@@ -1,5 +1,121 @@
-const CACHE='ltf-v43-rs';
-const ASSETS=['./','index.html','ltf.js','ltf_bg.wasm','hero.jpg','manifest.json','icon-192.png','icon-512.png','apple-touch-icon.png','names.js','cloud.js','chat.js','scan.js'];
-self.addEventListener('install',e=>{e.waitUntil(caches.open(CACHE).then(c=>c.addAll(ASSETS)));self.skipWaiting();});
-self.addEventListener('activate',e=>{e.waitUntil(caches.keys().then(ks=>Promise.all(ks.filter(k=>k!==CACHE&&k!=='ltf-scan-v1').map(k=>caches.delete(k)))));self.clients.claim();});
-self.addEventListener('fetch',e=>{if(e.request.method!=='GET'||new URL(e.request.url).origin!==location.origin)return;if(new URL(e.request.url).pathname.includes('/scan/')){e.respondWith(caches.open('ltf-scan-v1').then(c=>c.match(e.request,{ignoreSearch:true}).then(m=>m||fetch(e.request).then(r=>{if(r.ok)c.put(e.request,r.clone());return r;}))));return;}e.respondWith(fetch(e.request).then(r=>{const cp=r.clone();caches.open(CACHE).then(c=>c.put(e.request,cp));return r;}).catch(()=>caches.match(e.request).then(m=>m||caches.match('index.html'))));});
+/*
+ * @license MIT
+ * ~~~~~~~~~~~~
+ * sofitel-service-lestroisforts
+ * ~~~~~~~~~~~~
+ * Copyright (c) 2026 Abraham Ukachi. The Les Trois Forts Project.
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the 'Software'), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in all
+ * copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED 'AS IS', WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ * SOFTWARE.
+ *
+ * @project: sofitel-service-lestroisforts
+ * @name: Les Trois Forts - Service Worker (Rust/WASM build)
+ * @file: rust/web/sw.js
+ * @type: JavaScript (Service Worker)
+ * @authors: Abraham Ukachi <abrahamukachi@gmail.com>
+ *
+ * Example usage:
+ *   1+|> navigator.serviceWorker.register('sw.js');
+ *    -|>
+ *
+ */
+
+/*
+ * !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+ * MOTTO: We'll always do more 😜!!!
+ * !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+ */
+
+// 🛡️ The service worker of the Rust/WASM build: network first (always fresh when online),
+// cache as a fallback (📴 offline), and a separate persistent cache for the heavy scan assets.
+
+// the cache of this version (bump it on every deploy, so phones pick up the new build 🚀)
+const CACHE = 'ltf-v45-rs';
+// the app shell, precached on install 📦
+const ASSETS = [
+  './',
+  'index.html',
+  'ltf.js',
+  'ltf_bg.wasm',
+  'hero.jpg',
+  'manifest.json',
+  'icon-192.png',
+  'icon-512.png',
+  'apple-touch-icon.png',
+  'names.js',
+  'cloud.js',
+  'chat.js',
+  'scan.js',
+];
+
+// 📥 install: precache the shell & take over right away
+self.addEventListener('install', (event) => {
+  // open the cache & add the shell
+  event.waitUntil(caches.open(CACHE).then((cache) => cache.addAll(ASSETS)));
+  // don't wait for the old tabs to close
+  self.skipWaiting();
+});
+
+// ✅ activate: delete the old caches (but keep the scan cache `ltf-scan-v2` across versions 📷) 🧹
+self.addEventListener('activate', (event) => {
+  // every cache that is neither this version nor the scan cache goes away
+  event.waitUntil(
+    caches
+      .keys()
+      .then((keys) =>
+        Promise.all(
+          keys.filter((key) => key !== CACHE && key !== 'ltf-scan-v2').map((key) => caches.delete(key)),
+        ),
+      ),
+  );
+  // control the open pages now
+  self.clients.claim();
+});
+
+// 🔗 fetch: same-origin GET requests only (Firebase, Google & co. go straight to the network)
+self.addEventListener('fetch', (event) => {
+  // not a GET, or another origin? let the browser handle it
+  if (event.request.method !== 'GET' || new URL(event.request.url).origin !== location.origin) return;
+  // 📷 scan assets: cache first (ignoring the query), then the network (and keep a copy)
+  if (new URL(event.request.url).pathname.includes('/scan/')) {
+    event.respondWith(
+      caches.open('ltf-scan-v2').then((cache) =>
+        cache.match(event.request, { ignoreSearch: true }).then(
+          (match) =>
+            match ||
+            fetch(event.request).then((response) => {
+              if (response.ok) cache.put(event.request, response.clone());
+              return response;
+            }),
+        ),
+      ),
+    );
+    return;
+  }
+  // 🌐 everything else: network first (and refresh the cache), else the cache, else index.html
+  event.respondWith(
+    fetch(event.request)
+      .then((response) => {
+        // keep a copy for offline use
+        const copy = response.clone();
+        caches.open(CACHE).then((cache) => cache.put(event.request, copy));
+        return response;
+      })
+      .catch(() => caches.match(event.request).then((match) => match || caches.match('index.html'))),
+  );
+});
