@@ -1,0 +1,86 @@
+# 
+# @license MIT
+# ~~~~~~~~~~~~
+# sofitel-service-lestroisforts
+# ~~~~~~~~~~~~
+# Copyright (c) 2026 Abraham Ukachi. The Les Trois Forts Project.
+#
+# Permission is hereby granted, free of charge, to any person obtaining a copy
+# of this software and associated documentation files (the 'Software'), to deal
+# in the Software without restriction, including without limitation the rights
+# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+# copies of the Software, and to permit persons to whom the Software is
+# furnished to do so, subject to the following conditions:
+#
+# The above copyright notice and this permission notice shall be included in all
+# copies or substantial portions of the Software.
+#
+# THE SOFTWARE IS PROVIDED 'AS IS', WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+# SOFTWARE.
+#
+# @project: sofitel-service-lestroisforts
+# @name: Les Trois Forts - Cargo Manifest
+# @file: rust/ltf/Cargo.toml
+# @type: TOML (Cargo)
+# @authors: Abraham Ukachi <abrahamukachi@gmail.com>
+#
+# Example usage:
+#   1+|> cargo build --release --target wasm32-unknown-unknown
+#    -|> 
+#
+#
+
+
+#
+# !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+# MOTTO: We'll always do more 😜!!!
+# !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+#
+
+
+# 🦀 The Rust/WebAssembly port of pwa/app.js (a cdylib loaded by wasm-bindgen in index.html).
+[package]
+name = "ltf"
+version = "12.0.0"
+edition = "2021"
+description = "Les Trois Forts — Service Academy (Rust/WebAssembly port of pwa/app.js)"
+publish = false
+
+[lib]
+crate-type = ["cdylib"]
+path = "src/lib.rs"
+
+# 📦 wasm-bindgen is pinned: it must match the wasm-bindgen CLI used by build.sh (0.2.129)
+[dependencies]
+wasm-bindgen = "=0.2.129"
+js-sys = "0.3"
+serde_json = { version = "1", features = ["preserve_order"] }
+
+# 🌐 only the Web APIs the app uses
+[dependencies.web-sys]
+version = "0.3"
+features = [
+  "Window", "console", "Document", "Element", "HtmlElement", "Node", "NodeList", "HtmlCollection",
+  "HtmlInputElement", "HtmlImageElement", "HtmlCanvasElement", "CanvasRenderingContext2d",
+  "Event", "EventTarget", "MouseEvent", "PointerEvent", "WheelEvent", "AddEventListenerOptions",
+  "DomRect", "CssStyleDeclaration", "DomTokenList", "History", "Location", "Storage",
+  "MediaQueryList", "FileReader", "File", "FileList", "Blob",
+  "IdbFactory", "IdbOpenDbRequest", "IdbRequest", "IdbDatabase", "IdbTransaction",
+  "IdbObjectStore", "IdbCursor", "IdbCursorWithValue", "IdbTransactionMode",
+  "SpeechSynthesis", "SpeechSynthesisUtterance", "SpeechSynthesisVoice",
+  "AudioContext", "BaseAudioContext", "OscillatorNode", "GainNode", "AudioParam", "AudioNode",
+  "AudioDestinationNode", "OscillatorType", "AudioScheduledSourceNode",
+]
+
+# 🗜️ smallest wasm: optimize for size, LTO, one codegen unit, abort on panic, strip symbols
+[profile.release]
+opt-level = "z"
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true
