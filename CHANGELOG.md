@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. Versions follow the service-worker cache (`ltf-vNN` → `0.NN.0`), see [CONTRIBUTING.md](./CONTRIBUTING.md#git-commit-messages) for the commit guidelines.
 
+### 0.46.0 (2026-10-20)
+
+* :sparkles: Add a welcome screen for first-time waiters: 5 swipeable slides (Académie, Carte, Formation, Briefing, Équipe) with Passer / Suivant / Commencer, in French & English (`welcome.js`)
+* :sparkles: Show the real floor plan with today's reserved tables on the Briefing slide (`window.LTFbriefPlan`, JS & Rust)
+* :sparkles: Add a "Revoir l'introduction" button in the Profil tab
+* :bento: Bump the service-worker cache to `ltf-v46-rs`
+
 ### 0.45.0 (2026-10-20)
 
 * :recycle: Rename every single-letter variable to a readable name (JS app, inline scripts, Rust crate, build tools, tests & scripts), behaviour 100% identical
