@@ -45,7 +45,7 @@
 // network first, cache as a fallback (📴 offline).
 
 // the cache of this version 🏷️
-const CACHE = 'ltf-v46';
+const CACHE = 'ltf-v47';
 // the app shell, precached on install 📦
 const ASSETS = [
   './',
@@ -93,5 +93,48 @@ self.addEventListener('fetch', (event) => {
         return response;
       })
       .catch(() => caches.match(event.request).then((match) => match || caches.match('index.html'))),
+  );
+});
+
+// ===== PUSH NOTIFICATIONS 📲 ===== //
+
+// 📩 push: a teammate posted in the team chat (sent by `api/notify.js`), show it unless the app is on screen
+self.addEventListener('push', (event) => {
+  // the payload { title, body, tag } (plain text as a fallback)
+  let payload = {};
+  try {
+    payload = event.data ? event.data.json() : {};
+  } catch (error) {
+    payload = { body: event.data ? event.data.text() : '' };
+  }
+  event.waitUntil(
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((windows) => {
+      // the app is open & visible? the chat chimes there, no notification needed 🔔
+      if (windows.some((client) => client.visibilityState === 'visible')) return;
+      return self.registration.showNotification(payload.title || 'Les Trois Forts', {
+        body: payload.body || '',
+        icon: 'icon-192.png',
+        badge: 'icon-192.png',
+        tag: payload.tag || 'ltf-chat',
+        renotify: true,
+        data: { url: './?chat=1' },
+      });
+    }),
+  );
+});
+
+// 👆 notification tapped: focus the app & open the chat (or start the app on the chat)
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  event.waitUntil(
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((windows) => {
+      // an app window is already open: bring it up and ask it to open the chat 💬
+      const openWindow = windows[0];
+      if (openWindow) {
+        openWindow.postMessage({ type: 'open-chat' });
+        return openWindow.focus();
+      }
+      return self.clients.openWindow((event.notification.data && event.notification.data.url) || './?chat=1');
+    }),
   );
 });
