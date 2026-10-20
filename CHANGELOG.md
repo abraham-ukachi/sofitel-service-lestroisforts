@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file. Versions follow the service-worker cache (`ltf-vNN` → `0.NN.0`), see [CONTRIBUTING.md](./CONTRIBUTING.md#git-commit-messages) for the commit guidelines.
 
+### 0.48.0 (2026-10-20)
+
+* :lipstick: Show the chat's + as a plain centered sign (no circle behind it)
+* :sparkles: Add a WhatsApp-like emoji panel: smiley button left in the composer, sections, recents, English & French search, a ⌫ delete key (`emoji.json` from emojibase, built by `rust/tools/gen_emoji.js`)
+* :sparkles: Add a GIF tab (GIPHY trending + search) and a Stickers tab with 13 AI-made Les Trois Forts stickers that work offline (`stickers/*.webp`, precached)
+* :lipstick: Show 1 to 3 emojis alone big in the bubble, and use the phone's colour emoji font everywhere
+* :bento: Bump the service-worker cache to `ltf-v48-rs`
+
 ### 0.47.0 (2026-10-20)
 
 * :lipstick: Center the labels of the welcome screen buttons (Passer, Suivant, Commencer)

@@ -45,7 +45,7 @@
 // network first, cache as a fallback (📴 offline).
 
 // the cache of this version 🏷️
-const CACHE = 'ltf-v47';
+const CACHE = 'ltf-v48';
 // the app shell, precached on install 📦
 const ASSETS = [
   './',
@@ -62,6 +62,20 @@ const ASSETS = [
   'icon-512.png',
   'apple-touch-icon.png',
   'welcome.js',
+  'emoji.json',
+  'stickers/bell.webp',
+  'stickers/bouillabaisse.webp',
+  'stickers/champagne.webp',
+  'stickers/cheese.webp',
+  'stickers/chef.webp',
+  'stickers/cloche.webp',
+  'stickers/cocktail.webp',
+  'stickers/espresso.webp',
+  'stickers/oysters.webp',
+  'stickers/pavlova.webp',
+  'stickers/red-wine.webp',
+  'stickers/vieux-port.webp',
+  'stickers/waiter.webp',
 ];
 
 // 📥 install: precache the shell & take over right away
