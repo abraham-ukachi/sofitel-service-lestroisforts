@@ -127,10 +127,15 @@ module.exports = async function handler(request, response) {
 
   // ✉️ the notification: the sender's name & the text (or "📷 Photo"), cut to 140 chars
   const text = stringOf(fields, 'text'),
-    hasPhoto = !!stringOf(fields, 'img');
+    hasPhoto = !!stringOf(fields, 'img'),
+    hasGif = !!stringOf(fields, 'gif'),
+    hasSticker = !!stringOf(fields, 'sticker');
   const payload = JSON.stringify({
     title: stringOf(fields, 'name') || 'Les Trois Forts',
-    body: (text || (hasPhoto ? '📷 Photo' : '')).slice(0, 140),
+    body: (text || (hasPhoto ? '📷 Photo' : hasGif ? '🎞️ GIF' : hasSticker ? '🏷️ Sticker' : '')).slice(
+      0,
+      140,
+    ),
     tag: 'ltf-chat',
   });
 
