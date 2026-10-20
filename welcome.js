@@ -50,6 +50,9 @@
   // the key that remembers the welcome was seen 🗝️
   const SEEN_KEY = 'ltf_welcome_v1';
 
+  // 🏷️ the current version of the app (shown at the bottom of the Profil tab, bump it with every release)
+  const APP_VERSION = '0.47.0';
+
   /**
    * `isEnglish` - Function 🌍
    *
@@ -244,9 +247,12 @@
 #wlc .wlc-top { position: absolute; left: 0; right: 0; top: calc(env(safe-area-inset-top) + 18px); z-index: 3;
   display: flex; justify-content: space-between; align-items: center; padding: 0 18px 0 22px; pointer-events: none; }
 #wlc .wlc-count { font-size: 13px; font-weight: 700; color: rgba(255, 255, 255, 0.8); }
+#wlc .wlc-skip, #wlc .wlc-next { display: flex; align-items: center; justify-content: center;
+  text-align: center; line-height: 1; }
 #wlc .wlc-skip { pointer-events: auto; padding: 7px 16px; border-radius: 16px; font-weight: 700; font-size: 14px;
   color: #f0ece2; background: rgba(0, 0, 0, 0.45); border: 1px solid rgba(255, 255, 255, 0.25); }
 #wlc .wlc-skip[hidden] { display: none; }
+#wlcVersion { margin: 18px 0 4px; text-align: center; font-size: 12px; opacity: 0.45; letter-spacing: 0.5px; }
 #wlc .wlc-foot { padding: 0 28px calc(env(safe-area-inset-bottom) + 24px); }
 #wlc .wlc-dots { display: flex; gap: 7px; margin-bottom: 26px; }
 #wlc .wlc-dot { width: 8px; height: 8px; border-radius: 4px; background: #22385a; transition: all 0.25s ease; }
@@ -358,6 +364,25 @@
     replay.textContent = '👋 ' + translate("Revoir l'introduction", 'Replay the introduction');
     replay.addEventListener('click', openWelcome);
     resetButton.parentNode.insertBefore(replay, resetButton);
+    addVersionCaption(resetButton);
+  }
+
+  /**
+   * `addVersionCaption` - Function 🏷️
+   *
+   * Adds a small, faded caption with the app's version below the reset button of the Profil tab.
+   *
+   * @param { HTMLElement } resetButton - the reset button of the Profil tab
+   * @returns { void }
+   */
+  function addVersionCaption(resetButton) {
+    if (document.getElementById('wlcVersion')) return;
+    addStyles();
+    const caption = document.createElement('p');
+    caption.id = 'wlcVersion';
+    // only the major & minor numbers, e.g. "V0.47" 🏷️
+    caption.textContent = 'V' + APP_VERSION.split('.').slice(0, 2).join('.');
+    resetButton.parentNode.insertBefore(caption, resetButton.nextSibling);
   }
 
   /**
