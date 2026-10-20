@@ -68,6 +68,7 @@ import {
   deleteDoc,
   deleteField,
   doc,
+  setDoc,
   serverTimestamp,
 } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
 
@@ -130,6 +131,56 @@ const escapeHtml = (value) =>
 
 // the localStorage key of the last message seen (ms), for the red dot 🔴
 const SEEN_KEY = 'ltf_chat_seen';
+
+// the public VAPID key of the push server (`api/notify.js` on Vercel holds the private one 🔐)
+const VAPID_PUBLIC_KEY =
+  'BOHVPWR9iG-S4nCjzn6k6o2hahvWKOaAaix3BxmgDW4MS6I7Fv4GIyMIECUAaE8hPCPBX1rAKSsJEHhKMeIS5_A';
+
+// ===== CHIME 🔔 ===== //
+
+// the shared audio context (created on the first chime, browsers want a tap first 👆)
+let audioContext = null;
+
+/**
+ * `playChime` - Function 🔔
+ *
+ * Plays a short, soft two-note chime (synthesised with the Web Audio API, no file to download).
+ * Respects the app's sound switch (`ltf_v1.sound`).
+ *
+ * @returns { void }
+ */
+function playChime() {
+  try {
+    // the sound switch of the Profil tab is off? stay quiet 🤫
+    if (JSON.parse(localStorage.getItem('ltf_v1') || '{}').sound === false) return;
+    audioContext = audioContext || new (window.AudioContext || window.webkitAudioContext)();
+    if (audioContext.state === 'suspended') audioContext.resume();
+    const start = audioContext.currentTime;
+    // two bell-like notes: E6 then B6, each with a quick attack & a soft decay 🎶
+    [
+      [1318.5, 0],
+      [1975.5, 0.09],
+    ].forEach(([frequency, delay]) => {
+      const oscillator = audioContext.createOscillator(),
+        overtone = audioContext.createOscillator(),
+        gain = audioContext.createGain();
+      oscillator.type = 'sine';
+      overtone.type = 'sine';
+      oscillator.frequency.value = frequency;
+      overtone.frequency.value = frequency * 2.01;
+      gain.gain.setValueAtTime(0.0001, start + delay);
+      gain.gain.exponentialRampToValueAtTime(0.18, start + delay + 0.012);
+      gain.gain.exponentialRampToValueAtTime(0.0001, start + delay + 0.45);
+      oscillator.connect(gain);
+      overtone.connect(gain);
+      gain.connect(audioContext.destination);
+      oscillator.start(start + delay);
+      overtone.start(start + delay);
+      oscillator.stop(start + delay + 0.5);
+      overtone.stop(start + delay + 0.5);
+    });
+  } catch (error) {}
+}
 
 // ===== STATE 🌱 ===== //
 
@@ -213,6 +264,7 @@ function listen() {
   }
   // start empty; signed out? just paint the sign-in screen
   messages = [];
+  listen.loaded = false;
   if (!user) {
     paint();
     return;
@@ -222,9 +274,19 @@ function listen() {
     query(collection(firestore, 'chat'), orderBy('ts', 'desc'), limit(150)),
     (snapshot) => {
       // oldest first, with an estimated time for our own pending messages
+      // the ids we already had (none on the first snapshot) 🆔
+      const knownIds = new Set(messages.map((message) => message.id)),
+        isFirstSnapshot = !listen.loaded;
+      listen.loaded = true;
       messages = snapshot.docs
         .map((docSnapshot) => ({ id: docSnapshot.id, ...docSnapshot.data({ serverTimestamps: 'estimate' }) }))
         .reverse();
+      // 🔔 a new message from a teammate while the app is open: chime
+      if (
+        !isFirstSnapshot &&
+        messages.some((message) => !knownIds.has(message.id) && message.uid !== user.uid)
+      )
+        playChime();
       errorText = '';
       // chat open? it's seen; repaint + refresh the button
       if (overlay) markSeen();
@@ -525,7 +587,9 @@ function bubbleHtml(message) {
     (isMine ? ' me' : '') +
     '" data-id="' +
     message.id +
-    '"><span class="cswi">↩︎</span><div class="cbw">' +
+    '"><span class="cswi">↩︎</span>' +
+    (isMine ? '<span class="cswd">🗑</span>' : '') +
+    '<div class="cbw">' +
     '<div class="ccap" style="color:' +
     accent +
     '">' +
@@ -716,7 +780,10 @@ async function send() {
   paint();
   // post it (❌ restore everything on failure)
   try {
-    await addDoc(collection(firestore, 'chat'), newMessage);
+    const added = await addDoc(collection(firestore, 'chat'), newMessage);
+    // 🔔 sent: chime, then ask the push server to notify the team
+    playChime();
+    notifyTeam(added.id);
   } catch (error) {
     pendingPhoto = keptPhoto;
     replyTo = keptReply;
@@ -765,7 +832,7 @@ function openChat() {
   overlay.innerHTML =
     '<div class="sch"><button class="cx" aria-label="close">←</button><div class="grow"><div style="font-weight:700">' +
     translate("Chat de l'équipe", 'Team chat') +
-    '</div><div class="muted sm">Les Trois Forts</div></div></div>' +
+    '</div><div class="muted sm">Les Trois Forts</div></div><button class="cbell" hidden aria-label="notifications"></button></div>' +
     '<div class="cbody"></div><div class="cfoot"><div class="crep"></div><div class="cmenu" hidden><label><input type="file" accept="image/*" capture="environment" hidden>📷 ' +
     translate('Appareil photo', 'Camera') +
     '</label><label><input type="file" accept="image/*" hidden>🖼️ ' +
@@ -777,6 +844,9 @@ function openChat() {
   // 🔙 Back (button or gesture) closes the chat
   history.pushState({ chat: 1 }, '');
   overlay.querySelector('.cx').onclick = () => history.back();
+  // 🔔 the notifications switch (bell) in the header
+  overlay.querySelector('.cbell').onclick = togglePush;
+  refreshBell();
 
   // ✍️ the composer: grows up to 120 px, Enter sends (Shift+Enter = new line)
   const textarea = overlay.querySelector('textarea');
@@ -847,9 +917,8 @@ function openChat() {
     if (target.closest('[data-del]')) {
       const id = target.closest('[data-del]').dataset.del;
       selectedId = null;
-      if (confirm(translate('Supprimer ce message ?', 'Delete this message?')))
-        deleteDoc(doc(firestore, 'chat', id)).catch(() => {});
       paint();
+      askDelete(id);
       return;
     }
     // 🔍 a photo
@@ -882,35 +951,46 @@ function openChat() {
         swipe = null;
         return;
       }
-      if (dx > 10 && dx > Math.abs(dy)) {
+      // ➡️ right = reply (any message), ⬅️ left = delete (only my own messages)
+      const canDelete = swipe.cm.classList.contains('me');
+      if (Math.abs(dx) > 10 && Math.abs(dx) > Math.abs(dy) && (dx > 0 || canDelete)) {
         swipe.on = true;
+        swipe.direction = dx > 0 ? 'reply' : 'delete';
         try {
           body.setPointerCapture(event.pointerId);
         } catch (error) {}
       } else return;
     }
-    // follow the finger (max 90 px), armed past 60 px
-    const offset = Math.max(0, Math.min(90, dx));
+    // follow the finger (max 90 px either way), armed past 60 px
+    const offset =
+      swipe.direction === 'reply' ? Math.max(0, Math.min(90, dx)) : Math.min(0, Math.max(-90, dx));
     swipe.cm.style.transition = 'none';
     swipe.cm.style.transform = 'translateX(' + offset + 'px)';
     swipe.cm.classList.toggle('arm', offset > 60);
+    swipe.cm.classList.toggle('armdel', offset < -60);
   });
   // the finger lifts: snap back, swallow the click & reply when armed 📳
   const endSwipe = () => {
     if (!swipe) return;
     const messageRow = swipe.cm,
       started = swipe.on,
-      armed = messageRow.classList.contains('arm');
+      armed = messageRow.classList.contains('arm'),
+      armedDelete = messageRow.classList.contains('armdel');
     swipe = null;
     if (!started) return;
     messageRow.style.transition = 'transform .2s';
     messageRow.style.transform = '';
-    messageRow.classList.remove('arm');
+    messageRow.classList.remove('arm', 'armdel');
     body.dataset.sw = '1';
     setTimeout(() => delete body.dataset.sw, 50);
     if (armed) {
       if (navigator.vibrate) navigator.vibrate(10);
       setReplyTo(messageRow.dataset.id);
+    }
+    // 🗑 swiped left far enough: ask before deleting
+    if (armedDelete) {
+      if (navigator.vibrate) navigator.vibrate(10);
+      askDelete(messageRow.dataset.id);
     }
   };
   body.addEventListener('pointerup', endSwipe);
@@ -953,6 +1033,218 @@ addEventListener(
   },
   true,
 );
+
+// ===== DELETE DIALOG 🗑 ===== //
+
+/**
+ * `askDelete` - Function 🗑
+ *
+ * Shows our own confirm dialog (in the app's theme, not the system one) before deleting one of my messages.
+ *
+ * @param { string } id - the message id
+ * @returns { void }
+ */
+function askDelete(id) {
+  const message = messages.find((candidate) => candidate.id === id);
+  // only my own messages can be deleted (Firestore rules 🛡️)
+  if (!message || !user || message.uid !== user.uid || document.querySelector('.cdlg')) return;
+  // a short preview of the message 👀
+  const preview = message.text ? message.text.slice(0, 120) : message.img ? '📷 Photo' : '';
+  const dialog = document.createElement('div');
+  dialog.className = 'cdlg';
+  dialog.innerHTML =
+    '<div class="cdlgbox" role="dialog" aria-modal="true"><div class="cdlgic">🗑</div><h3>' +
+    translate('Supprimer ce message ?', 'Delete this message?') +
+    '</h3><p class="cdlgtx">' +
+    translate("Il sera supprimé pour toute l'équipe.", 'It will be deleted for the whole team.') +
+    '</p>' +
+    (preview ? '<p class="cdlgpv">' + escapeHtml(preview) + '</p>' : '') +
+    '<div class="cdlgbt"><button class="btn sec" data-act="cancel">' +
+    translate('Annuler', 'Cancel') +
+    '</button><button class="btn danger" data-act="delete">' +
+    translate('Supprimer', 'Delete') +
+    '</button></div></div>';
+  // close (with a short fade) 👋
+  const closeDialog = () => {
+    dialog.classList.add('out');
+    setTimeout(() => dialog.remove(), 160);
+  };
+  dialog.addEventListener('click', (event) => {
+    const action = event.target.closest('[data-act]');
+    // a tap on the dark backdrop or "Cancel" closes, "Delete" deletes 🗑
+    if (event.target === dialog || (action && action.dataset.act === 'cancel')) closeDialog();
+    else if (action && action.dataset.act === 'delete') {
+      deleteDoc(doc(firestore, 'chat', id)).catch(() => {});
+      closeDialog();
+    }
+  });
+  document.body.appendChild(dialog);
+}
+
+// ===== PUSH NOTIFICATIONS 📲 ===== //
+
+/**
+ * `pushSupported` - Function 📲
+ *
+ * @returns { boolean } - true when this browser can receive web push (on iPhone: only once added to the home screen)
+ */
+const pushSupported = () =>
+  'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
+
+/**
+ * `base64ToBytes` - Function 🔢
+ *
+ * @param { string } base64 - a URL-safe base64 string (the VAPID key)
+ * @returns { Uint8Array } - its bytes
+ */
+const base64ToBytes = (base64) => {
+  const padded = (base64 + '='.repeat((4 - (base64.length % 4)) % 4)).replace(/-/g, '+').replace(/_/g, '/');
+  return Uint8Array.from(atob(padded), (char) => char.charCodeAt(0));
+};
+
+/**
+ * `deviceKey` - Function 🆔
+ *
+ * @param { string } endpoint - the push endpoint of this device
+ * @returns { string } - a short stable key for it (field name in `push/{uid}.devices`)
+ */
+const deviceKey = (endpoint) => {
+  let hash = 0;
+  for (const char of endpoint) hash = (hash * 31 + char.charCodeAt(0)) >>> 0;
+  return 'd' + hash.toString(36);
+};
+
+/**
+ * `currentSubscription` - Async Function 📲
+ *
+ * @returns { Promise<PushSubscription|null> } - this device's push subscription, if any
+ */
+async function currentSubscription() {
+  if (!pushSupported()) return null;
+  const registration = await navigator.serviceWorker.ready;
+  return registration.pushManager.getSubscription();
+}
+
+/**
+ * `refreshBell` - Async Function 🔔
+ *
+ * Shows the bell in the chat header: 🔔 when this phone gets notifications, 🔕 when not.
+ *
+ * @returns { Promise<void> }
+ */
+async function refreshBell() {
+  const bell = overlay && overlay.querySelector('.cbell');
+  if (!bell) return;
+  // no push here, or signed out? no bell
+  if (!pushSupported() || !user) {
+    bell.hidden = true;
+    return;
+  }
+  const isOn = Notification.permission === 'granted' && !!(await currentSubscription());
+  bell.hidden = false;
+  bell.textContent = isOn ? '🔔' : '🔕';
+  bell.classList.toggle('on', isOn);
+}
+
+/**
+ * `togglePush` - Async Function 🔔
+ *
+ * Turns the chat notifications on (permission + push subscription saved in Firestore `push/{uid}`)
+ * or off (unsubscribes this phone) for this device.
+ *
+ * @returns { Promise<void> }
+ */
+async function togglePush() {
+  if (!pushSupported() || !user) return;
+  try {
+    const existing = await currentSubscription();
+    // 🔕 on → off
+    if (existing && Notification.permission === 'granted') {
+      await setDoc(
+        doc(firestore, 'push', user.uid),
+        { devices: { [deviceKey(existing.endpoint)]: deleteField() } },
+        { merge: true },
+      );
+      await existing.unsubscribe();
+      showToast(translate('Notifications désactivées', 'Notifications turned off'));
+    } else {
+      // 🔔 off → on: ask the permission (needs this tap 👆)
+      const permission = await Notification.requestPermission();
+      if (permission !== 'granted') {
+        showToast(
+          translate(
+            'Autorisez les notifications dans les réglages du téléphone',
+            'Allow notifications in the phone settings',
+          ),
+        );
+      } else {
+        const registration = await navigator.serviceWorker.ready;
+        const subscription =
+          existing ||
+          (await registration.pushManager.subscribe({
+            userVisibleOnly: true,
+            applicationServerKey: base64ToBytes(VAPID_PUBLIC_KEY),
+          }));
+        const json = subscription.toJSON();
+        // save this device (endpoint + keys) under my uid 🗃️
+        await setDoc(
+          doc(firestore, 'push', user.uid),
+          {
+            devices: {
+              [deviceKey(json.endpoint)]: {
+                endpoint: json.endpoint,
+                p256dh: json.keys.p256dh,
+                auth: json.keys.auth,
+                lang: isEnglish() ? 'en' : 'fr',
+                ts: Date.now(),
+              },
+            },
+          },
+          { merge: true },
+        );
+        showToast(translate('Notifications activées 🔔', 'Notifications on 🔔'));
+      }
+    }
+  } catch (error) {
+    showToast(translate('Notifications indisponibles', 'Notifications unavailable'));
+  }
+  refreshBell();
+}
+
+/**
+ * `showToast` - Function 🍞
+ *
+ * @param { string } text - a short message shown for 2.5 s at the top of the chat
+ * @returns { void }
+ */
+function showToast(text) {
+  if (!overlay) return;
+  const toast = document.createElement('div');
+  toast.className = 'ctoast';
+  toast.textContent = text;
+  overlay.appendChild(toast);
+  setTimeout(() => toast.remove(), 2500);
+}
+
+/**
+ * `notifyTeam` - Async Function 📣
+ *
+ * Asks the push server (`/api/notify` on Vercel) to notify every other teammate of a new message.
+ * The server reads the message itself from Firestore with my token, so nobody can fake one 🛡️.
+ *
+ * @param { string } id - the id of the message I just posted
+ * @returns { Promise<void> }
+ */
+async function notifyTeam(id) {
+  try {
+    const token = await user.getIdToken();
+    await fetch('/api/notify', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+      body: JSON.stringify({ id }),
+    });
+  } catch (error) {}
+}
 
 // ===== CHAT BUTTON 🔵 ===== //
 
@@ -1006,4 +1298,16 @@ onAuthStateChanged(auth, (signedInUser) => {
   listen();
   paint();
   updateFab();
+  refreshBell();
 });
+
+// 📲 opened from a chat notification (`?chat=1`): open the chat right away
+if (new URLSearchParams(location.search).get('chat') === '1') {
+  history.replaceState(history.state, '', location.pathname + location.hash);
+  setTimeout(openChat, 300);
+}
+// 📲 a notification was tapped while the app was already open (message from the service worker)
+if ('serviceWorker' in navigator)
+  navigator.serviceWorker.addEventListener('message', (event) => {
+    if (event.data && event.data.type === 'open-chat') openChat();
+  });
