@@ -136,6 +136,50 @@ const SEEN_KEY = 'ltf_chat_seen';
 const VAPID_PUBLIC_KEY =
   'BOHVPWR9iG-S4nCjzn6k6o2hahvWKOaAaix3BxmgDW4MS6I7Fv4GIyMIECUAaE8hPCPBX1rAKSsJEHhKMeIS5_A';
 
+// the GIPHY API key for the GIF tab (a public browser key, like the Firebase web key 🔐)
+const GIPHY_KEY = 'VMCxSwYxaWBq2oevtt0lbdLWivVCoo4q';
+// the only GIF addresses a bubble will show (GIPHY's media servers) 🛡️
+const GIF_PATTERN = /^https:\/\/media[0-9]?\.giphy\.com\//;
+// our own AI-made stickers (pwa/stickers/<slug>.webp, precached so they work offline 📴): [slug, French, English]
+const STICKERS = [
+  ['bell', 'Service !', 'Service bell'],
+  ['bouillabaisse', 'Bouillabaisse', 'Fish soup'],
+  ['champagne', 'Santé !', 'Cheers!'],
+  ['cheese', 'Plateau de fromages', 'Cheese board'],
+  ['chef', 'Chef', 'Chef'],
+  ['cloche', 'Envoyez !', 'Plate up!'],
+  ['cocktail', 'Cocktail', 'Cocktail'],
+  ['espresso', 'Café', 'Espresso'],
+  ['oysters', 'Huîtres', 'Oysters'],
+  ['pavlova', 'Pavlova', 'Pavlova'],
+  ['red-wine', 'Vin rouge', 'Red wine'],
+  ['vieux-port', 'Vieux-Port', 'Old Port'],
+  ['waiter', 'Bravo !', 'Well done!'],
+];
+
+/**
+ * `isStickerSlug` - Function 🏷️
+ *
+ * @param { any } slug - a message's sticker field
+ * @returns { boolean } - true when it names one of our stickers
+ */
+const isStickerSlug = (slug) => STICKERS.some((sticker) => sticker[0] === slug);
+// the localStorage key of my recent emojis 🕘
+const RECENT_KEY = 'ltf_emoji_recent';
+// the emoji tabs: [icon, French name, English name], same order as `emoji.json` (+ recents first) 🗂️
+const EMOJI_TABS = [
+  ['🕘', 'Récents', 'Recent'],
+  ['😀', 'Smileys & émotions', 'Smileys & emotion'],
+  ['🧑', 'Personnes', 'People'],
+  ['🐶', 'Animaux & nature', 'Animals & nature'],
+  ['🍔', 'Nourriture & boissons', 'Food & drink'],
+  ['✈️', 'Voyages & lieux', 'Travel & places'],
+  ['⚽', 'Activités', 'Activities'],
+  ['💡', 'Objets', 'Objects'],
+  ['🔣', 'Symboles', 'Symbols'],
+  ['🏳️', 'Drapeaux', 'Flags'],
+];
+
 // ===== CHIME 🔔 ===== //
 
 // the shared audio context (created on the first chime, browsers want a tap first 👆)
@@ -193,7 +237,11 @@ let user = null,
   replyTo = null,
   pendingPhoto = null,
   selectedId = null,
-  errorText = '';
+  errorText = '',
+  // the emoji list (loaded on first use), the picker tab ('emoji' | 'gif') & the GIF search timer 😀
+  emojiTabs = null,
+  pickerTab = 'emoji',
+  gifTimer = 0;
 
 /**
  * `timeOf` - Function ⏱️
@@ -597,7 +645,9 @@ function bubbleHtml(message) {
     '<span>' +
     escapeHtml(message.name || 'Staff') +
     '</span></div>' +
-    '<div class="cb" style="background:' +
+    '<div class="cb' +
+    (isStickerSlug(message.sticker) && !message.text ? ' cbst' : '') +
+    '" style="background:' +
     background +
     '">' +
     // ↩️ the quoted message
@@ -612,8 +662,22 @@ function bubbleHtml(message) {
       : '') +
     // 📷 the photo
     (message.img ? '<img class="ci" src="' + message.img + '" alt="">' : '') +
-    // ✍️ the text (new lines kept)
-    (message.text ? '<div class="ct">' + escapeHtml(message.text).replace(/\n/g, '<br>') + '</div>' : '') +
+    // 🏷️ our sticker
+    (isStickerSlug(message.sticker)
+      ? '<img class="cst" src="stickers/' + message.sticker + '.webp" alt="sticker">'
+      : '') +
+    // 🎞️ the GIF (GIPHY only)
+    (typeof message.gif === 'string' && GIF_PATTERN.test(message.gif)
+      ? '<img class="cg" src="' + escapeHtml(message.gif) + '" alt="GIF" loading="lazy">'
+      : '') +
+    // ✍️ the text (new lines kept, 1 to 3 emojis alone shown big like WhatsApp 😀)
+    (message.text
+      ? '<div class="ct' +
+        (isEmojiOnly(message.text) ? ' cbig' : '') +
+        '">' +
+        escapeHtml(message.text).replace(/\n/g, '<br>') +
+        '</div>'
+      : '') +
     // 🕘 the time
     '<div class="ctm">' +
     formatTime(timeOf(message)) +
@@ -653,7 +717,10 @@ function setReplyTo(id) {
     id: message.id,
     uid: message.uid || '',
     name: message.name || '',
-    text: (message.text || (message.img ? '📷 Photo' : '')).slice(0, 120),
+    text: (
+      message.text ||
+      (message.img ? '📷 Photo' : message.gif ? '🎞️ GIF' : message.sticker ? '🏷️ Sticker' : '')
+    ).slice(0, 120),
   };
   selectedId = null;
   paint();
@@ -837,9 +904,11 @@ function openChat() {
     translate('Appareil photo', 'Camera') +
     '</label><label><input type="file" accept="image/*" hidden>🖼️ ' +
     translate('Photos', 'Photos') +
-    '</label></div><div class="cpill"><textarea rows="1" maxlength="1000" enterkeyhint="send" placeholder="' +
+    '</label></div><div class="cpill"><button class="cemo" aria-label="emoji">' +
+    SMILEY_ICON +
+    '</button><textarea rows="1" maxlength="1000" enterkeyhint="send" placeholder="' +
     translate('Message…', 'Message…') +
-    '"></textarea><button class="cplus" aria-label="photo">+</button></div></div>';
+    '"></textarea><button class="cplus" aria-label="photo">+</button></div><div class="cpick" hidden></div></div>';
   document.body.appendChild(overlay);
   // 🔙 Back (button or gesture) closes the chat
   history.pushState({ chat: 1 }, '');
@@ -867,6 +936,23 @@ function openChat() {
       send();
     }
   });
+
+  // 😀 the emoji / GIF panel: the smiley opens it (keyboard down), the keyboard icon or the text box closes it
+  overlay.querySelector('.cemo').onclick = (event) => {
+    event.stopPropagation();
+    if (overlay.querySelector('.cpick').hidden) openPicker();
+    else {
+      closePicker();
+      textarea.focus();
+    }
+  };
+  textarea.addEventListener('focus', closePicker);
+  // remember where the caret was, so emojis go in the right place ✍️
+  ['keyup', 'click', 'select', 'input'].forEach((type) =>
+    textarea.addEventListener(type, () => {
+      textarea.dataset.caret = String(textarea.selectionStart);
+    }),
+  );
 
   // ➕ the photo menu (camera / gallery), closed by any tap outside
   const menu = overlay.querySelector('.cmenu');
@@ -1010,6 +1096,7 @@ function openChat() {
  */
 function closeChat() {
   if (!overlay) return;
+  clearTimeout(gifTimer);
   overlay.remove();
   overlay = null;
   selectedId = null;
@@ -1023,6 +1110,13 @@ addEventListener(
   (event) => {
     if (!overlay) return;
     event.stopImmediatePropagation();
+    // the emoji / GIF panel is open? close it first 😀
+    const picker = overlay.querySelector('.cpick');
+    if (picker && !picker.hidden) {
+      closePicker();
+      history.pushState({ chat: 1 }, '');
+      return;
+    }
     const zoomViewer = document.querySelector('.zoomv');
     if (zoomViewer) {
       zoomViewer.remove();
@@ -1033,6 +1127,406 @@ addEventListener(
   },
   true,
 );
+
+// ===== EMOJI & GIF PANEL 😀 ===== //
+
+// the outline smiley of the composer (like WhatsApp) & the keyboard icon shown while the panel is open
+const SMILEY_ICON =
+  '<svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round">' +
+  '<circle cx="12" cy="12" r="9.2"/><path d="M8 14.2c1 1.4 2.3 2.1 4 2.1s3-.7 4-2.1"/>' +
+  '<circle cx="9" cy="9.8" r=".6" fill="currentColor"/><circle cx="15" cy="9.8" r=".6" fill="currentColor"/></svg>';
+const KEYBOARD_ICON =
+  '<svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round">' +
+  '<rect x="2.5" y="6" width="19" height="12" rx="2.5"/><path d="M6 10h.01M9.3 10h.01M12.6 10h.01M15.9 10h.01M18 10h.01M6.5 14h11"/></svg>';
+
+/**
+ * `isEmojiOnly` - Function 😀
+ *
+ * @param { string } text - a message text
+ * @returns { boolean } - true for 1 to 3 emojis and nothing else (shown big in the bubble)
+ */
+function isEmojiOnly(text) {
+  const trimmed = String(text || '').replace(/\s/g, '');
+  if (
+    !trimmed ||
+    trimmed.length > 40 ||
+    !/^[\p{Extended_Pictographic}\p{Emoji_Component}\u200d\ufe0f]+$/u.test(trimmed)
+  )
+    return false;
+  return splitGraphemes(trimmed).length <= 3;
+}
+
+/**
+ * `splitGraphemes` - Function ✂️
+ *
+ * @param { string } text - any text
+ * @returns { string[] } - its visible characters (a family emoji or a flag stays one piece)
+ */
+function splitGraphemes(text) {
+  if (window.Intl && Intl.Segmenter)
+    return [...new Intl.Segmenter().segment(text)].map((piece) => piece.segment);
+  return Array.from(text);
+}
+
+/**
+ * `loadEmojis` - Async Function 📥
+ *
+ * Loads `emoji.json` once (built by rust/tools/gen_emoji.js from emojibase, English + French search words).
+ *
+ * @returns { Promise<Array> } - one list of [emoji, search words] per tab
+ */
+async function loadEmojis() {
+  if (!emojiTabs) emojiTabs = await (await fetch('emoji.json')).json();
+  return emojiTabs;
+}
+
+/**
+ * `recentEmojis` - Function 🕘
+ *
+ * @returns { string[] } - my last 32 emojis, newest first
+ */
+const recentEmojis = () => {
+  try {
+    return JSON.parse(localStorage.getItem(RECENT_KEY) || '[]');
+  } catch (error) {
+    return [];
+  }
+};
+
+/**
+ * `openPicker` - Function 😀
+ *
+ * Opens the emoji / GIF panel at the bottom (in place of the phone keyboard).
+ *
+ * @returns { void }
+ */
+function openPicker() {
+  const picker = overlay && overlay.querySelector('.cpick');
+  if (!picker) return;
+  // keyboard down, panel up ⬆️
+  overlay.querySelector('textarea').blur();
+  overlay.querySelector('.cmenu').hidden = true;
+  picker.hidden = false;
+  overlay.querySelector('.cemo').innerHTML = KEYBOARD_ICON;
+  paintPicker();
+}
+
+/**
+ * `closePicker` - Function 👋
+ *
+ * @returns { void }
+ */
+function closePicker() {
+  const picker = overlay && overlay.querySelector('.cpick');
+  if (!picker || picker.hidden) return;
+  picker.hidden = true;
+  overlay.querySelector('.cemo').innerHTML = SMILEY_ICON;
+}
+
+/**
+ * `paintPicker` - Function 🎨
+ *
+ * Draws the panel: the search box, the content (emoji sections or GIF grid) and the bottom bar
+ * (Emoji / GIF tabs, the emoji section shortcuts and the delete key ⌫).
+ *
+ * @returns { void }
+ */
+function paintPicker() {
+  const picker = overlay.querySelector('.cpick'),
+    isEmoji = pickerTab === 'emoji',
+    isSticker = pickerTab === 'sticker';
+  picker.innerHTML =
+    '<div class="cpsearch"><span>🔎</span><input type="search" enterkeyhint="search" placeholder="' +
+    (isEmoji
+      ? translate('Rechercher un emoji', 'Search emoji')
+      : isSticker
+        ? translate('Rechercher un sticker', 'Search stickers')
+        : translate('Rechercher des GIF', 'Search GIFs')) +
+    '"></div><div class="cpbody"></div><div class="cpbar"><div class="cptabs">' +
+    [
+      ['emoji', '😀'],
+      ['gif', 'GIF'],
+      ['sticker', '🏷️'],
+    ]
+      .map(
+        (tab) =>
+          '<button data-tab="' +
+          tab[0] +
+          '"' +
+          (pickerTab === tab[0] ? ' class="on"' : '') +
+          '>' +
+          tab[1] +
+          '</button>',
+      )
+      .join('') +
+    '</div>' +
+    (isEmoji
+      ? '<div class="cpjump">' +
+        EMOJI_TABS.map((tab, index) => '<button data-jump="' + index + '">' + tab[0] + '</button>').join('') +
+        '</div><button class="cpdel" aria-label="delete">⌫</button>'
+      : isSticker
+        ? '<span class="cptenor">Les Trois Forts</span>'
+        : '<span class="cptenor">GIPHY</span>') +
+    '</div>';
+  const search = picker.querySelector('input');
+  // the search box (no keyboard-closing of the panel: it's inside it) 🔎
+  search.oninput = () =>
+    isEmoji ? paintEmojis(search.value) : isSticker ? paintStickers(search.value) : searchGifs(search.value);
+  // 🗂️ Emoji / GIF tabs
+  picker.querySelectorAll('[data-tab]').forEach(
+    (button) =>
+      (button.onclick = () => {
+        pickerTab = button.dataset.tab;
+        paintPicker();
+      }),
+  );
+  if (isEmoji) {
+    // ⏭️ jump to a section
+    picker.querySelectorAll('[data-jump]').forEach(
+      (button) =>
+        (button.onclick = () => {
+          search.value = '';
+          paintEmojis('');
+          const section = picker.querySelector('#cpsec' + button.dataset.jump);
+          if (section) picker.querySelector('.cpbody').scrollTop = section.offsetTop - 4;
+        }),
+    );
+    // ⌫ delete the character before the caret (hold-free, one emoji at a time)
+    picker.querySelector('.cpdel').onclick = deleteBeforeCaret;
+    paintEmojis('');
+  } else if (isSticker) paintStickers('');
+  else searchGifs('');
+  // 👆 taps in the content: an emoji goes in the text, a GIF is sent right away
+  picker.querySelector('.cpbody').onclick = (event) => {
+    const emojiButton = event.target.closest('[data-emoji]'),
+      gifButton = event.target.closest('[data-gif]'),
+      stickerButton = event.target.closest('[data-sticker]');
+    if (emojiButton) insertEmoji(emojiButton.dataset.emoji);
+    if (gifButton) sendMedia({ gif: gifButton.dataset.gif });
+    if (stickerButton) sendMedia({ sticker: stickerButton.dataset.sticker });
+  };
+}
+
+/**
+ * `paintEmojis` - Async Function 😀
+ *
+ * Fills the panel with the emoji sections, or with the matches of a search (English or French words).
+ *
+ * @param { string } searchText - the search box text ('' = every section)
+ * @returns { Promise<void> }
+ */
+async function paintEmojis(searchText) {
+  const content = overlay && overlay.querySelector('.cpbody');
+  if (!content) return;
+  let tabs = [];
+  try {
+    tabs = await loadEmojis();
+  } catch (error) {
+    content.innerHTML =
+      '<p class="cpmsg">' + translate('Emojis indisponibles', 'Emojis unavailable') + '</p>';
+    return;
+  }
+  // the panel may have changed while loading
+  if (pickerTab !== 'emoji' || !overlay) return;
+  const button = (emoji) => '<button data-emoji="' + emoji + '">' + emoji + '</button>';
+  const words = searchText.trim().toLowerCase();
+  // 🔎 a search: every emoji whose words contain all the typed words
+  if (words) {
+    const parts = words.split(/\s+/);
+    const matches = tabs
+      .flat()
+      .filter((item) => parts.every((part) => item[1].includes(part)))
+      .slice(0, 160);
+    content.innerHTML = matches.length
+      ? '<div class="cpgrid">' + matches.map((item) => button(item[0])).join('') + '</div>'
+      : '<p class="cpmsg">' + translate('Aucun emoji trouvé', 'No emoji found') + '</p>';
+    return;
+  }
+  // 🗂️ every section, recents first
+  const recents = recentEmojis();
+  content.innerHTML = [recents, ...tabs.map((tab) => tab.map((item) => item[0]))]
+    .map((list, index) =>
+      list.length || index === 0
+        ? '<div class="cpsec" id="cpsec' +
+          index +
+          '">' +
+          translate(EMOJI_TABS[index][1], EMOJI_TABS[index][2]) +
+          '</div><div class="cpgrid">' +
+          (list.length
+            ? list.map(button).join('')
+            : '<p class="cpmsg">' +
+              translate('Vos emojis récents ici', 'Your recent emojis show here') +
+              '</p>') +
+          '</div>'
+        : '',
+    )
+    .join('');
+}
+
+/**
+ * `insertEmoji` - Function ✍️
+ *
+ * Puts an emoji at the caret of the text box (keyboard stays down) and remembers it in the recents.
+ *
+ * @param { string } emoji - the tapped emoji
+ * @returns { void }
+ */
+function insertEmoji(emoji) {
+  const textarea = overlay.querySelector('textarea');
+  const caret = Math.min(+(textarea.dataset.caret || textarea.value.length), textarea.value.length);
+  if (textarea.value.length + emoji.length > 1000) return;
+  textarea.value = textarea.value.slice(0, caret) + emoji + textarea.value.slice(caret);
+  textarea.dataset.caret = String(caret + emoji.length);
+  textarea.dispatchEvent(new Event('input'));
+  textarea.dataset.caret = String(caret + emoji.length);
+  // 🕘 newest first, no duplicates, 32 max
+  const recents = [emoji, ...recentEmojis().filter((recent) => recent !== emoji)].slice(0, 32);
+  localStorage.setItem(RECENT_KEY, JSON.stringify(recents));
+}
+
+/**
+ * `deleteBeforeCaret` - Function ⌫
+ *
+ * Deletes the character (a whole emoji, even a family or a flag) before the caret.
+ *
+ * @returns { void }
+ */
+function deleteBeforeCaret() {
+  const textarea = overlay.querySelector('textarea');
+  const caret = Math.min(+(textarea.dataset.caret || textarea.value.length), textarea.value.length);
+  if (!caret) return;
+  const pieces = splitGraphemes(textarea.value.slice(0, caret));
+  const removed = (pieces.pop() || '').length;
+  textarea.value = textarea.value.slice(0, caret - removed) + textarea.value.slice(caret);
+  textarea.dispatchEvent(new Event('input'));
+  textarea.dataset.caret = String(caret - removed);
+}
+
+/**
+ * `searchGifs` - Function 🎞️
+ *
+ * Shows GIPHY's trending GIFs, or the results of a search (waits 400 ms after the last key).
+ *
+ * @param { string } searchText - the search box text ('' = trending)
+ * @returns { void }
+ */
+function searchGifs(searchText) {
+  clearTimeout(gifTimer);
+  gifTimer = setTimeout(
+    async () => {
+      const content = overlay && overlay.querySelector('.cpbody');
+      if (!content || pickerTab !== 'gif') return;
+      // no GIPHY key yet? say so instead of failing 🔑
+      if (!/^[A-Za-z0-9]{20,}$/.test(GIPHY_KEY)) {
+        content.innerHTML =
+          '<p class="cpmsg">' + translate('GIF bientôt disponibles', 'GIFs coming soon') + '</p>';
+        return;
+      }
+      // the GIPHY request: trending or search, safe content (pg-13) 🛡️
+      const words = searchText.trim();
+      const url =
+        'https://api.giphy.com/v1/gifs/' +
+        (words ? 'search?q=' + encodeURIComponent(words) + '&' : 'trending?') +
+        'api_key=' +
+        GIPHY_KEY +
+        '&limit=40&rating=pg-13&lang=' +
+        (isEnglish() ? 'en' : 'fr');
+      try {
+        const results = (await (await fetch(url)).json()).data || [];
+        if (pickerTab !== 'gif' || !overlay) return;
+        // the small animated previews (fixed width 200 px), GIPHY addresses only
+        const gifs = results
+          .map((result) => result.images && result.images.fixed_width)
+          .filter((media) => media && GIF_PATTERN.test(String(media.url)))
+          .map((media) => ({ url: String(media.url).split('?')[0] }));
+        content.innerHTML = gifs.length
+          ? '<div class="cpgifs">' +
+            gifs
+              .map(
+                (media) =>
+                  '<button data-gif="' +
+                  escapeHtml(media.url) +
+                  '"><img src="' +
+                  escapeHtml(media.url) +
+                  '" alt="GIF" loading="lazy"></button>',
+              )
+              .join('') +
+            '</div>'
+          : '<p class="cpmsg">' + translate('Aucun GIF trouvé', 'No GIF found') + '</p>';
+      } catch (error) {
+        content.innerHTML = '<p class="cpmsg">' + translate('GIF indisponibles', 'GIFs unavailable') + '</p>';
+      }
+    },
+    searchText ? 400 : 0,
+  );
+}
+
+/**
+ * `paintStickers` - Function 🏷️
+ *
+ * Fills the panel with our stickers (or the ones whose name matches the search).
+ *
+ * @param { string } searchText - the search box text ('' = all)
+ * @returns { void }
+ */
+function paintStickers(searchText) {
+  const content = overlay && overlay.querySelector('.cpbody');
+  if (!content) return;
+  const words = searchText.trim().toLowerCase();
+  const matches = STICKERS.filter((sticker) => !words || sticker.join(' ').toLowerCase().includes(words));
+  content.innerHTML = matches.length
+    ? '<div class="cpstk">' +
+      matches
+        .map(
+          (sticker) =>
+            '<button data-sticker="' +
+            sticker[0] +
+            '" title="' +
+            escapeHtml(translate(sticker[1], sticker[2])) +
+            '"><img src="stickers/' +
+            sticker[0] +
+            '.webp" alt=""></button>',
+        )
+        .join('') +
+      '</div>'
+    : '<p class="cpmsg">' + translate('Aucun sticker trouvé', 'No sticker found') + '</p>';
+}
+
+/**
+ * `sendMedia` - Async Function 🎞️
+ *
+ * Posts a GIF or a sticker right away (with the reply, if any), then chimes and notifies the team.
+ *
+ * @param { { gif?: string, sticker?: string } } media - a GIPHY address or one of our sticker slugs
+ * @returns { Promise<void> }
+ */
+async function sendMedia(media) {
+  if (!user) return;
+  if (media.gif && !GIF_PATTERN.test(media.gif)) return;
+  if (media.sticker && !isStickerSlug(media.sticker)) return;
+  const newMessage = {
+    uid: user.uid,
+    name: user.displayName || 'Staff',
+    pic: user.photoURL || '',
+    text: '',
+    ts: serverTimestamp(),
+  };
+  if (media.gif) newMessage.gif = media.gif;
+  if (media.sticker) newMessage.sticker = media.sticker;
+  if (replyTo) newMessage.rep = replyTo;
+  replyTo = null;
+  closePicker();
+  paint.done = false;
+  paint();
+  try {
+    const added = await addDoc(collection(firestore, 'chat'), newMessage);
+    playChime();
+    notifyTeam(added.id);
+  } catch (error) {
+    errorText = translate('Envoi impossible', 'Could not send');
+    paint();
+  }
+}
 
 // ===== DELETE DIALOG 🗑 ===== //
 

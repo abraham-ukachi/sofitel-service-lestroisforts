@@ -172,7 +172,9 @@ body {
 body {
   margin: 0;
   color: var(--tx);
-  font-family: -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  font-family:
+    -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji',
+    'Noto Color Emoji';
   font-size: 15px;
   min-height: 100vh;
   -webkit-font-smoothing: antialiased;
@@ -2166,7 +2168,7 @@ body.notabs .toast {
   background: var(--bar, #14203a);
   border: 1px solid rgba(255, 255, 255, 0.14);
   border-radius: 24px;
-  padding: 4px 4px 4px 16px;
+  padding: 2px 4px 2px 2px;
 }
 .cpill textarea {
   flex: 1;
@@ -2182,18 +2184,228 @@ body.notabs .toast {
   line-height: 1.35;
 }
 .cplus {
-  width: 36px;
-  height: 36px;
-  border-radius: 18px;
+  width: 40px;
+  height: 40px;
   border: 0;
-  background: rgba(255, 255, 255, 0.1);
+  padding: 0;
+  background: transparent;
   color: inherit;
-  font-size: 24px;
-  line-height: 1;
+  font-size: 28px;
   font-weight: 300;
   cursor: pointer;
   flex: none;
-  margin-left: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 0;
+}
+/* 😀 the emoji button, left inside the pill */
+.cemo {
+  width: 40px;
+  height: 40px;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: var(--mu);
+  cursor: pointer;
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+/* 😀 the emoji / GIF panel (WhatsApp-like, in place of the keyboard) */
+.cpick {
+  margin: 8px -10px 0;
+  height: 310px;
+  background: var(--bar, #14203a);
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  display: flex;
+  flex-direction: column;
+  animation: cpickup 0.18s ease-out;
+}
+.cpick[hidden] {
+  display: none;
+}
+@keyframes cpickup {
+  from {
+    transform: translateY(30px);
+    opacity: 0;
+  }
+}
+.cpsearch {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 10px 12px 4px;
+  padding: 0 12px;
+  height: 38px;
+  border-radius: 19px;
+  background: var(--sf2);
+  font-size: 14px;
+}
+.cpsearch input {
+  flex: 1;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 15px;
+}
+.cpbody {
+  flex: 1;
+  overflow-y: auto;
+  padding: 0 8px 6px;
+  overscroll-behavior: contain;
+}
+.cpsec {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--mu);
+  margin: 10px 6px 4px;
+}
+.cpgrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(42px, 1fr));
+}
+.cpgrid button {
+  height: 44px;
+  border: 0;
+  background: none;
+  font-size: 28px;
+  cursor: pointer;
+  border-radius: 10px;
+  padding: 0;
+}
+.cpgrid button:active {
+  background: var(--sf2);
+}
+.cpmsg {
+  grid-column: 1 / -1;
+  text-align: center;
+  color: var(--mu);
+  font-size: 13.5px;
+  margin: 14px 0;
+}
+.cpgifs {
+  columns: 2;
+  column-gap: 6px;
+  padding-top: 6px;
+}
+.cpgifs button {
+  display: block;
+  width: 100%;
+  margin: 0 0 6px;
+  padding: 0;
+  border: 0;
+  border-radius: 10px;
+  overflow: hidden;
+  background: var(--sf2);
+  cursor: pointer;
+  break-inside: avoid;
+}
+.cpgifs img {
+  display: block;
+  width: 100%;
+  min-height: 60px;
+}
+.cpbar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  padding-bottom: max(6px, env(safe-area-inset-bottom));
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+.cptabs {
+  display: flex;
+  gap: 4px;
+  flex: none;
+}
+.cptabs button {
+  border: 0;
+  background: none;
+  color: var(--mu);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  padding: 6px 10px;
+  border-radius: 14px;
+  cursor: pointer;
+}
+.cptabs button.on {
+  background: var(--sf2);
+  color: var(--gold);
+}
+.cpjump {
+  flex: 1;
+  display: flex;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.cpjump button {
+  border: 0;
+  background: none;
+  font-size: 18px;
+  padding: 4px 5px;
+  cursor: pointer;
+  flex: none;
+}
+.cpdel {
+  border: 0;
+  background: none;
+  color: inherit;
+  font-size: 22px;
+  padding: 2px 6px;
+  cursor: pointer;
+  flex: none;
+}
+.cptenor {
+  margin-left: auto;
+  font-size: 11px;
+  color: var(--mu);
+}
+/* 🏷️ the sticker grid & a sticker in a bubble (no bubble colour behind it) */
+.cpstk {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 6px;
+  padding-top: 8px;
+}
+.cpstk button {
+  border: 0;
+  background: none;
+  padding: 4px;
+  border-radius: 14px;
+  cursor: pointer;
+}
+.cpstk button:active {
+  background: var(--sf2);
+}
+.cpstk img {
+  width: 100%;
+  display: block;
+}
+.cst {
+  display: block;
+  width: 140px;
+  height: 140px;
+}
+.cb.cbst {
+  background: transparent !important;
+  padding: 0;
+}
+/* 🎞️ a GIF in a bubble & 1-3 emojis alone shown big */
+.cg {
+  display: block;
+  max-width: 220px;
+  width: 100%;
+  border-radius: 12px;
+  margin-bottom: 4px;
+}
+.ct.cbig {
+  font-size: 40px;
+  line-height: 1.15;
 }
 .cmenu {
   position: absolute;
