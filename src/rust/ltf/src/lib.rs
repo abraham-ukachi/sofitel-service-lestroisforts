@@ -170,6 +170,8 @@ pub fn start() {
     });
     // 🗂️ the items (scan & tests) + the course of an item
     expose0("LTFitems", ui::ltf_items);
+    // 👋 the floor plan with today's bookings (welcome screen)
+    expose0("LTFbriefPlan", ui::ltf_brief_plan);
     expose2("LTFcourseOf", |it, _| get(&it, "course"));
     // 🌗 the theme
     expose2("LTFtheme", |theme, _| {

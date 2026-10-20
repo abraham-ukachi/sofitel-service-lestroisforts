@@ -533,6 +533,8 @@
   };
   // 🌍 the items, for the scan & the tests
   window.LTFitems = () => items;
+  // 👋 the floor plan with today's bookings, for the welcome screen
+  window.LTFbriefPlan = () => planSVG({ labels: true, res: LTF.jour.tables.map((table) => table[1]) });
 
   /**
    * `sayBtn` - Function 🔊

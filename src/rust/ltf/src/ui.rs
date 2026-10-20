@@ -2133,6 +2133,23 @@ pub fn ltf_test() -> JsValue {
     js_sys::JSON::parse(&report.to_string()).unwrap_or(JsValue::NULL)
 }
 
+/// `ltf_brief_plan` - Function (window.LTFbriefPlan) 👋
+///
+/// The floor plan with today's reserved tables in gold, for the welcome screen.
+///
+/// @returns { JsValue } - the floor plan `<svg>` markup
+pub fn ltf_brief_plan() -> JsValue {
+    let built_app = app();
+    let empty = vec![];
+    let reserved: Vec<String> = built_app.data["jour"]["tables"]
+        .as_array()
+        .unwrap_or(&empty)
+        .iter()
+        .map(|table| table[1].as_str().unwrap_or_default().to_string())
+        .collect();
+    JsValue::from_str(&plan_svg_res(None, true, &reserved))
+}
+
 /// `ltf_items` - Function (window.LTFitems) 🗂️
 ///
 /// A plain-object snapshot of the items (without the generator functions).
