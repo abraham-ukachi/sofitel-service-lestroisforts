@@ -2,6 +2,15 @@
 
 All notable changes to this project will be documented in this file. Versions follow the service-worker cache (`ltf-vNN` → `0.NN.0`), see [CONTRIBUTING.md](./CONTRIBUTING.md#git-commit-messages) for the commit guidelines.
 
+### 0.47.0 (2026-10-20)
+
+* :lipstick: Center the labels of the welcome screen buttons (Passer, Suivant, Commencer)
+* :sparkles: Show the app version (V0.47) as a small faded caption at the bottom of the Profil tab
+* :sparkles: Play a short chime when a chat message is sent or arrives (Web Audio, follows the sound switch)
+* :sparkles: Swipe one of your messages to the left to delete it, with our own themed confirm dialog (no system pop-up)
+* :sparkles: Add chat push notifications: 🔔 bell in the chat header, subscriptions in Firestore `push/{uid}`, sent by the new Vercel function `api/notify.js` (web-push, VAPID key in the Vercel env)
+* :bento: Bump the service-worker cache to `ltf-v47-rs`
+
 ### 0.46.0 (2026-10-20)
 
 * :sparkles: Add a welcome screen for first-time waiters: 5 swipeable slides (Académie, Carte, Formation, Briefing, Équipe) with Passer / Suivant / Commencer, in French & English (`welcome.js`)
