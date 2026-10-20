@@ -45,7 +45,7 @@
 // cache as a fallback (📴 offline), and a separate persistent cache for the heavy scan assets.
 
 // the cache of this version (bump it on every deploy, so phones pick up the new build 🚀)
-const CACHE = 'ltf-v45-rs';
+const CACHE = 'ltf-v46-rs';
 // the app shell, precached on install 📦
 const ASSETS = [
   './',
@@ -57,6 +57,7 @@ const ASSETS = [
   'icon-192.png',
   'icon-512.png',
   'apple-touch-icon.png',
+  'welcome.js',
   'names.js',
   'cloud.js',
   'chat.js',

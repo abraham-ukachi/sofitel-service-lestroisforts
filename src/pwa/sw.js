@@ -45,7 +45,7 @@
 // network first, cache as a fallback (📴 offline).
 
 // the cache of this version 🏷️
-const CACHE = 'ltf-v45';
+const CACHE = 'ltf-v46';
 // the app shell, precached on install 📦
 const ASSETS = [
   './',
@@ -61,6 +61,7 @@ const ASSETS = [
   'icon-192.png',
   'icon-512.png',
   'apple-touch-icon.png',
+  'welcome.js',
 ];
 
 // 📥 install: precache the shell & take over right away
