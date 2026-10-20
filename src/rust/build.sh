@@ -80,10 +80,11 @@ if [ -x "$WASM_OPT_BIN" ]; then "$WASM_OPT_BIN" -Oz --enable-bulk-memory --enabl
 # 5. 📄 static files (index.html, service worker, scripts, icons, photos, scan engine, grape audio)
 node tools/make_index.js "$PWA" "$DIST"
 cp web/sw.js "$DIST/"
-cp "$PWA"/{names.js,cloud.js,chat.js,scan.js,welcome.js,manifest.json,hero.jpg,icon-192.png,icon-512.png,apple-touch-icon.png} "$DIST/"
+cp "$PWA"/{names.js,cloud.js,chat.js,emoji.json,scan.js,welcome.js,manifest.json,hero.jpg,icon-192.png,icon-512.png,apple-touch-icon.png} "$DIST/"
 cp -r "$PWA/img" "$DIST/img"
 cp -r "$PWA/scan" "$DIST/scan"
 cp -r "$PWA/say" "$DIST/say"
+cp -r "$PWA/stickers" "$DIST/stickers"
 
 # 6. 📝 the public repo files: README, LICENSE, CONTRIBUTING, CHANGELOG & the Vercel config (static, no build)
 cp "$RUST_DIR/../README.md" "$RUST_DIR/../LICENSE" "$DIST/"
