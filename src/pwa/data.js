@@ -2547,8 +2547,8 @@ window.LTF.fromages = [
       en: 'the mildest, rind covered in dried flowers',
     },
     d: {
-      fr: 'Tomme enrobée de fleurs séchées comestibles (souci, bleuet, rose, mauve). Pâte souple, notes florales ; la croûte se mange.',
-      en: 'A tomme coated in edible dried flowers (marigold, cornflower, rose, mallow). Supple paste, floral notes; the rind is edible.',
+      fr: "C'est une tomme enrobée de fleurs séchées qui se mangent : souci, bleuet, rose et mauve. La pâte est souple, avec des notes florales, et vous pouvez manger la croûte.",
+      en: "It's a tomme coated in edible dried flowers: marigold, cornflower, rose and mallow. It's supple, with floral notes, and you can eat the rind.",
     },
   },
   {
@@ -2559,8 +2559,8 @@ window.LTF.fromages = [
     pate: { fr: 'Pâte pressée', en: 'Pressed cheese' },
     h: { fr: 'croûte marquée par le panier (faisselle)', en: 'rind printed by its basket mould' },
     d: {
-      fr: 'Petite tomme corse, reconnaissable aux motifs de panier sur sa croûte. Pâte souple, goût lactique et franc.',
-      en: 'A small Corsican tomme, recognisable by the basket pattern on its rind. Supple paste, clean milky taste.',
+      fr: "C'est une petite tomme corse, on la reconnaît aux motifs de panier sur sa croûte. Pâte souple, goût de lait franc et net.",
+      en: "It's a small Corsican tomme, you can tell by the basket pattern on its rind. Supple, with a clean, milky taste.",
     },
   },
   {
@@ -2570,8 +2570,8 @@ window.LTF.fromages = [
     pate: { fr: 'Pâte molle, croûte cendrée', en: 'Soft cheese, ash rind' },
     h: { fr: 'petit chèvre rond servi sur assiette noire', en: "small round goat's cheese on a black plate" },
     d: {
-      fr: "Chèvre recouvert de cendre végétale : la cendre protège la croûte et adoucit l'acidité. Pâte fine et fondante sous la croûte.",
-      en: "Goat's cheese coated in vegetable ash, which protects the rind and softens the acidity. Fine, melting paste under the rind.",
+      fr: "C'est un chèvre recouvert de cendre végétale : la cendre protège la croûte et adoucit l'acidité. Juste dessous, la pâte est fine et fondante.",
+      en: "It's a goat's cheese coated in vegetable ash, which protects the rind and softens the tang. Just underneath, it's fine and melting.",
     },
   },
   {
@@ -2581,8 +2581,8 @@ window.LTF.fromages = [
     pate: { fr: 'Pâte molle légèrement persillée', en: 'Soft, lightly blue-veined' },
     h: { fr: 'croûte grise cendrée, cœur légèrement bleu', en: 'grey ash rind, lightly blue heart' },
     d: {
-      fr: 'Le « bleu doux » du plateau : croûte grise cendrée, pâte crémeuse à peine persillée. Le premier pas vers les bleus.',
-      en: 'The board\'s "gentle blue": grey ash rind, creamy paste barely veined. A first step into blue cheese.',
+      fr: "C'est le « bleu doux » du plateau : une croûte grise cendrée et une pâte crémeuse, à peine persillée. Parfait pour commencer avec les bleus.",
+      en: "It's the board's \"gentle blue\": a grey ash rind and a creamy inside, barely veined. Perfect if you're just getting into blue cheese.",
     },
   },
   {
@@ -2592,8 +2592,8 @@ window.LTF.fromages = [
     pate: { fr: 'Pâte molle, croûte aux herbes', en: 'Soft cheese, herb crust' },
     h: { fr: "croûte d'herbes du maquis", en: 'crust of maquis herbs' },
     d: {
-      fr: "Brebis corse roulé dans les herbes du maquis (romarin, sarriette, thym). On l'appelle aussi Fleur du maquis.",
-      en: "Corsican sheep's cheese rolled in maquis herbs (rosemary, savory, thyme). Also called Fleur du maquis.",
+      fr: "C'est un brebis corse roulé dans les herbes du maquis : romarin, sarriette et thym. On l'appelle aussi Fleur du maquis.",
+      en: "It's a Corsican sheep's cheese rolled in maquis herbs: rosemary, savory and thyme. It's also called Fleur du maquis.",
     },
   },
   {
@@ -2606,8 +2606,8 @@ window.LTF.fromages = [
       en: 'aged 18 months: fruity, nutty, little crystals',
     },
     d: {
-      fr: 'Fruité, noisette et beurre, avec du caractère : à 18 mois le goût est plus intense et de petits cristaux croquants apparaissent.',
-      en: 'Fruity, nutty and buttery with real character: at 18 months the taste is deeper and little crunchy crystals appear.',
+      fr: "C'est un Comté de 18 mois : fruité, noisette, beurré, avec du caractère. À cet âge, le goût est plus intense et il y a de petits cristaux qui croquent.",
+      en: "It's an 18-month Comté: fruity, nutty, buttery, with real character. At that age the taste is deeper and you get little crunchy crystals.",
     },
   },
   {
@@ -2617,8 +2617,8 @@ window.LTF.fromages = [
     pate: { fr: 'Pâte molle, croûte lavée', en: 'Soft cheese, washed rind' },
     h: { fr: 'croûte orangée, chèvre corse', en: 'orange rind, Corsican goat' },
     d: {
-      fr: "Chèvre corse à croûte orangée. « Casgiu casanu » veut dire « fromage de la maison » en corse. Posé à côté de l'autre moitié de la tommette.",
-      en: 'Corsican goat\'s cheese with an orange rind. "Casgiu casanu" means "house cheese" in Corsican. Placed next to the other half of the tommette.',
+      fr: "C'est un chèvre corse à croûte orangée. « Casgiu casanu », ça veut dire « fromage de la maison » en corse. Sur le plateau, il est juste à côté de l'autre moitié de la tommette.",
+      en: 'It\'s a Corsican goat\'s cheese with an orange rind. "Casgiu casanu" means "house cheese" in Corsican. On the board it sits right next to the other half of the tommette.',
     },
   },
   {
@@ -2629,8 +2629,8 @@ window.LTF.fromages = [
     side: 1,
     h: { fr: 'le plus fort, servi à côté du plateau', en: 'the strongest, served beside the board' },
     d: {
-      fr: 'Le bleu italien, le plus fort. Chez nous il est très crémeux, servi à part dans un ramequin, à côté du plateau, pour ne pas parfumer les autres.',
-      en: "The Italian blue, the strongest. Ours is very creamy, served separately in a ramekin beside the board so it won't overpower the others.",
+      fr: "C'est le bleu italien, le plus fort du plateau. Le nôtre est très crémeux, et on le sert à part dans un petit ramequin pour qu'il ne parfume pas les autres.",
+      en: "It's the Italian blue, the strongest on the board. Ours is really creamy, and we serve it on the side in a little ramekin so it doesn't take over the others.",
     },
   },
 ];
