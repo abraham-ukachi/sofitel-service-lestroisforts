@@ -517,7 +517,10 @@ pub fn build() -> App {
         let prod_key = obj_keys(&li["wineProd"]).into_iter().find(|producer| ww.contains(producer.as_str()));
         let prod = prod_key.map(|producer| js(&li["wineProd"][producer.as_str()])).unwrap_or_default();
         let colour = match wc.as_str() { "Blanc" => "white", "Rosé" => "rosé", "Rouge" => "red", _ => "undefined" };
-        let say = if en_ { format!("A {} {} from {}, {}, by {}.", colour, wa, w_(&wr), gs(wine, "v"), ww) } else { format!("Un {} {} ({}), millésime {}, de {}.", if wc == "Blanc" { "blanc" } else if wc == "Rosé" { "rosé" } else { "rouge" }, wa, wr, gs(wine, "v"), ww) };
+        // 🗺 the French "from" for each wine region (de Provence, du Rhône, d'Espagne...)
+        let from_region = match wr.as_str() { "Rhône" => "du Rhône".to_string(), "Espagne" => "d'Espagne".to_string(), "Loire" => "de la Loire".to_string(), "Sicile (Italie)" => "de Sicile".to_string(), other => format!("de {}", other) };
+        // 🗣 the way a waiter would say it at the table
+        let say = if en_ { format!("It's a {} from {}, appellation {}, {} vintage, made by {}.", colour, w_(&wr), wa, gs(wine, "v"), ww) } else { format!("C'est un {} {}, appellation {}, millésime {}, signé {}.", if wc == "Blanc" { "blanc" } else if wc == "Rosé" { "rosé" } else { "rouge" }, from_region, wa, gs(wine, "v"), ww) };
         let aw = format!("{} {}", wa, ww);
         let pk = if wc == "Blanc" { if richw.iter().any(|marker| aw.contains(marker)) { "BlancRich" } else { "Blanc" } } else if wc == "Rosé" { "Rosé" } else if bigr.iter().any(|marker| wa.contains(marker)) { "RougeBig" } else { "Rouge" };
         sec(SAY, &ttl_say, &esc(&say)) + &taste_sec(&format!("{}|{}@{}", ww, wc, wa)) + &sec("🍇", &translate("L'appellation", "The appellation"), &esc(&app)) + &sec("🏡", &translate("Le domaine", "The producer"), &esc(&prod)) + &sec("🍽", &translate("Accord suggéré", "Pairing idea"), &esc(&or_str(&[&li["pairWith"][pk]])))
@@ -551,7 +554,7 @@ pub fn build() -> App {
     };
     let info_coffee = |coffee: &Value| -> String {
         let name = gs(coffee, "n");
-        let say = if name == "Thé / infusion" { if !en_ && tk(&li, "teaCoffee") { js(&li["teaCoffee"]) } else { "Teas and herbal teas from Maison Père Blaize, Marseille's historic herbalist (founded 1815). Eight choices — see the tea list.".into() } } else { or_str(&[&li["coffee"]]) };
+        let say = if name == "Thé / infusion" { if !en_ && tk(&li, "teaCoffee") { js(&li["teaCoffee"]) } else { "We have teas and herbal teas from Maison Père Blaize, Marseille's historic herbalist since 1815. There are eight to choose from: shall I show you the list?".into() } } else { or_str(&[&li["coffee"]]) };
         sec("🇬🇧", &translate("En anglais", "In English"), &esc(&{
             let english = &le["coffee"][name.as_str()];
             if truthy(english) { js(english) } else { name.clone() }
@@ -567,10 +570,10 @@ pub fn build() -> App {
         let course = gs(wine, "course");
         let say = if en_ {
             let course_en = match course.as_str() { "Entrée" => "starter", "Plat poisson" => "fish course", "Plat viande" => "meat course", "Dessert" => "dessert", _ => "undefined" };
-            format!("The {} pairing of the Tasting Menu (+55 € per person). {}.", course_en, or_str(&[&english["t"]]))
+            format!("This is what we pour with the {} on the Tasting Menu, if you take the pairing (55 € extra per person). {}.", course_en, or_str(&[&english["t"]]))
         } else {
-            let course_fr = match course.as_str() { "Entrée" => "de l'entrée", "Plat poisson" => "du plat poisson", "Plat viande" => "du plat viande", "Dessert" => "du dessert", _ => "undefined" };
-            format!("L'accord {} du Menu Dégustation (+55 € par personne). {}.", course_fr, gs(wine, "t"))
+            let course_fr = match course.as_str() { "Entrée" => "l'entrée", "Plat poisson" => "le plat poisson", "Plat viande" => "le plat viande", "Dessert" => "le dessert", _ => "undefined" };
+            format!("C'est ce qu'on vous sert avec {} dans le Menu Dégustation, si vous prenez les accords (55 € de plus par personne). {}.", course_fr, gs(wine, "t"))
         };
         sec(SAY, &ttl_say, &esc(&say)) + &(if truthy(&wine["tk"]) { taste_sec(&gs(wine, "tk")) } else { String::new() }) + &sec("🍇", &translate("Cépages", "Grapes"), &esc(&if en_ { or_str(&[&english["g"], &wine["g"]]) } else { gs(wine, "g") }))
     };

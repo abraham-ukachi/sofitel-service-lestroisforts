@@ -624,6 +624,22 @@
       `<p class="warn">⚠ ${ALLERGY}</p>`
     );
   }
+  // the French "from" for each wine region (de Provence, du Rhône, d'Espagne...) 🗺
+  const REGION_FROM = {
+    Rhône: 'du Rhône',
+    Espagne: "d'Espagne",
+    Loire: 'de la Loire',
+    'Sicile (Italie)': 'de Sicile',
+  };
+
+  /**
+   * `fromRegion` - Function 🗺
+   *
+   * @param { string } region - a wine region, in French (e.g. "Provence", "Rhône")
+   * @returns { string } - the region with the right French "from" (e.g. "de Provence", "du Rhône")
+   */
+  const fromRegion = (region) => REGION_FROM[region] || 'de ' + region;
+
   // rich whites & big reds (for the pairing idea) 🍷
   const RICHW =
     /Meursault|Condrieu|Châteauneuf|Bandol|Beaune|Saint-Joseph|Pibarnon|Cardillone|Leoube|Minuty, Blanc/;
@@ -654,9 +670,10 @@
     );
     const prod = prodKey ? INFO.wineProd[prodKey] : '';
     const colour = { Blanc: 'white', Rosé: 'rosé', Rouge: 'red' }[wine.c];
+    // the way a waiter would say it at the table 🗣
     const say = EN
-      ? `A ${colour} ${wine.a} from ${translateWord(wine.r)}, ${wine.v}, by ${wine.w}.`
-      : `Un ${wine.c === 'Blanc' ? 'blanc' : wine.c === 'Rosé' ? 'rosé' : 'rouge'} ${wine.a} (${wine.r}), millésime ${wine.v}, de ${wine.w}.`;
+      ? `It's a ${colour} from ${translateWord(wine.r)}, appellation ${wine.a}, ${wine.v} vintage, made by ${wine.w}.`
+      : `C'est un ${wine.c === 'Blanc' ? 'blanc' : wine.c === 'Rosé' ? 'rosé' : 'rouge'} ${fromRegion(wine.r)}, appellation ${wine.a}, millésime ${wine.v}, signé ${wine.w}.`;
     const pairingKind =
       wine.c === 'Blanc'
         ? RICHW.test(wine.a + ' ' + wine.w)
@@ -756,7 +773,7 @@
           coffee.n === 'Thé / infusion'
             ? !EN && INFO.teaCoffee
               ? INFO.teaCoffee
-              : "Teas and herbal teas from Maison Père Blaize, Marseille's historic herbalist (founded 1815). Eight choices — see the tea list."
+              : "We have teas and herbal teas from Maison Père Blaize, Marseille's historic herbalist since 1815. There are eight to choose from: shall I show you the list?"
             : INFO.coffee || '',
         ),
       )
@@ -785,10 +802,10 @@
   function infoPair(wine) {
     const english = (LTF_EN.pairing || {})[wine.n] || {};
     const say = EN
-      ? `The ${{ Entrée: 'starter', 'Plat poisson': 'fish course', 'Plat viande': 'meat course', Dessert: 'dessert' }[wine.course]} pairing of the Tasting Menu (+55 € per person). ${english.t || ''}.`
-      : `L'accord ` +
-        `${{ Entrée: "de l'entrée", 'Plat poisson': 'du plat poisson', 'Plat viande': 'du plat viande', Dessert: 'du dessert' }[wine.course]}` +
-        ` du Menu Dégustation (+55 € par personne). ${wine.t}.`;
+      ? `This is what we pour with the ${{ Entrée: 'starter', 'Plat poisson': 'fish course', 'Plat viande': 'meat course', Dessert: 'dessert' }[wine.course]} on the Tasting Menu, if you take the pairing (55 € extra per person). ${english.t || ''}.`
+      : `C'est ce qu'on vous sert avec ` +
+        `${{ Entrée: "l'entrée", 'Plat poisson': 'le plat poisson', 'Plat viande': 'le plat viande', Dessert: 'le dessert' }[wine.course]}` +
+        ` dans le Menu Dégustation, si vous prenez les accords (55 € de plus par personne). ${wine.t}.`;
     return (
       sec(SAY, ttlSay, esc(say)) +
       (wine.tk ? tasteSec(wine.tk) : '') +
