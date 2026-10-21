@@ -51,7 +51,7 @@
   const SEEN_KEY = 'ltf_welcome_v1';
 
   // 🏷️ the current version of the app (shown at the bottom of the Profil tab, bump it with every release)
-  const APP_VERSION = '0.48.0';
+  const APP_VERSION = '0.49.0';
 
   /**
    * `isEnglish` - Function 🌍

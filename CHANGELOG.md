@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file. Versions follow the service-worker cache (`ltf-vNN` → `0.NN.0`), see [CONTRIBUTING.md](./CONTRIBUTING.md#git-commit-messages) for the commit guidelines.
 
+### 0.49.0 (2026-10-21)
+
+* :speech_balloon: Rewrite every "What to tell the guest" line (dishes, cocktails, softs, teas, coffee, digestifs, champagnes, cheeses) in French and English so it sounds like a waiter talking at the table, easy to learn by heart
+* :speech_balloon: Make the wine and pairing-wine lines spoken too ("C'est un rouge de Provence, appellation Bandol..."), with the right French "de / du / d'" for each region
+* :bento: Bump the service-worker cache to `ltf-v49-rs`
+
 ### 0.48.0 (2026-10-20)
 
 * :lipstick: Show the chat's + as a plain centered sign (no circle behind it)

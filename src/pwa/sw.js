@@ -45,7 +45,7 @@
 // network first, cache as a fallback (📴 offline).
 
 // the cache of this version 🏷️
-const CACHE = 'ltf-v48';
+const CACHE = 'ltf-v49';
 // the app shell, precached on install 📦
 const ASSETS = [
   './',

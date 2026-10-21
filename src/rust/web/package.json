@@ -1,6 +1,6 @@
 {
   "name": "sofitel-service-lestroisforts",
-  "version": "0.48.0",
+  "version": "0.49.0",
   "private": true,
   "description": "Les Trois Forts - Service Academy: the static PWA + the chat push function (api/notify.js) on Vercel",
   "author": "Abraham Ukachi <abrahamukachi@gmail.com>",
