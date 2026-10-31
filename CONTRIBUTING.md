@@ -74,45 +74,49 @@ This app is used on a real restaurant floor, so:
 | `wasm-bindgen` CLI | **0.2.129** | must match the crate pin |
 | binaryen (`wasm-opt`) | version_133 (optional) | a smaller wasm |
 | Node.js | >= 18 | data conversion & tests |
-| jsdom / fake-indexeddb | 24 / 6 | tests |
 
-> NOTE: `bash rust/setup_toolchain.sh` installs all of it in a fresh sandbox (aarch64, no C compiler: zig is used as the linker).
+> NOTE: `bash src/rust/setup_toolchain.sh` installs the toolchain in the original fresh aarch64 sandbox (no C compiler: zig is used as the linker). On a normal development machine, install stable Rust, the WASM target and the pinned `wasm-bindgen` CLI with your usual toolchain instead.
 
 
 ### Build
 
 ```bash
-cd rust && ./build.sh        # -> rust/dist/
+npm ci
+npm run build              # -> src/rust/dist/
 ```
 
-`build.sh` converts the menu data (`pwa/*.js`) to JSON, compiles the crate, runs `wasm-bindgen` & `wasm-opt`, then copies the static files, the docs and the readable sources (`src/`) into `rust/dist/`, the folder that is published.
+`build.sh` converts the menu data (`src/pwa/*.js`) to JSON, compiles the crate, runs `wasm-bindgen` & `wasm-opt`, then copies the static files, the docs and the readable sources (`src/`) into `src/rust/dist/`. When a source-side static asset is absent, it uses the checked-in deployable copy at the repository root.
 
 
 ### Updating the menu
 
-1. Edit `pwa/data.js` (menu), `pwa/i18n.js` (English + ⓘ notes), `pwa/i18n_fr.js` (French ⓘ notes, same keys) and `pwa/images.js` + `pwa/img/` (photos).
+1. Edit `src/pwa/data.js` (menu), `src/pwa/i18n.js` (English + ⓘ notes), `src/pwa/i18n_fr.js` (French ⓘ notes, same keys) and `src/pwa/images.js` + `src/pwa/img/` (photos).
 2. Rename an image file when you replace it (the service worker & the browsers cache it).
-3. Regenerate `pwa/scan/emb.json` (`src/rust/tools/scan/emb.js`) when dish or wine photos change.
-4. Run `./build.sh` and the [tests](#testing-).
-5. Bump `CACHE` in `rust/web/sw.js` (`ltf-vNN-rs`) so the phones pick up the new build.
+3. Regenerate `src/pwa/scan/emb.json` (`src/rust/tools/scan/emb.js`) when dish or wine photos change.
+4. Run `npm run build` and the [tests](#testing-).
+5. Bump `CACHE` in `src/rust/web/sw.js` (`ltf-vNN-rs`) so the phones pick up the new build.
 
 
 ## Project Structure 📁
 
 ```sh
 .
-├── pwa/                     # the JavaScript app (reference) + the shared page, data & assets
-│   ├── index.html           # app shell, CSS & inline helpers (shared by both builds)
-│   ├── app.js               # the original app (the tests compare the Rust port against it)
-│   ├── chat.js cloud.js scan.js
-│   └── data.js i18n.js i18n_fr.js fun.js images.js names.js
-├── rust/
-│   ├── ltf/                 # the Cargo crate (src/lib.rs, state.rs, build.rs, ui.rs, media.rs, util.rs)
-│   ├── tools/               # gen_data.js, gen_appdata.js, make_index.js, enc_names.py, scan/
-│   ├── web/                 # sw.js, vercel.json, CONTRIBUTING.md, CHANGELOG.md
-│   ├── tests/               # jsdom tests (run_all.sh)
-│   ├── build.sh
-│   └── dist/                # the build output = this public repo
+├── index.html ltf.js ltf_bg.wasm sw.js   # checked-in deployable app
+├── chat.js chat-security.mjs cloud.js scan.js
+├── src/
+│   ├── pwa/                 # JavaScript reference + shared page, data & assets
+│   │   ├── index.html       # app shell, CSS & inline helpers
+│   │   ├── app.js           # the original JavaScript application
+│   │   ├── chat.js chat-security.mjs cloud.js scan.js
+│   │   └── data.js i18n.js i18n_fr.js fun.js images.js
+│   └── rust/
+│       ├── ltf/             # Cargo crate (lib.rs, state.rs, build.rs, ui.rs, media.rs, util.rs)
+│       ├── tools/           # data generators, names encryptor, scan tools
+│       ├── web/             # service worker, push function & package metadata
+│       ├── tests/           # focused Node regression tests
+│       ├── build.sh
+│       └── dist/            # generated build output (ignored)
+├── firestore.rules firebase.json SECURITY.md
 ├── README.md
 └── LICENSE
 ```
@@ -161,7 +165,7 @@ Examples:
 | 🌐 | `:globe_with_meridians:` | Internationalization and localization. | English strings & French ⓘ notes. |
 | 🔒 | `:lock:` | Fix security or privacy issues. | Firestore rules, encrypted names, anything about guest data. |
 | 🔧 | `:wrench:` | Add or update configuration files. | `build.sh`, `Cargo.toml`, `vercel.json`, `manifest.json`. |
-| ✅ | `:white_check_mark:` | Add, update, or pass tests. | `rust/tests/`. |
+| ✅ | `:white_check_mark:` | Add, update, or pass tests. | `src/rust/tests/`. |
 | 📝 | `:memo:` | Add or update documentation. | README, CONTRIBUTING, CHANGELOG. |
 | 📄 | `:page_facing_up:` | Add or update license. | `LICENSE`. |
 | 🚚 | `:truck:` | Move or rename resources. | Moved files, new hosting paths. |
@@ -173,7 +177,7 @@ Examples:
 
 ### JavaScript, Rust & CSS Styleguide
 
-* **Behaviour first**: the Rust port must render exactly the same HTML as `pwa/app.js`. Change both, or neither (the compare tests will tell you).
+* **Behaviour first**: the Rust port must render exactly the same HTML as `src/pwa/app.js`. Change both, or neither, and run the parity suite from the complete development checkout (its scripts are not included in this public snapshot).
 * **Never rename what the outside sees**: `window.LTF*` functions, DOM ids & classes, `localStorage` / `sessionStorage` / IndexedDB keys (`ltf_v1`, `ltf_sync`, `ltf_run`, `ltf_code`, `ltf_chat_seen`, `ltf_scan_learn`, `ltf_photos`), Firestore fields, cache names & URLs.
 * **Keep the two tables of `app.js` as they are** (`const IC = {` and `const factQs = EN ? [`): `tools/gen_appdata.js` reads them as text.
 * **Comment everything**: a short lowercase comment above almost every statement or block, `// import ...` above each import, trailing comments on fields, section banners (`// ===== SECTION 🧩 ===== //`) separated by two blank lines, and emojis where they help 🍪 🌍 🔗 🧹 🌱 👂 🚀 🛡️ ✅.
@@ -195,8 +199,9 @@ Examples:
 * **Check it before you commit** 🔍:
 
 ```bash
-NODE_PATH=/tmp/jt/node_modules node rust/tools/check_readable.js rust/dist pwa rust/ltf/src rust/tools rust/tests tools
-# check_readable: NN files, 0 problem(s) ✅
+npm ci
+npm run check
+# tests pass, then check_readable reports 0 problem(s) ✅
 ```
 * **CSS**: the theme variables only (`var(--gold)`, `var(--sf)`...), never a new hard-coded color for something themable; one comment per section.
 * **New source files start with the license header** of the project:
@@ -214,7 +219,7 @@ NODE_PATH=/tmp/jt/node_modules node rust/tools/check_readable.js rust/dist pwa r
 *
 * @project: sofitel-service-lestroisforts
 * @name: Les Trois Forts - Team Chat
-* @file: pwa/chat.js
+* @file: src/pwa/chat.js
 * @type: JavaScript (ES module)
 * @authors: Abraham Ukachi <abrahamukachi@gmail.com>
 *
@@ -239,25 +244,24 @@ NODE_PATH=/tmp/jt/node_modules node rust/tools/check_readable.js rust/dist pwa r
 
 Every pull request must:
 
-1. build with `cd rust && ./build.sh`,
-2. pass `NODE_PATH=/tmp/jt/node_modules bash rust/tests/run_all.sh` with **`errors(final) 0`** and **`TOTAL DIFFS 0`**,
-3. be checked by hand on a phone (installed PWA) in **light & dark**, in **French & English**, for every screen it touches.
+1. install the locked dependencies with `npm ci`,
+2. pass `npm run check`,
+3. build with `npm run build`,
+4. be checked by hand on a phone (installed PWA) in **light & dark**, in **French & English**, for every screen it touches.
 
-| No. | Test | What it checks |
-|:----|:-----|:---------------|
-| 1 | *`t_rs.js`* | Every screen of the Rust app |
-| 2 | *`compare.js`* | JS vs Rust, byte for byte (40 steps × 4 runs) |
-| 3 | *`photos.js`* | IndexedDB photos & upload |
-| 4 | *`zoom.js`* | Photo viewer gestures |
-| 5 | *`async_boot.js`* | The deployed index.html |
-| 6 | *`route.js`* | Router & resumed sessions |
+The checked-in `src/rust/tests/*.test.mjs` files use Node's built-in test runner. Chat security changes must add regression cases for the untrusted field or rendering path they affect. Keep the root deployable copies and their `src/pwa` sources synchronized.
+
+> IMPORTANT: The older jsdom suite (`t_rs.js`, `compare.js`, `photos.js`, `zoom.js`, `async_boot.js` and `route.js`) is not included in this public snapshot. Rust rendering changes still require that suite from the complete development checkout, with **`errors(final) 0`** and **`TOTAL DIFFS 0`**. The focused security tests do not replace full parity testing.
+
+Firestore rule changes require emulator tests and a separate Firebase deployment. Never deploy rules before active teammates have the required custom claims; see [SECURITY.md](./SECURITY.md).
 
 
 ## Releasing a version 🔖
 
-1. Bump `CACHE` in `rust/web/sw.js` to `ltf-vNN-rs`.
+1. Bump `CACHE` in `src/rust/web/sw.js` to `ltf-vNN-rs` and keep the deployable `sw.js` synchronized.
 2. Add the `0.NN.0` section to [CHANGELOG.md](./CHANGELOG.md) with gitmoji bullets.
-3. Build, test, deploy `rust/dist` and commit `:bookmark: Release 0.NN.0`.
+3. Build, test, deploy `src/rust/dist` and commit `:bookmark: Release 0.NN.0`.
+4. Deploy `firestore.rules` separately only when the release changes them, after assigning any required team claims.
 
 
 ## Reporting Bugs & Requesting Features 🐛
@@ -293,6 +297,7 @@ By contributing, you agree that your contributions will be licensed under the sa
 
 
 ---
+
 
 <p align="center">
   Made with ❤️ by <a href="https://github.com/abraham-ukachi" target="_blank">Abraham Ukachi</a>

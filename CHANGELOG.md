@@ -2,6 +2,15 @@
 
 All notable changes to this project will be documented in this file. Versions follow the service-worker cache (`ltf-vNN` → `0.NN.0`), see [CONTRIBUTING.md](./CONTRIBUTING.md#git-commit-messages) for the commit guidelines.
 
+### 0.50.0 (2026-10-31)
+
+* :lock: Escape chat document IDs and validate inline photos at both the bubble and full-screen viewer, closing stored HTML/attribute injection paths
+* :lock: Allow only supported reaction values in chat rendering and Firestore writes
+* :lock: Add version-controlled Firestore rules requiring a `team: true` custom claim, strict message validation and owner-only progress / push writes
+* :white_check_mark: Add dependency-free chat security regression tests
+* :wrench: Repair clean-checkout build asset fallbacks and add reproducible npm scripts / lockfile
+* :bento: Bump the service-worker caches to `ltf-v50` & `ltf-v50-rs` and precache `chat-security.mjs`
+
 ### 0.49.0 (2026-10-21)
 
 * :speech_balloon: Rewrite every "What to tell the guest" line (dishes, cocktails, softs, teas, coffee, digestifs, champagnes, cheeses) in French and English so it sounds like a waiter talking at the table, easy to learn by heart

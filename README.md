@@ -106,13 +106,12 @@ Versions as built on 2026-10-19:
 | [TensorFlow.js](https://www.tensorflow.org/js) + MobileNet v2 | **4.22.0** / **2.1.1** | Image embeddings for the scan; weights converted to float16. Unminified builds in `scan/vendor/`. |
 | [Tesseract.js](https://tesseract.projectnaptha.com) | **5.1.1** | French OCR for the labels (as published, in `scan/vendor/`). |
 | [Node.js](https://nodejs.org) | **>= 18** | Build tools (data conversion) & tests. |
-| [jsdom](https://github.com/jsdom/jsdom) / [fake-indexeddb](https://github.com/dumbmatter/fakeIndexedDB) | **24** / **6** | Tests. |
-| [Vercel](https://vercel.com) | static | No framework, no build: `rust/dist` is deployed as is. |
+| [Vercel](https://vercel.com) | static | No framework, no build: the checked-in root or `src/rust/dist` is deployed as is. |
 
 
 ## How it works 🦀⚡
 
-The app started as a JavaScript PWA (`pwa/app.js`) and was then rewritten, screen by screen, in Rust. The Rust port renders **exactly the same HTML**, uses the same `localStorage` key (`ltf_v1`, same JSON shape) and the same IndexedDB photos (`ltf_photos`), so nothing changed for the team when it went live. The JavaScript app is kept as the reference: the tests render both apps side by side and compare them.
+The app started as a JavaScript PWA (`src/pwa/app.js`) and was then rewritten, screen by screen, in Rust. The Rust port renders **exactly the same HTML**, uses the same `localStorage` key (`ltf_v1`, same JSON shape) and the same IndexedDB photos (`ltf_photos`), so nothing changed for the team when it went live. The JavaScript app is kept as the reference for parity checks in the complete development checkout.
 
 | No. | Piece | File | What it does |
 |:----|:------|:-----|:-------------|
@@ -137,8 +136,9 @@ The app started as a JavaScript PWA (`pwa/app.js`) and was then rewritten, scree
 ├── index.html               # app shell: CSS, inline helpers (table plan, crew code, grapes, cheese scale...)
 ├── ltf.js                   # wasm-bindgen glue
 ├── ltf_bg.wasm              # the whole app, in Rust (+ the embedded menu data)
-├── sw.js                    # service worker (cache `ltf-v44-rs`)
+├── sw.js                    # service worker (cache `ltf-v50-rs`)
 ├── chat.js                  # 💬 team chat
+├── chat-security.mjs        # 🛡️ escaping, photo validation & reaction filtering
 ├── cloud.js                 # ☁️ Google sign-in & cloud sync
 ├── scan.js                  # 📷 photo scan
 ├── names.js                 # 🔐 encrypted briefing data (AES-GCM)
@@ -156,6 +156,9 @@ The app started as a JavaScript PWA (`pwa/app.js`) and was then rewritten, scree
 │       ├── build.sh         # one-shot build -> dist/
 │       └── setup_toolchain.sh
 ├── vercel.json              # headers (no-cache for index.html & sw.js, application/wasm)
+├── firestore.rules          # team-claim authorization & write validation (deployed separately)
+├── firebase.json            # Firebase rules configuration
+├── SECURITY.md              # custom-claim and Firebase deployment runbook
 ├── CHANGELOG.md
 ├── CONTRIBUTING.md
 ├── LICENSE
@@ -165,14 +168,17 @@ The app started as a JavaScript PWA (`pwa/app.js`) and was then rewritten, scree
 
 ## Getting Started 🚀
 
-To build from the full project (`pwa/` + `rust/`):
+To build directly from this checkout (`src/pwa/` + `src/rust/`):
 
 ```bash
-# 1. the toolchain (Rust + wasm32, wasm-bindgen 0.2.129, binaryen, test deps)
-bash rust/setup_toolchain.sh
+# 1. the toolchain (Rust + wasm32, wasm-bindgen 0.2.129, binaryen)
+bash src/rust/setup_toolchain.sh
 
-# 2. build -> rust/dist/
-cd rust && ./build.sh
+# 2. install the locked JavaScript dependencies
+npm ci
+
+# 3. build -> src/rust/dist/
+npm run build
 ```
 
 | Step | Command | What it does |
@@ -184,36 +190,31 @@ cd rust && ./build.sh
 | `size` | `wasm-opt -Oz ...` | a smaller wasm |
 | `static` | `node tools/make_index.js ../pwa dist` + copies | index.html, sw.js, scripts, photos, scan, docs & `src/` |
 
-To run it locally, serve `rust/dist` with any static server (e.g. `npx serve rust/dist`) and open it in your browser.
+To run it locally, serve `src/rust/dist` with any static server (e.g. `npx serve src/rust/dist`) and open it in your browser.
 
 > NOTE: Google sign-in only works on the authorized domains of the Firebase project (the Vercel URL). Everything else works on `localhost`.
 
 
 ## Testing 🧪
-> IMPORTANT: The tests run both apps in [jsdom](https://github.com/jsdom/jsdom) with the same seeded `Math.random` and a fixed clock, and compare them byte for byte.
+
+Install the locked dependencies, then run the security regression tests and source-style checks:
 
 ```bash
-mkdir -p /tmp/jt && cd /tmp/jt && npm init -y && npm i jsdom@24 fake-indexeddb@6
-NODE_PATH=/tmp/jt/node_modules bash rust/tests/run_all.sh
+npm ci
+npm run check
 ```
 
-| No. | Test | What it checks | Status | Date |
-|:----|:-----|:---------------|:-------|:-----|
-| 1 | *`t_rs.js`* | Walks every screen of the Rust app, LTFtest, speech, the photo viewer & the course filters | *Passed* (errors 0) | 2026-10-20 |
-| 2 | *`compare.js`* | 40 steps × 4 runs (FR, EN, winter date, existing progress): JS vs Rust body HTML, items, LTFtest & saved progress; a full chrono round & the exam | *Passed* (0 diffs) | 2026-10-20 |
-| 3 | *`photos.js`* | IndexedDB photos saved by the JS app show in the Rust app; upload → 900 px JPEG | *Passed* | 2026-10-20 |
-| 4 | *`zoom.js`* | Photo viewer gestures (double tap, wheel, pan, pinch, reset, swipe down), JS vs Rust | *Passed* | 2026-10-20 |
-| 5 | *`async_boot.js`* | The deployed index.html, async wasm load | *Passed* | 2026-10-20 |
-| 6 | *`route.js`* | URL router, deep links, bad links, resumed quiz after a refresh | *Passed* | 2026-10-20 |
-| 7 | *`check_readable.js`* | No single-letter identifiers & no minified code of ours (JS, Rust, Python, shell) | *Passed* (0 problems) | 2026-10-20 |
+`npm test` runs the dependency-free tests in `src/rust/tests/`. They exercise the actual chat validators, reject markup and attribute injection, restrict photos and reactions, and verify that the root and `src/pwa` copies stay identical. `npm run check:readable` checks the readable JavaScript, Rust and shell sources.
 
-> NOTE: Hand checks on a real phone (installed PWA) are still needed for the camera, the speech voices & Google sign-in, which jsdom can't run.
+> IMPORTANT: The older jsdom parity suite (`t_rs.js`, `compare.js`, `photos.js`, `zoom.js`, `async_boot.js` and `route.js`) is not included in this public snapshot. Run that suite from the complete development checkout before changing Rust rendering, and do not treat the focused security tests as a replacement for it.
+
+Hand checks on a real phone (installed PWA) are still needed for the camera, speech voices, Google sign-in, push notifications and offline upgrades. Firebase rules also need Firestore emulator coverage before deployment; see [SECURITY.md](./SECURITY.md).
 
 
 ## Privacy & security 🛡️
 
 - 🙈 **No guest data in clear**: the briefing never shows guest names unless the team code is typed; the names ship encrypted (AES-GCM 256, PBKDF2-SHA256 600 000 rounds) in `names.js`.
-- 🔐 **Firestore rules**: `users/{uid}` can only be read & written by that user; the chat is readable by signed-in users only, each user can only write their own messages and their own reaction, and delete their own messages.
+- 🔐 **Firestore rules**: every application document requires the `team: true` custom claim. Progress and push-subscription writes are owner-only; chat reads require team membership, messages are author-owned and reaction updates can change only the caller's reaction. The rules in [firestore.rules](./firestore.rules) become active only after the separate Firebase deployment described in [SECURITY.md](./SECURITY.md).
 - 📸 **Photos stay on the phone** (IndexedDB), except the ones a team member chooses to post in the chat.
 - 🔑 The Firebase web config in `cloud.js` / `chat.js` is a public identifier by design; access is enforced by the rules above.
 
@@ -225,7 +226,7 @@ These are some of the things we did or plan to do:
 | No. | Name | File | Status |
 |:----|:-----|:-----|:-------|
 | 1 | *`Rust/WASM port`* | [src/rust/ltf](./src/rust/ltf) | Done |
-| 2 | *`JS vs Rust compare tests`* | `rust/tests/` | Done |
+| 2 | *`JS vs Rust compare tests`* | complete development checkout | Done (not in this public snapshot) |
 | 3 | *`Daily briefing + table plan`* | [index.html](./index.html), `ui.rs` | Done |
 | 4 | *`Google sign-in & cloud sync`* | [cloud.js](./cloud.js) | Done |
 | 5 | *`Photo scan (offline)`* | [scan.js](./scan.js) | Done |
@@ -274,6 +275,7 @@ The design & development of this project was inspired by the following:
 
 
 ---
+
 
 ## License
 
