@@ -45,7 +45,7 @@
 // network first, cache as a fallback (📴 offline).
 
 // the cache of this version 🏷️
-const CACHE = 'ltf-v49';
+const CACHE = 'ltf-v50';
 // the app shell, precached on install 📦
 const ASSETS = [
   './',
@@ -152,3 +152,4 @@ self.addEventListener('notificationclick', (event) => {
     }),
   );
 });
+
