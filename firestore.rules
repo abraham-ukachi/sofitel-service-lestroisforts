@@ -1,0 +1,99 @@
+rules_version = '2';
+
+// Les Trois Forts: every application document requires a Firebase auth custom claim `team: true`.
+// Assign claims with the Admin SDK before deploying this file; see SECURITY.md.
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function isTeamMember() {
+      return request.auth != null && request.auth.token.get('team', false) == true;
+    }
+
+    function validPhoto(photo) {
+      return photo is string
+        && photo.size() < 900000
+        && (photo.matches('^data:image/jpeg;base64,[A-Za-z0-9+/]+={0,2}$')
+          || photo.matches('^data:image/png;base64,[A-Za-z0-9+/]+={0,2}$')
+          || photo.matches('^data:image/webp;base64,[A-Za-z0-9+/]+={0,2}$'));
+    }
+
+    function validReply(reply) {
+      return reply is map
+        && reply.keys().hasOnly(['id', 'uid', 'name', 'text'])
+        && reply.keys().hasAll(['id', 'uid', 'name', 'text'])
+        && reply.id is string
+        && reply.id.size() <= 128
+        && reply.uid is string
+        && reply.uid.size() <= 128
+        && reply.name is string
+        && reply.name.size() <= 200
+        && reply.text is string
+        && reply.text.size() <= 120;
+    }
+
+    function validNewMessage(message) {
+      return message.keys().hasOnly(['uid', 'name', 'pic', 'text', 'img', 'gif', 'sticker', 'rep', 'r', 'ts'])
+        && message.keys().hasAll(['uid', 'name', 'pic', 'text', 'ts'])
+        && message.uid == request.auth.uid
+        && message.name is string
+        && message.name.size() > 0
+        && message.name.size() <= 200
+        && message.pic is string
+        && message.pic.size() <= 2048
+        && message.text is string
+        && message.text.size() <= 1000
+        && message.ts == request.time
+        && (message.text.size() > 0 || 'img' in message || 'gif' in message || 'sticker' in message)
+        && (!('img' in message) || validPhoto(message.img))
+        && (!('gif' in message) || (message.gif is string
+          && message.gif.size() <= 2048
+          && message.gif.matches('^https://media[0-9]?\\.giphy\\.com/.+$')))
+        && (!('sticker' in message) || message.sticker in [
+          'bell', 'bouillabaisse', 'champagne', 'cheese', 'chef', 'cloche', 'cocktail',
+          'espresso', 'oysters', 'pavlova', 'red-wine', 'vieux-port', 'waiter'
+        ])
+        && (!('rep' in message) || validReply(message.rep))
+        && (!('r' in message) || (message.r is map && message.r.size() == 0));
+    }
+
+    function validReactionUpdate() {
+      let previousReactions = resource.data.get('r', {});
+      let nextReactions = request.resource.data.get('r', {});
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly(['r'])
+        && previousReactions is map
+        && nextReactions is map
+        && nextReactions.diff(previousReactions).affectedKeys().hasOnly([request.auth.uid])
+        && (!(request.auth.uid in nextReactions) || nextReactions[request.auth.uid] in [
+          '👍', '❤️', '😂', '😮', '🙏', '🔥'
+        ]);
+    }
+
+    // Progress is private even within the team: only its owner can read or replace it.
+    match /users/{uid} {
+      allow read, create, update, delete: if isTeamMember() && request.auth.uid == uid;
+    }
+
+    // Any approved teammate can read chat; only the author can create or delete a message.
+    match /chat/{messageId} {
+      allow read: if isTeamMember();
+      allow create: if isTeamMember() && validNewMessage(request.resource.data);
+      allow update: if isTeamMember() && validReactionUpdate();
+      allow delete: if isTeamMember() && resource.data.uid == request.auth.uid;
+    }
+
+    // The push function lists subscriptions with the sender's token; writes remain owner-only.
+    match /push/{uid} {
+      allow read: if isTeamMember();
+      allow create, update: if isTeamMember()
+        && request.auth.uid == uid
+        && request.resource.data.keys().hasOnly(['devices'])
+        && request.resource.data.devices is map
+        && request.resource.data.devices.size() <= 30;
+      allow delete: if isTeamMember() && request.auth.uid == uid;
+    }
+
+    // Everything not explicitly listed above is denied.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
