@@ -1,6 +1,6 @@
 {
   "name": "sofitel-service-lestroisforts",
-  "version": "0.49.0",
+  "version": "0.50.0",
   "private": true,
   "description": "Les Trois Forts - Service Academy: the static PWA + the chat push function (api/notify.js) on Vercel",
   "author": "Abraham Ukachi <abrahamukachi@gmail.com>",
@@ -8,7 +8,18 @@
   "engines": {
     "node": ">=18"
   },
+  "scripts": {
+    "build": "bash src/rust/build.sh",
+    "test": "node --test src/rust/tests/*.test.mjs",
+    "check:readable": "node src/rust/tools/check_readable.js src/pwa src/rust/ltf/src src/rust/tools src/rust/tests api chat.js chat-security.mjs cloud.js scan.js",
+    "check": "npm test && npm run check:readable"
+  },
   "dependencies": {
     "web-push": "3.6.7"
+  },
+  "devDependencies": {
+    "acorn": "8.15.0",
+    "eslint-scope": "8.4.0"
   }
 }
+
