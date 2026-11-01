@@ -2,6 +2,17 @@
 
 All notable changes to this project will be documented in this file. Versions follow the service-worker cache (`ltf-vNN` → `0.NN.0`), see [CONTRIBUTING.md](./CONTRIBUTING.md#git-commit-messages) for the commit guidelines.
 
+### 0.50.0 (2026-11-01)
+
+* :lock: Lock the team chat to approved members: a Google sign-in now sends an access request, an admin approves or refuses it in Profil > Équipe (approve all, remove, make admin), the owner is always admin, admins get a push for each new request
+* :lock: Version the Firestore security rules (`rust/web/firestore.rules`): team-only reads, every chat field validated, server timestamps, one reaction per user, admins can moderate
+* :lock: Escape and validate every chat value before it reaches the page (photo data URLs, reactions, message ids, reply colours) so a crafted database entry can't inject HTML
+* :lock: Add security headers on Vercel: Content-Security-Policy, `frame-ancestors 'none'` + `X-Frame-Options`, `nosniff`, `Referrer-Policy`, `Permissions-Policy`, `Cross-Origin-Opener-Policy`
+* :lock: Harden the push server (`api/notify.js`): one notification per message (`pushlog`), per-user rate limit, timeouts, error logs, approved teammates only
+* :bug: Service worker: fall back to `index.html` for page navigations only, cache successful answers only (inside `waitUntil`), never cache `/api/`, version the scanner cache (`ltf-scan-v3`)
+* :page_facing_up: Change the license from MIT to a proprietary All Rights Reserved license (LICENSE, every file header, README, CONTRIBUTING, package.json `UNLICENSED`)
+* :bento: Bump the service-worker cache to `ltf-v50-rs`
+
 ### 0.49.0 (2026-10-21)
 
 * :speech_balloon: Rewrite every "What to tell the guest" line (dishes, cocktails, softs, teas, coffee, digestifs, champagnes, cheeses) in French and English so it sounds like a waiter talking at the table, easy to learn by heart
