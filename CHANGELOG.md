@@ -5,6 +5,7 @@ All notable changes to this project will be documented in this file. Versions fo
 ### 0.52.0 (2026-11-01)
 
 * :trophy: Add a team leaderboard (`board.js`): a "Classement de l'équipe" row under the rank card on the home screen opens a podium + ranking with two tabs, this month (resets on the 1st) and all-time, showing each teammate's XP, streak and mastered cards
+* :sparkles: Add a sixth welcome slide "Qui est le meilleur ?" introducing the leaderboard podium
 * :lock: Firestore rules for `board/{uid}`: approved teammates read, each one writes only their own whole-number score with a server time
 * :bento: Bump the service-worker cache to `ltf-v52-rs`
 

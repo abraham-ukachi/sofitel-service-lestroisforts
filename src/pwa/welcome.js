@@ -32,7 +32,7 @@
  * !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
  */
 
-// 👋 Welcome screen: five swipeable slides that introduce the app to a first-time waiter.
+// 👋 Welcome screen: six swipeable slides that introduce the app to a first-time waiter.
 // Shared by the JS and the Rust builds (it only needs `window.LTFbriefPlan` for the floor plan).
 
 (function () {
@@ -95,9 +95,25 @@
   }
 
   /**
+   * `podiumStep` - Function 🏆
+   *
+   * @param { string } medal - the medal emoji
+   * @param { string } name - the teammate's (example) name
+   * @param { string } score - the XP label
+   * @param { number } height - the step height in px
+   * @returns { string } - one step of the leaderboard slide's podium
+   */
+  function podiumStep(medal, name, score, height) {
+    return (
+      `<div class="wlc-step"><b>${name}</b><span class="wlc-muted">${score}</span>` +
+      `<div class="wlc-block" style="height:${height}px">${medal}</div></div>`
+    );
+  }
+
+  /**
    * `slides` - Function 🎞️
    *
-   * @returns { Array<{ kicker: string, title: string, body: string, art: string }> } - the five slides
+   * @returns { Array<{ kicker: string, title: string, body: string, art: string }> } - the six slides
    */
   function slides() {
     return [
@@ -154,6 +170,19 @@
           `<div class="wlc-plan"><b class="wlc-plan-title">${translate('Briefing du jour', "Today's briefing")}</b>` +
           `<div class="wlc-muted">${translate('Tables réservées en or', 'Reserved tables in gold')}</div>` +
           `<div class="wlc-plan-box">${planMarkup()}</div></div>`,
+      },
+      {
+        kicker: translate('Classement', 'Leaderboard'),
+        title: translate('Qui est le meilleur ?', "Who's the best?"),
+        body: translate(
+          "Chaque quiz vous rapporte des XP. Grimpez sur le podium de l'équipe, ce mois-ci et depuis toujours.",
+          'Every quiz earns you XP. Climb the team podium, this month and all-time.',
+        ),
+        art:
+          `<img class="wlc-photo" src="img/c-ruinart-blanc-de-blancs.jpg" alt="">` +
+          `<div class="wlc-shade"></div>` +
+          `<div class="wlc-podium">${podiumStep('🥈', 'Léa', '840 XP', 58)}` +
+          `${podiumStep('🥇', translate('Vous', 'You'), '1 120 XP', 92)}${podiumStep('🥉', 'Karim', '610 XP', 40)}</div>`,
       },
       {
         kicker: translate('Scan · Chat · Profil', 'Scan · Chat · Profile'),
@@ -231,6 +260,12 @@
 #wlc .wlc-scan { position: absolute; left: 70px; bottom: 128px; z-index: 2; }
 #wlc .wlc-bubble { position: absolute; right: 22px; bottom: 70px; z-index: 2; padding: 12px 16px;
   border-radius: 20px; background: rgba(106, 79, 176, 0.92); color: #fff; font-weight: 700; font-size: 14px; }
+#wlc .wlc-podium { position: absolute; left: 22px; right: 22px; bottom: 56px; z-index: 2; display: flex;
+  justify-content: center; align-items: flex-end; gap: 10px; }
+#wlc .wlc-step { flex: 1; max-width: 104px; text-align: center; }
+#wlc .wlc-step b { display: block; font-size: 15px; }
+#wlc .wlc-block { margin-top: 6px; border-radius: 14px 14px 0 0; background: rgba(13, 26, 46, 0.86);
+  border: 1px solid rgba(232, 200, 115, 0.55); display: grid; place-items: center; font-size: 26px; }
 #wlc .wlc-text { padding: 6px 28px 0; }
 #wlc .wlc-kicker { color: #e8c873; font-size: 12px; font-weight: 700; letter-spacing: 0.5px; text-transform: uppercase; }
 #wlc .wlc-title { font: 700 29px/1.2 Georgia, serif; margin: 10px 0 10px; }
@@ -271,7 +306,7 @@
   /**
    * `openWelcome` - Function 🎬
    *
-   * Opens the five welcome slides (swipe, Passer / Skip, Suivant / Next, Commencer / Start).
+   * Opens the six welcome slides (swipe, Passer / Skip, Suivant / Next, Commencer / Start).
    *
    * @returns { void }
    */
