@@ -74,7 +74,7 @@ pub fn ic(name: &str, size: u32) -> String {
 /// @param { &str } ch - a chapter id
 /// @returns { &'static str } - its icon name
 pub fn chic(ch: &str) -> &'static str {
-    match ch { "jour" => "clip", "hiver" => "snow", "dej" => "sun", "diner" => "moon", "dess" => "cake", "cock" => "glass", "cafe" => "cup", "vins" => "wine", "champ" => "flute", "dig" => "tumbler", "from" => "cheese", "acc" => "grape", "plan" => "map", _ => "star" }
+    match ch { "jour" => "clip", "hiver" => "snow", "dej" => "sun", "diner" => "moon", "deg" => "gift", "dess" => "cake", "cock" => "glass", "cafe" => "cup", "vins" => "wine", "champ" => "flute", "dig" => "tumbler", "from" => "cheese", "acc" => "grape", "plan" => "map", _ => "star" }
 }
 
 
@@ -1973,7 +1973,7 @@ pub fn carte_render() {
     let (cat, course) = ui(|ui_state| (ui_state.carte_cat.clone(), ui_state.carte_course.clone()));
     let rx = carte_strip_re();
     let mut blocks = String::new();
-    for chapter in built_app.ch.iter().filter(|chapter| chapter.id != "plan" && if course != "all" { ["dej", "diner", "dess"].contains(&chapter.id) } else { cat == "all" || cat == chapter.id }) {
+    for chapter in built_app.ch.iter().filter(|chapter| chapter.id != "plan" && if course != "all" { ["dej", "diner", "deg", "dess"].contains(&chapter.id) } else { cat == "all" || cat == chapter.id }) {
         let mut its: Vec<usize> = (0..built_app.items.len()).filter(|&index| built_app.items[index].ch == chapter.id && !built_app.items[index].fact && hay(index).contains(&needle)).collect();
         if course != "all" {
             its.retain(|&index| built_app.items[index].course == Some(course.as_str()));
@@ -2005,8 +2005,8 @@ pub fn carte_render() {
                 if it.has_info() { format!("onclick=\"LTFinfo('{}')\"", it.id) } else { String::new() },
                 match ph { Some(photo) => format!("<img class=\"thumb zoomable\" src=\"{}\" loading=\"lazy\" alt=\"\" onclick=\"LTFzoom('{}',event)\">", photo, it.id), None => format!("<div class=\"av\">{}</div>", ic(chic(chapter.id), 20)) },
                 match it.course { Some(course_key) => format!("<span class=\"cb cb-{}\">{}{}</span>", course_key, c_lab(course_key), if !it.csub.is_empty() { format!(" · {}", it.csub) } else { String::new() }), None => String::new() },
-                it.front,
-                esc(&re_replace(&strip(&it.back), &rx, "")),
+                highlight_html(&it.front, &needle),
+                highlight(&re_replace(&strip(&it.back), &rx, ""), &needle),
                 say_btn(it),
                 if it.has_info() { format!("<span class=\"rt\">{}</span>", ic("chev", 18)) } else { String::new() }
             );

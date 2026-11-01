@@ -105,7 +105,70 @@
     String(value)
       .normalize('NFD')
       .replace(/[\u0300-\u036f]/g, '')
-      .toLowerCase();
+      .toLowerCase()
+      // œ / æ don't decompose: "boeuf" must find "bœuf" 🔎
+      .replace(/œ/g, 'oe')
+      .replace(/æ/g, 'ae');
+
+  /**
+   * `highlight` - Function 🖍️
+   * Escapes a text and wraps every match of the search needle in a <mark>,
+   * accent-insensitive ("boeuf" lights up "bœuf").
+   *
+   * @param { string } text - the plain text
+   * @param { string } needle - the normalized search needle
+   * @returns { string } - the escaped text, with the matches marked
+   */
+  const highlight = (text, needle) => {
+    const plain = String(text);
+    if (!needle) return esc(plain);
+    // the normalized text, with the original index of every normalized character
+    const characters = Array.from(plain);
+    let normalized = '';
+    const origins = [];
+    characters.forEach((character, index) => {
+      const normalizedCharacter = norm(character);
+      normalized += normalizedCharacter;
+      for (let count = 0; count < normalizedCharacter.length; count++) origins.push(index);
+    });
+    // every match, as ranges of original characters
+    const ranges = [];
+    let from = normalized.indexOf(needle);
+    while (from !== -1) {
+      ranges.push([origins[from], origins[from + needle.length - 1] + 1]);
+      from = normalized.indexOf(needle, from + needle.length);
+    }
+    if (!ranges.length) return esc(plain);
+    // ✍️ rebuild the text with the marks
+    let out = '';
+    let cursor = 0;
+    ranges.forEach(([start, end]) => {
+      if (start < cursor) return;
+      out +=
+        esc(characters.slice(cursor, start).join('')) +
+        '<mark>' +
+        esc(characters.slice(start, end).join('')) +
+        '</mark>';
+      cursor = end;
+    });
+    return out + esc(characters.slice(cursor).join(''));
+  };
+
+  /**
+   * `highlightHtml` - Function 🖍️
+   * Same as `highlight`, for a name that holds a little HTML (e.g. `<br><small>`): only the text is marked.
+   *
+   * @param { string } html - the name, with its tags
+   * @param { string } needle - the normalized search needle
+   * @returns { string } - the name, with the matches marked
+   */
+  const highlightHtml = (html, needle) =>
+    needle
+      ? String(html)
+          .split(/(<[^>]*>)/)
+          .map((part, index) => (index % 2 ? part : highlight(part, needle)))
+          .join('')
+      : html;
 
   // ===== STORAGE 💾 ===== //
 
@@ -352,9 +415,17 @@
     },
     {
       id: 'diner',
-      name: translate('Dîner & Dégustation', 'Dinner & Tasting Menu'),
+      name: translate('Dîner', 'Dinner'),
       icon: '🌙',
-      sub: translate('Carte du soir, Menu Dégustation 89 €', 'Evening menu, 89 € Tasting Menu'),
+      sub: translate('La carte du soir (ne change pas)', 'The evening menu (stays the same)'),
+    },
+    {
+      id: 'deg',
+      name: translate('Menu Dégustation', 'Tasting Menu'),
+      icon: '🎁',
+      sub: LTF.degSub
+        ? LTF.degSub[EN ? 'en' : 'fr']
+        : translate('Menu surprise du jour · 89 €', 'Surprise menu of the day · 89 €'),
     },
     {
       id: 'dess',
@@ -1221,7 +1292,7 @@
   dishes.forEach((dish) => {
     // the chapters of the dish (tasting / desserts / formula / lunch & dinner / dinner)
     const chs = dish.svc.includes('deg')
-      ? ['diner']
+      ? ['deg']
       : dish.s === 'Desserts' || dish.s === 'Fromages'
         ? ['dess']
         : dish.svc.includes('formule')
@@ -1457,8 +1528,17 @@
  ['Le « Retour de pêche suivant la Criée » est facturé…','14 € les 100 g',['42 € la pièce','14 € la portion','24 € les 100 g']]
 ];
   // ➕ one fact item per question (+ the daily briefing & the winter facts from data.js)
+  // (the Tasting Menu facts go to its own chapter 🎁)
   factQs.forEach(([question, answer, options]) =>
-    add('diner', question, answer, [() => mcq(question, answer, options, '')], { fact: true }),
+    add(
+      /Dégustation|Tasting/.test(question) ? 'deg' : 'diner',
+      question,
+      answer,
+      [() => mcq(question, answer, options, '')],
+      {
+        fact: true,
+      },
+    ),
   );
   ((LTF.jour || {})[EN ? 'en' : 'fr'] || []).forEach(([question, answer, options, explanation]) =>
     add('jour', question, answer, [() => mcq(question, answer, options, explanation || '')], { fact: true }),
@@ -2235,6 +2315,7 @@
  pin:'<path d="M12 21s7-6.5 7-12a7 7 0 0 0-14 0c0 5.5 7 12 7 12z"/><circle cx="12" cy="9" r="2.5"/>',
  sun:'<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>',
  moon:'<path d="M20 14.5A8 8 0 0 1 9.5 4 8 8 0 1 0 20 14.5z"/>',
+ gift:'<rect x="3" y="8" width="18" height="4" rx="1"/><path d="M12 8v13M19 12v7a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2v-7M7.5 8a2.5 2.5 0 0 1 0-5C11 3 12 8 12 8s1-5 4.5-5a2.5 2.5 0 0 1 0 5"/>',
  cake:'<path d="M4 20h16v-7H4zM4 15c2 1.5 4-1 6 0s4 1.5 6 0 4-1 4 0M12 9v4M12 5.5v.5"/>',
  cup:'<path d="M4 9h12v5a5 5 0 0 1-5 5H9a5 5 0 0 1-5-5zM16 10h2a2 2 0 0 1 0 4h-2M8 3v3M12 3v3"/>',
  wine:'<path d="M8 3h8l-1 6a3 3 0 0 1-6 0zM12 12v8M8 21h8"/>',
@@ -2270,6 +2351,7 @@
     hiver: 'snow',
     dej: 'sun',
     diner: 'moon',
+    deg: 'gift',
     dess: 'cake',
     cock: 'glass',
     cafe: 'cup',
@@ -3942,7 +4024,7 @@
         (chapter) =>
           chapter.id !== 'plan' &&
           (carteCourse !== 'all'
-            ? ['dej', 'diner', 'dess'].includes(chapter.id)
+            ? ['dej', 'diner', 'deg', 'dess'].includes(chapter.id)
             : carteCat === 'all' || carteCat === chapter.id),
       )
         .map((chapter) => {
@@ -3995,8 +4077,8 @@
                     `${photo ? `<img class="thumb zoomable" src="${photo}" loading="lazy" alt="" onclick="LTFzoom('${item.id}',event)">` : `<div class="av">${svgIcon(CHIC[chapter.id] || 'star', 20)}</div>`}` +
                     `<div class="tx">` +
                     `${item.course ? `<span class="cb cb-${item.course}">${cLab(item.course)}${item.csub ? ' · ' + item.csub : ''}</span>` : ''}` +
-                    `<div class="n">${item.front}</div><div class="muted sm clamp">` +
-                    `${esc(strip(item.back).replace(/^(Pour commencer|Entrée|Plat principal|Fromage|Dessert|Appetizer|Starter|Main course|Cheese)( · (poisson|viande|fish|meat))? /, ''))}` +
+                    `<div class="n">${highlightHtml(item.front, needle)}</div><div class="muted sm clamp">` +
+                    `${highlight(strip(item.back).replace(/^(Pour commencer|Entrée|Plat principal|Fromage|Dessert|Appetizer|Starter|Main course|Cheese)( · (poisson|viande|fish|meat))? /, ''), needle)}` +
                     `</div></div>${sayBtn(item)}${item.info ? `<span class="rt">${svgIcon('chev', 18)}</span>` : ''}` +
                     `</div>`)
                 );

@@ -440,7 +440,8 @@ pub fn build() -> App {
         Ch { id: "jour", name: translate("Service du jour", "Today's service"), sub: js(&data["jour"]["sub"][if en_ { "en" } else { "fr" }]) },
         Ch { id: "hiver", name: translate("Carte d'hiver 3F", "Winter menu 3F"), sub: translate("Dès le 19 octobre · 14 plats + 4 desserts", "From 19 October · 14 dishes + 4 desserts") },
         Ch { id: "dej", name: translate("Déjeuner", "Lunch"), sub: translate("Carte du midi & formule 49 €", "Lunch menu & 49 € formula") },
-        Ch { id: "diner", name: translate("Dîner & Dégustation", "Dinner & Tasting Menu"), sub: translate("Carte du soir, Menu Dégustation 89 €", "Evening menu, 89 € Tasting Menu") },
+        Ch { id: "diner", name: translate("Dîner", "Dinner"), sub: translate("La carte du soir (ne change pas)", "The evening menu (stays the same)") },
+        Ch { id: "deg", name: translate("Menu Dégustation", "Tasting Menu"), sub: if data["degSub"].is_object() { js(&data["degSub"][if en_ { "en" } else { "fr" }]) } else { translate("Menu surprise du jour · 89 €", "Surprise menu of the day · 89 €") } },
         Ch { id: "dess", name: translate("Desserts & Fromages", "Desserts & Cheese"), sub: translate("Douceurs et plateau Lemarié", "Sweets and the Lemarié cheese board") },
         Ch { id: "from", name: translate("Plateau de fromages", "Cheese board"), sub: translate("8 fromages, du plus doux au plus fort", "8 cheeses, mildest to strongest") },
         Ch { id: "cock", name: translate("Cocktails & Softs", "Cocktails & Soft drinks"), sub: translate("Signatures, fiches techniques, softs, eaux", "Signatures, recipe cards, softs, waters") },
@@ -715,7 +716,7 @@ pub fn build() -> App {
     // 🍽 every dish becomes one item per chapter it belongs to
     for dish_ref in &dishes {
         let dish: &Value = dish_ref;
-        let chs: Vec<&'static str> = if has(dish, "deg") { vec!["diner"] } else if gs(dish, "s") == "Desserts" || gs(dish, "s") == "Fromages" { vec!["dess"] } else if has(dish, "formule") { vec!["dej"] } else if has(dish, "dej") { vec!["dej", "diner"] } else { vec!["diner"] };
+        let chs: Vec<&'static str> = if has(dish, "deg") { vec!["deg"] } else if gs(dish, "s") == "Desserts" || gs(dish, "s") == "Fromages" { vec!["dess"] } else if has(dish, "formule") { vec!["dej"] } else if has(dish, "dej") { vec!["dej", "diner"] } else { vec!["diner"] };
         let mut chs = chs;
         if has(dish, "hiver") { chs.push("hiver"); }
         if has(dish, "deg") { chs.push("jour"); }
@@ -799,7 +800,9 @@ pub fn build() -> App {
     for fact in fq.as_array().unwrap_or(&empty) {
         let (qq, answer) = (js(&fact[0]), js(&fact[1]));
         let options: Vec<String> = fact[2].as_array().unwrap_or(&empty).iter().map(js).collect();
-        add!("diner", qq.clone(), answer.clone(), vec![mq(qq.clone(), answer.clone(), rcv(options), String::new())], |it: &mut Item| it.fact = true);
+        // (the Tasting Menu facts go to its own chapter 🎁)
+        let fact_chapter = if qq.contains("Dégustation") || qq.contains("Tasting") { "deg" } else { "diner" };
+        add!(fact_chapter, qq.clone(), answer.clone(), vec![mq(qq.clone(), answer.clone(), rcv(options), String::new())], |it: &mut Item| it.fact = true);
     }
     for fact in data["jour"][if en_ { "en" } else { "fr" }].as_array().unwrap_or(&empty) {
         let (qq, answer) = (js(&fact[0]), js(&fact[1]));
