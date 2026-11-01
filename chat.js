@@ -1,27 +1,18 @@
 /*
- * @license MIT
+ * @license Proprietary - All Rights Reserved
  * ~~~~~~~~~~~~
  * sofitel-service-lestroisforts
  * ~~~~~~~~~~~~
- * Copyright (c) 2026 Abraham Ukachi. The Les Trois Forts Project.
+ * Copyright (c) 2026 Abraham Ukachi. The Les Trois Forts Project. All rights reserved.
  *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the 'Software'), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
+ * This source code is proprietary and confidential. It is shown publicly for
+ * viewing only. No permission is granted to copy, modify, merge, publish,
+ * distribute, sublicense, sell, host or deploy this software, in whole or in
+ * part, or to use it to build another product or service, without the prior
+ * written permission of the copyright holder. See the LICENSE file for the
+ * full terms.
  *
- * The above copyright notice and this permission notice shall be included in all
- * copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED 'AS IS', WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
+ * THE SOFTWARE IS PROVIDED 'AS IS', WITHOUT WARRANTY OF ANY KIND.
  *
  * @project: sofitel-service-lestroisforts
  * @name: Les Trois Forts - Team Chat
@@ -69,6 +60,7 @@ import {
   deleteField,
   doc,
   setDoc,
+  getDoc,
   serverTimestamp,
 } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
 
@@ -128,6 +120,44 @@ const escapeHtml = (value) =>
     /[&<>"']/g,
     (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char],
   );
+
+// ===== SAFETY CHECKS 🛡️ ===== //
+// Every field of a chat doc comes from the database, so a crafted doc must never reach the page as HTML.
+
+// a Firestore auto id (20 letters / digits): the only ids we put in the page 🆔
+const SAFE_ID_PATTERN = /^[A-Za-z0-9]{1,40}$/;
+// a real photo: a base64 JPEG / PNG / WebP data URL, nothing else 📷
+const SAFE_PHOTO_PATTERN = /^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/;
+
+/**
+ * `isSafeId` - Function 🆔
+ *
+ * @param { any } id - a message id
+ * @returns { boolean } - true when it is a plain Firestore id (letters & digits only)
+ */
+const isSafeId = (id) => typeof id === 'string' && SAFE_ID_PATTERN.test(id);
+
+/**
+ * `isSafePhoto` - Function 📷
+ *
+ * @param { any } source - a message's `img` field
+ * @returns { boolean } - true when it is a genuine base64 image data URL
+ */
+const isSafePhoto = (source) => typeof source === 'string' && SAFE_PHOTO_PATTERN.test(source);
+
+/**
+ * `isSafeReaction` - Function 😍
+ *
+ * @param { any } emoji - a reaction value
+ * @returns { boolean } - true when it is a short text with no HTML characters (one emoji)
+ */
+const isSafeReaction = (emoji) =>
+  typeof emoji === 'string' && emoji.length > 0 && emoji.length <= 16 && !/[<>&"'`=]/.test(emoji);
+
+// ===== TEAM ACCESS 👥 ===== //
+
+// the owner of the app: always an admin (the Firestore rules check the same verified email 🔐)
+const OWNER_EMAIL = 'abrahamukachi@gmail.com';
 
 // the localStorage key of the last message seen (ms), for the red dot 🔴
 const SEEN_KEY = 'ltf_chat_seen';
@@ -238,6 +268,13 @@ let user = null,
   pendingPhoto = null,
   selectedId = null,
   errorText = '',
+  // my team access ('loading' | 'pending' | 'refused' | 'member' | 'admin') & its unsubscriber 👥
+  access = 'loading',
+  accessUnsubscribe = null,
+  // (admins only) the access requests, the team & their unsubscribers 🛂
+  accessRequests = [],
+  teamMembers = [],
+  adminUnsubscribers = [],
   // the emoji list (loaded on first use), the picker tab ('emoji' | 'gif') & the GIF search timer 😀
   emojiTabs = null,
   pickerTab = 'emoji',
@@ -313,7 +350,7 @@ function listen() {
   // start empty; signed out? just paint the sign-in screen
   messages = [];
   listen.loaded = false;
-  if (!user) {
+  if (!user || !hasChatAccess()) {
     paint();
     return;
   }
@@ -327,7 +364,9 @@ function listen() {
         isFirstSnapshot = !listen.loaded;
       listen.loaded = true;
       messages = snapshot.docs
-        .map((docSnapshot) => ({ id: docSnapshot.id, ...docSnapshot.data({ serverTimestamps: 'estimate' }) }))
+        .map((docSnapshot) => ({ ...docSnapshot.data({ serverTimestamps: 'estimate' }), id: docSnapshot.id }))
+        // 🛡️ a doc with a hand-made id never reaches the page
+        .filter((message) => isSafeId(message.id))
         .reverse();
       // 🔔 a new message from a teammate while the app is open: chime
       if (
@@ -409,12 +448,14 @@ function shrinkPhoto(file) {
  * @returns { void }
  */
 function viewPhoto(src) {
+  // only genuine photos are shown 🛡️
+  if (!isSafePhoto(src)) return;
   // the viewer overlay (same markup & classes as the app's zoom viewer)
   const viewer = document.createElement('div');
   viewer.className = 'ov zoomv';
   viewer.innerHTML =
     '<div class="zt"><div class="zn"></div><button class="zx" aria-label="close" style="font-size:22px">✕</button></div><div class="zs"><img src="' +
-    src +
+    escapeHtml(src) +
     '" alt="" draggable="false"></div><div class="zh">' +
     translate('Pincez ou touchez deux fois pour zoomer', 'Pinch or double-tap to zoom') +
     '</div>';
@@ -602,9 +643,12 @@ function bubbleHtml(message) {
   const isMine = user && message.uid === user.uid,
     [background, accent] = colorsOf(message.uid);
   // the reactions { uid: emoji } & their counts { emoji: n }
-  const reactions = message.r || {},
+  const reactions = message.r && typeof message.r === 'object' ? message.r : {},
     counts = {};
-  Object.values(reactions).forEach((emoji) => (counts[emoji] = (counts[emoji] || 0) + 1));
+  // only short, HTML-free reactions are counted 🛡️
+  Object.values(reactions)
+    .filter(isSafeReaction)
+    .forEach((emoji) => (counts[emoji] = (counts[emoji] || 0) + 1));
   // the reaction chips (mine is highlighted)
   const chips = Object.keys(counts)
     .map(
@@ -614,9 +658,9 @@ function bubbleHtml(message) {
         '" data-re="' +
         message.id +
         '" data-e="' +
-        emoji +
+        escapeHtml(emoji) +
         '">' +
-        emoji +
+        escapeHtml(emoji) +
         (counts[emoji] > 1 ? ' ' + counts[emoji] : '') +
         '</button>',
     )
@@ -653,7 +697,7 @@ function bubbleHtml(message) {
     // ↩️ the quoted message
     (message.rep
       ? '<div class="cq" style="border-color:' +
-        colorsOf(message.rep.uid)[1] +
+        colorsOf(String(message.rep.uid || ''))[1] +
         '"><b>' +
         escapeHtml(message.rep.name) +
         '</b> ' +
@@ -661,7 +705,7 @@ function bubbleHtml(message) {
         '</div>'
       : '') +
     // 📷 the photo
-    (message.img ? '<img class="ci" src="' + message.img + '" alt="">' : '') +
+    (isSafePhoto(message.img) ? '<img class="ci" src="' + escapeHtml(message.img) + '" alt="">' : '') +
     // 🏷️ our sticker
     (isStickerSlug(message.sticker)
       ? '<img class="cst" src="stickers/' + message.sticker + '.webp" alt="sticker">'
@@ -763,6 +807,12 @@ function paint() {
           signInWithRedirect(auth, new GoogleAuthProvider());
       }
     };
+    return;
+  }
+  // ⏳ signed in, but not (yet) on the team: the waiting / refused screen
+  if (!hasChatAccess()) {
+    body.innerHTML = accessScreenHtml();
+    footer.style.display = 'none';
     return;
   }
   // show the composer
@@ -1732,13 +1782,452 @@ function showToast(text) {
 async function notifyTeam(id) {
   try {
     const token = await user.getIdToken();
-    await fetch('/api/notify', {
+    const response = await fetch('/api/notify', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
       body: JSON.stringify({ id }),
     });
+    // ⚠️ keep a trace when the push server refused (the message itself is already posted)
+    if (!response.ok) console.warn('[chat] notify failed', response.status);
+  } catch (error) {
+    console.warn('[chat] notify unreachable', error);
+  }
+}
+
+// ===== TEAM ACCESS: APPROVALS 🛂 ===== //
+// A Google sign-in alone is not enough to read the chat: the owner (or another admin) approves each
+// waiter first. `team/{uid}` = approved ({ role: 'member' | 'admin' }), `requests/{uid}` = waiting.
+// The Firestore rules enforce all of this on the server, the screens below only follow it 🔐.
+
+/**
+ * `isOwner` - Function 👑
+ *
+ * @returns { boolean } - true when the signed-in Google account is the owner's (verified email)
+ */
+const isOwner = () => !!(user && user.emailVerified && user.email === OWNER_EMAIL);
+
+/**
+ * `hasChatAccess` - Function 🔑
+ *
+ * @returns { boolean } - true when I'm an approved member (or an admin) of the team
+ */
+const hasChatAccess = () => access === 'member' || access === 'admin';
+
+/**
+ * `stopAccessWatchers` - Function 🧹
+ *
+ * Stops my access watcher and the admin watchers (requests & team lists).
+ *
+ * @returns { void }
+ */
+function stopAccessWatchers() {
+  if (accessUnsubscribe) accessUnsubscribe();
+  accessUnsubscribe = null;
+  adminUnsubscribers.forEach((stop) => stop());
+  adminUnsubscribers = [];
+  accessRequests = [];
+  teamMembers = [];
+}
+
+/**
+ * `setAccess` - Function 🔄
+ *
+ * Saves my new access level and refreshes everything that depends on it.
+ *
+ * @param { string } newAccess - 'loading' | 'pending' | 'refused' | 'member' | 'admin'
+ * @returns { void }
+ */
+function setAccess(newAccess) {
+  const hadAccess = hasChatAccess(),
+    wasAdmin = access === 'admin';
+  access = newAccess;
+  // 👂 the chat itself: start / stop listening when the access opens or closes
+  if (hadAccess !== hasChatAccess()) listen();
+  // 🛂 the admin lists
+  if (wasAdmin !== (access === 'admin')) watchAdminLists();
+  paint();
+  updateFab();
+  renderTeamCard();
+}
+
+/**
+ * `watchAccess` - Function 👂
+ *
+ * Follows my own `team/{uid}` doc: approved → member / admin; not there → I ask for access
+ * (the owner's account makes itself admin on its first sign-in 👑).
+ *
+ * @returns { void }
+ */
+function watchAccess() {
+  stopAccessWatchers();
+  access = 'loading';
+  renderTeamCard();
+  if (!user) return;
+  accessUnsubscribe = onSnapshot(
+    doc(firestore, 'team', user.uid),
+    async (snapshot) => {
+      // ✅ approved
+      if (snapshot.exists()) {
+        setAccess(snapshot.data().role === 'admin' ? 'admin' : 'member');
+        return;
+      }
+      // 👑 the owner: add myself as the first admin
+      if (isOwner()) {
+        try {
+          await setDoc(doc(firestore, 'team', user.uid), memberFields(userCard(), 'admin'));
+        } catch (error) {
+          setAccess('pending');
+        }
+        return;
+      }
+      // ⏳ everybody else: ask once, then wait (or see the refusal)
+      await askForAccess();
+    },
+    () => setAccess('pending'),
+  );
+}
+
+/**
+ * `userCard` - Function 🪪
+ *
+ * @returns { { uid: string, name: string, email: string, pic: string } } - who I am, for a request
+ */
+const userCard = () => ({
+  uid: user.uid,
+  name: (user.displayName || 'Staff').slice(0, 100),
+  email: user.email || '',
+  pic: (user.photoURL || '').slice(0, 500),
+});
+
+/**
+ * `memberFields` - Function 🧾
+ *
+ * @param { { name: string, email: string, pic: string } } person - the person to add
+ * @param { string } role - 'member' or 'admin'
+ * @returns { object } - the `team/{uid}` doc
+ */
+const memberFields = (person, role) => ({
+  name: String(person.name || 'Staff').slice(0, 100),
+  email: String(person.email || ''),
+  pic: String(person.pic || '').slice(0, 500),
+  role,
+  by: user.uid,
+  ts: serverTimestamp(),
+});
+
+/**
+ * `askForAccess` - Async Function 🙋
+ *
+ * Creates my `requests/{uid}` doc (once) and pings the admins; shows "waiting" or "refused".
+ *
+ * @returns { Promise<void> }
+ */
+async function askForAccess() {
+  try {
+    const existing = await getDoc(doc(firestore, 'requests', user.uid));
+    // 🚫 an admin already said no
+    if (existing.exists() && existing.data().refused) {
+      setAccess('refused');
+      return;
+    }
+    setAccess('pending');
+    if (existing.exists()) return;
+    // 📝 my request (name, email & photo for the admin's list)
+    const card = userCard();
+    await setDoc(doc(firestore, 'requests', user.uid), {
+      name: card.name,
+      email: card.email,
+      pic: card.pic,
+      ts: serverTimestamp(),
+    });
+    // 📣 tell the admins (push notification)
+    const token = await user.getIdToken();
+    fetch('/api/notify', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+      body: JSON.stringify({ request: true }),
+    }).catch(() => {});
+  } catch (error) {
+    setAccess('pending');
+  }
+}
+
+/**
+ * `watchAdminLists` - Function 🛂
+ *
+ * (Admins only) follows the waiting requests and the team, for the Profil "Équipe" card.
+ *
+ * @returns { void }
+ */
+function watchAdminLists() {
+  adminUnsubscribers.forEach((stop) => stop());
+  adminUnsubscribers = [];
+  accessRequests = [];
+  teamMembers = [];
+  if (access !== 'admin') return;
+  // ⏳ the waiting requests (the refused ones stay hidden)
+  adminUnsubscribers.push(
+    onSnapshot(collection(firestore, 'requests'), (snapshot) => {
+      accessRequests = snapshot.docs
+        .map((docSnapshot) => ({ ...docSnapshot.data(), uid: docSnapshot.id }))
+        .filter((request) => !request.refused);
+      renderTeamCard();
+      updateFab();
+    }),
+  );
+  // 👥 the team
+  adminUnsubscribers.push(
+    onSnapshot(collection(firestore, 'team'), (snapshot) => {
+      teamMembers = snapshot.docs.map((docSnapshot) => ({ ...docSnapshot.data(), uid: docSnapshot.id }));
+      renderTeamCard();
+    }),
+  );
+}
+
+/**
+ * `approve` - Async Function ✅
+ *
+ * (Admins only) lets someone into the team and removes their request.
+ *
+ * @param { string } uid - the requester's uid
+ * @returns { Promise<void> }
+ */
+async function approve(uid) {
+  const request = accessRequests.find((candidate) => candidate.uid === uid);
+  if (!request) return;
+  try {
+    await setDoc(doc(firestore, 'team', uid), memberFields(request, 'member'));
+    await deleteDoc(doc(firestore, 'requests', uid));
+  } catch (error) {
+    alert(translate('Validation impossible', 'Could not approve'));
+  }
+}
+
+/**
+ * `refuse` - Async Function 🚫
+ *
+ * (Admins only) refuses a request (kept as "refused" so it doesn't come back).
+ *
+ * @param { string } uid - the requester's uid
+ * @returns { Promise<void> }
+ */
+async function refuse(uid) {
+  try {
+    await updateDoc(doc(firestore, 'requests', uid), { refused: true });
   } catch (error) {}
 }
+
+/**
+ * `removeMember` - Async Function ➖
+ *
+ * (Admins only) removes someone from the team: they lose the chat right away.
+ *
+ * @param { string } uid - the member's uid
+ * @returns { Promise<void> }
+ */
+async function removeMember(uid) {
+  const member = teamMembers.find((candidate) => candidate.uid === uid);
+  if (!member || member.email === OWNER_EMAIL || uid === user.uid) return;
+  if (
+    !confirm(
+      translate('Retirer ' + member.name + " de l'équipe ?", 'Remove ' + member.name + ' from the team?'),
+    )
+  )
+    return;
+  try {
+    await deleteDoc(doc(firestore, 'team', uid));
+  } catch (error) {}
+}
+
+/**
+ * `toggleAdmin` - Async Function 🎖️
+ *
+ * (Admins only) makes a member an admin, or an admin a member again.
+ *
+ * @param { string } uid - the member's uid
+ * @returns { Promise<void> }
+ */
+async function toggleAdmin(uid) {
+  const member = teamMembers.find((candidate) => candidate.uid === uid);
+  if (!member || member.email === OWNER_EMAIL || uid === user.uid) return;
+  try {
+    await updateDoc(doc(firestore, 'team', uid), { role: member.role === 'admin' ? 'member' : 'admin' });
+  } catch (error) {}
+}
+
+/**
+ * `accessScreenHtml` - Function ⏳
+ *
+ * @returns { string } - the chat screen for someone not (yet) on the team
+ */
+function accessScreenHtml() {
+  const [icon, text] =
+    access === 'refused'
+      ? [
+          '🚫',
+          translate(
+            "Votre demande d'accès au chat a été refusée. Parlez-en à votre responsable.",
+            'Your request to join the chat was refused. Please talk to your manager.',
+          ),
+        ]
+      : access === 'loading'
+        ? ['💬', translate('Chargement…', 'Loading…')]
+        : [
+            '⏳',
+            translate(
+              "Demande envoyée ! Le chat s'ouvrira dès qu'un responsable aura validé votre compte.",
+              'Request sent! The chat opens as soon as a manager approves your account.',
+            ),
+          ];
+  return (
+    '<div class="cempty"><div style="font-size:44px">' +
+    icon +
+    '</div><p>' +
+    text +
+    '</p><p class="muted sm">' +
+    escapeHtml(user ? user.email : '') +
+    '</p></div>'
+  );
+}
+
+/**
+ * `personRowHtml` - Function 👤
+ *
+ * @param { object } person - a request or a member { uid, name, email, pic, role? }
+ * @param { string } buttons - the action buttons (HTML)
+ * @returns { string } - one row of the "Équipe" card
+ */
+function personRowHtml(person, buttons) {
+  const avatar = person.pic
+    ? '<img src="' +
+      escapeHtml(person.pic) +
+      '" referrerpolicy="no-referrer" style="width:36px;height:36px;border-radius:50%;flex:none" alt="">'
+    : '<div class="av" style="width:36px;height:36px">' + escapeHtml((person.name || '?')[0]) + '</div>';
+  return (
+    '<div class="row" style="gap:10px;margin:10px 0">' +
+    avatar +
+    '<div class="grow" style="min-width:0"><div style="font-weight:700">' +
+    escapeHtml(person.name || 'Staff') +
+    (person.role === 'admin' ? ' 🎖️' : '') +
+    '</div><div class="muted sm" style="overflow:hidden;text-overflow:ellipsis">' +
+    escapeHtml(person.email || '') +
+    '</div></div>' +
+    buttons +
+    '</div>'
+  );
+}
+
+/**
+ * `teamCardHtml` - Function 👥
+ *
+ * @returns { string } - the admin's "Équipe" card: waiting requests (approve / refuse) & the team
+ */
+function teamCardHtml() {
+  const smallButton = (action, uid, label, extra) =>
+    '<button class="btn' +
+    (extra || '') +
+    '" data-team="' +
+    action +
+    '" data-uid="' +
+    escapeHtml(uid) +
+    '" style="width:auto;padding:6px 10px;margin:0">' +
+    label +
+    '</button>';
+  const requestsHtml = accessRequests.length
+    ? accessRequests
+        .map((request) =>
+          personRowHtml(
+            request,
+            smallButton('approve', request.uid, '✓') + smallButton('refuse', request.uid, '✕', ' sec'),
+          ),
+        )
+        .join('') +
+      (accessRequests.length > 1
+        ? '<button class="btn" data-team="approve-all" style="margin-top:6px">' +
+          translate('Tout valider', 'Approve all') +
+          ' (' +
+          accessRequests.length +
+          ')</button>'
+        : '')
+    : '<p class="muted sm">' + translate('Aucune demande en attente.', 'No pending requests.') + '</p>';
+  const membersHtml = teamMembers
+    .slice()
+    .sort((first, second) => String(first.name).localeCompare(String(second.name)))
+    .map((member) =>
+      personRowHtml(
+        member,
+        member.email === OWNER_EMAIL || member.uid === user.uid
+          ? ''
+          : smallButton('admin', member.uid, '🎖️', ' sec') + smallButton('remove', member.uid, '➖', ' sec'),
+      ),
+    )
+    .join('');
+  return (
+    '<div class="sh">' +
+    translate('Équipe', 'Team') +
+    '</div><div class="card"><div style="font-weight:700">' +
+    translate("Demandes d'accès au chat", 'Chat access requests') +
+    (accessRequests.length ? ' · ' + accessRequests.length : '') +
+    '</div>' +
+    requestsHtml +
+    '<div style="font-weight:700;margin-top:14px">' +
+    translate('Membres', 'Members') +
+    ' · ' +
+    teamMembers.length +
+    '</div>' +
+    membersHtml +
+    '<p class="muted sm" style="margin:8px 0 0">' +
+    translate(
+      '🎖️ = responsable (peut valider les demandes). ➖ retire le membre du chat.',
+      '🎖️ = admin (can approve requests). ➖ removes the member from the chat.',
+    ) +
+    '</p></div>'
+  );
+}
+
+/**
+ * `renderTeamCard` - Function 🎨
+ *
+ * (Admins only) injects or refreshes the `#teamAdm` card on the Profil screen, right after the
+ * Google account card `#gAcc` (cloud.js); removes it for everybody else.
+ *
+ * @returns { void }
+ */
+function renderTeamCard() {
+  const accountCard = document.getElementById('gAcc');
+  let box = document.getElementById('teamAdm');
+  // not an admin, or not on Profil? no card
+  if (access !== 'admin' || !accountCard) {
+    if (box) box.remove();
+    return;
+  }
+  if (!box) {
+    box = document.createElement('div');
+    box.id = 'teamAdm';
+    accountCard.after(box);
+    // 👆 the buttons (one listener for the whole card)
+    box.addEventListener('click', (event) => {
+      const button = event.target.closest('[data-team]');
+      if (!button) return;
+      const uid = button.dataset.uid;
+      const actions = {
+        approve: () => approve(uid),
+        refuse: () => refuse(uid),
+        remove: () => removeMember(uid),
+        admin: () => toggleAdmin(uid),
+        'approve-all': () => accessRequests.slice().forEach((request) => approve(request.uid)),
+      };
+      if (actions[button.dataset.team]) actions[button.dataset.team]();
+    });
+  }
+  box.innerHTML = teamCardHtml();
+}
+
+// 👂 the app re-renders Profil: put the "Équipe" card back after the account card
+new MutationObserver(() => {
+  if (access === 'admin' && document.getElementById('gAcc') && !document.getElementById('teamAdm'))
+    renderTeamCard();
+}).observe(document.documentElement, { childList: true, subtree: true });
 
 // ===== CHAT BUTTON 🔵 ===== //
 
@@ -1772,7 +2261,7 @@ function updateFab() {
   const display = show ? 'flex' : 'none';
   if (fabButton.style.display !== display) fabButton.style.display = display;
   const isUp = !!(scanFab && scanFab.classList.contains('up')),
-    hasDot = !!hasUnread();
+    hasDot = !!hasUnread() || (access === 'admin' && accessRequests.length > 0);
   if (fabButton.classList.contains('up') !== isUp) fabButton.classList.toggle('up', isUp);
   if (fabButton.classList.contains('dot') !== hasDot) fabButton.classList.toggle('dot', hasDot);
 }
@@ -1789,6 +2278,7 @@ new MutationObserver(() => updateFab()).observe(document.documentElement, {
 // 👤 signed in / out: (re)listen, repaint & refresh the button
 onAuthStateChanged(auth, (signedInUser) => {
   user = signedInUser;
+  watchAccess();
   listen();
   paint();
   updateFab();

@@ -1,0 +1,163 @@
+// Copyright (c) 2026 Abraham Ukachi. All rights reserved. The Les Trois Forts Project.
+// Proprietary and confidential: see LICENSE. No copying, modification or redistribution without written permission.
+//
+// @project: sofitel-service-lestroisforts
+// @name: Les Trois Forts - Firestore Security Rules
+// @file: rust/web/firestore.rules
+// @type: Firebase Security Rules
+// @authors: Abraham Ukachi <abrahamukachi@gmail.com>
+//
+// Example usage:
+//   1+|> Firebase console > Firestore Database > Rules > paste this file > Publish
+//    -|>
+//
+// !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+// MOTTO: We'll always do more 😜!!!
+// !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+//
+// 🛡️ Who may do what:
+// - users/{uid}    : my own progress & settings, only me.
+// - team/{uid}     : the approved team. Only admins add / remove / promote. The owner is always an admin.
+// - requests/{uid} : "let me into the chat" requests. Made by the person, read & answered by admins.
+// - chat/{id}      : team members only, every field checked (no HTML tricks, no fake authors, server time).
+// - push/{uid}     : my own devices; team members (and newcomers, for admins only) can read for the push server.
+// - pushlog/{id}   : one row per announced message / request, so a push can never be replayed.
+
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ===== HELPERS 🧰 ===== //
+
+    // 🔐 signed in with Google
+    function signedIn() {
+      return request.auth != null;
+    }
+    // 👑 the owner (verified Google email)
+    function isOwner() {
+      return signedIn()
+        && request.auth.token.email == 'abrahamukachi@gmail.com'
+        && request.auth.token.email_verified == true;
+    }
+    // the path of a team doc
+    function teamPath(uid) {
+      return /databases/$(database)/documents/team/$(uid);
+    }
+    // 👥 an approved member (or the owner)
+    function isMember() {
+      return signedIn() && (isOwner() || exists(teamPath(request.auth.uid)));
+    }
+    // 🎖️ an admin (or the owner)
+    function isAdmin() {
+      return signedIn()
+        && (isOwner() || (exists(teamPath(request.auth.uid)) && get(teamPath(request.auth.uid)).data.role == 'admin'));
+    }
+    // 🔤 a text field of at most `max` characters
+    function isText(value, max) {
+      return value is string && value.size() <= max;
+    }
+    // 🖼️ a Google profile photo address (or none)
+    function isPicture(value) {
+      return value == '' || (isText(value, 500) && value.matches('^https://[a-z0-9.-]+[.]googleusercontent[.]com/[^"<> ]*$'));
+    }
+
+    // ===== MY PROGRESS 📈 ===== //
+    match /users/{uid} {
+      allow read, write: if signedIn() && request.auth.uid == uid;
+    }
+
+    // ===== THE TEAM 👥 ===== //
+    match /team/{uid} {
+      // members see the team; anyone signed in may see who the admins are (to ping them) and their own doc
+      allow read: if isMember()
+        || (signedIn() && request.auth.uid == uid)
+        || (signedIn() && resource.data.role == 'admin');
+      // admins add / promote people (the owner may add himself first)
+      allow create, update: if isAdmin()
+        && request.resource.data.keys().hasOnly(['name', 'email', 'pic', 'role', 'by', 'ts'])
+        && request.resource.data.role in ['member', 'admin']
+        && isText(request.resource.data.name, 100)
+        && isText(request.resource.data.email, 200)
+        && isPicture(request.resource.data.pic)
+        && request.resource.data.by == request.auth.uid
+        && (resource == null || resource.data.email != 'abrahamukachi@gmail.com' || isOwner());
+      // admins remove people, but nobody removes the owner
+      allow delete: if isAdmin() && resource.data.email != 'abrahamukachi@gmail.com';
+    }
+
+    // ===== ACCESS REQUESTS 🙋 ===== //
+    match /requests/{uid} {
+      allow read: if isAdmin() || (signedIn() && request.auth.uid == uid);
+      // I ask once, with my real email & a server time
+      allow create: if signedIn() && request.auth.uid == uid && !isMember()
+        && request.resource.data.keys().hasOnly(['name', 'email', 'pic', 'ts'])
+        && isText(request.resource.data.name, 100)
+        && request.resource.data.email == request.auth.token.email
+        && isPicture(request.resource.data.pic)
+        && request.resource.data.ts == request.time;
+      // admins refuse (the flag only)
+      allow update: if isAdmin()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['refused'])
+        && request.resource.data.refused == true;
+      // admins clear it after approving; I may withdraw mine unless it was refused
+      allow delete: if isAdmin() || (signedIn() && request.auth.uid == uid && resource.data.get('refused', false) != true);
+    }
+
+    // ===== TEAM CHAT 💬 ===== //
+    match /chat/{id} {
+      allow read: if isMember();
+      // a new message: plain auto id, my uid, server time, every field checked 🛡️
+      allow create: if isMember()
+        && id.matches('^[A-Za-z0-9]{1,40}$')
+        && request.resource.data.keys().hasOnly(['uid', 'name', 'pic', 'text', 'img', 'gif', 'sticker', 'rep', 'ts'])
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.ts == request.time
+        && isText(request.resource.data.name, 100)
+        && isPicture(request.resource.data.pic)
+        && isText(request.resource.data.text, 1000)
+        && (!('img' in request.resource.data)
+          || (request.resource.data.img is string
+            && request.resource.data.img.size() < 1000000
+            && request.resource.data.img.split(',').size() == 2
+            && request.resource.data.img.split(',')[0] == 'data:image/jpeg;base64'))
+        && (!('gif' in request.resource.data)
+          || (isText(request.resource.data.gif, 500)
+            && request.resource.data.gif.matches('^https://media[0-9]?[.]giphy[.]com/[A-Za-z0-9/_.?=&-]+$')))
+        && (!('sticker' in request.resource.data)
+          || (isText(request.resource.data.sticker, 40) && request.resource.data.sticker.matches('^[a-z0-9-]+$')))
+        && (!('rep' in request.resource.data)
+          || (request.resource.data.rep is map
+            && request.resource.data.rep.keys().hasOnly(['id', 'uid', 'name', 'text'])
+            && request.resource.data.rep.id.matches('^[A-Za-z0-9]{1,40}$')
+            && isText(request.resource.data.rep.get('uid', ''), 128)
+            && isText(request.resource.data.rep.get('name', ''), 100)
+            && isText(request.resource.data.rep.get('text', ''), 200)));
+      // a reaction: only `r.<my uid>`, one short emoji
+      allow update: if isMember()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['r'])
+        && request.resource.data.r is map
+        && request.resource.data.r.diff(resource.data.get('r', {})).affectedKeys().hasOnly([request.auth.uid])
+        && (!(request.auth.uid in request.resource.data.r) || isText(request.resource.data.r[request.auth.uid], 16));
+      // my own messages (admins may also remove any message)
+      allow delete: if isMember() && (resource.data.uid == request.auth.uid || isAdmin());
+    }
+
+    // ===== PUSH DEVICES 📲 ===== //
+    match /push/{uid} {
+      allow read: if isMember()
+        || (signedIn() && request.auth.uid == uid)
+        || (signedIn() && exists(teamPath(uid)) && get(teamPath(uid)).data.role == 'admin');
+      allow write: if signedIn() && request.auth.uid == uid;
+    }
+
+    // ===== PUSH LOG 🔒 (one push per message / request, never twice) ===== //
+    match /pushlog/{key} {
+      allow create: if signedIn()
+        && request.resource.data.keys().hasOnly(['at'])
+        && (key == 'req_' + request.auth.uid
+          || (isMember()
+            && exists(/databases/$(database)/documents/chat/$(key))
+            && get(/databases/$(database)/documents/chat/$(key)).data.uid == request.auth.uid));
+    }
+  }
+}
