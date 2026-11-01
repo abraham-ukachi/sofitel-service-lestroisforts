@@ -421,9 +421,9 @@ window.LTF_INFO = {
       words: 'Contains celery likely (broth): check with the kitchen.',
     },
     'Faux-filet de bœuf maturé': {
-      chef: 'Beef aged 1 month, 180 g, little gem braised with bone marrow. (The tasting meat was aged 2 months, judged too strong.)',
+      chef: 'Beef aged 2 months, 180 g, little gem braised with bone marrow.',
       serv: 'Side plate served separately: butternut gnocchi and pumpkin seeds. Warn the guest the beef is aged (stronger flavour).',
-      say: "It's beef sirloin dry-aged for a month, so it has a deeper flavour, with little gem lettuce braised in bone marrow and butternut squash gnocchi.",
+      say: "It's beef sirloin dry-aged for two months, so it has a deeper flavour, with little gem lettuce braised in bone marrow and butternut squash gnocchi.",
       words: 'Contains gluten, egg (gnocchi).',
     },
     'Champignons des bois': {
@@ -432,21 +432,21 @@ window.LTF_INFO = {
       say: "It's our vegetarian main: wild mushrooms, sweet Cévennes onions slow-cooked in sherry vinegar, and a crispy potato.",
       words: 'Vegetarian.',
     },
-    'Amuse-bouche du jour': {
-      say: "It's a little bite from the chef to open the menu: a dill meringue with lemon cream, herring roe and mussels. Salty, fresh and light.",
-      words: 'Contains egg, fish (herring roe), molluscs (mussels), dairy.',
+    'Tartare de maigre': {
+      say: "It's the chef's little bite to open the menu: a meagre tartare with an aguachile jelly, Mexican-style, lime and a touch of chilli, and a light sea water foam. Fresh and a little spicy.",
+      words: 'Contains fish (raw). Aguachile = lime + chilli: mildly spicy, mention it.',
     },
-    'Saint-Pierre, clémentine': {
-      say: "It's John Dory with clementine, pickled and puréed butternut, an orange gel and tapioca pearls. The sauce is pil pil, a Basque emulsion of olive oil, garlic and chilli.",
-      words: 'Contains fish.',
+    'Turbot, mousseline de chou-fleur': {
+      say: "It's turbot, a noble white fish, with cauliflower two ways, a silky mousseline and crunchy pickles. A clam vinaigrette and a citrus sabayon, light and tangy.",
+      words: 'Contains fish, molluscs (clams), egg (sabayon). Check dairy with the kitchen.',
     },
-    'Paleron de bœuf Angus': {
-      say: "It's Angus beef chuck, slow-cooked for hours so it's really tender. With courgette three ways, a cream, baby courgettes and little pearls, plus chanterelles.",
-      words: 'Check dairy in the courgette cream with the kitchen.',
+    'Suprême de volaille, mousseline de carotte': {
+      say: "It's a chicken supreme, the breast with the wing bone, with a carrot mousseline, glazed bunch carrots and charred corn. The sauce is vadouvan, a French curry blend, gently spiced, not hot.",
+      words: 'Check dairy (mousseline, sauce) and mustard in the vadouvan with the kitchen.',
     },
-    'Sablé, poire pochée': {
-      say: "It's the menu's dessert: an all-butter shortbread, poached pear, a tonka bean cream and caramel.",
-      words: 'Contains gluten, butter/dairy, egg.',
+    'Sablé amande, ganache montée vanille-rose': {
+      say: "It's the menu's dessert: an almond shortbread, a whipped vanilla and rose ganache, candied grapefruit, a grapefruit jelly and a madeleine sponge. Floral, fresh and slightly bitter.",
+      words: 'Contains gluten, tree nuts (almond), dairy, egg.',
     },
     'Ravioles de Saint-Jacques': {
       say: "They're delicate scallop ravioli with foie gras and truffle, finished with a light soy foam.",

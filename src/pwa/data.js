@@ -34,6 +34,11 @@
 
 // Les Trois Forts — training data. Transcribed from the restaurant's real cards (Oct 2026). Do not invent.
 window.LTF = {
+  // 🎁 the Tasting Menu chapter caption (the sheet's date: the menu changes almost every day)
+  degSub: {
+    fr: 'Menu surprise · fiche du samedi 31 octobre 2026 · 89 €',
+    en: 'Surprise menu · sheet of Saturday 31 October 2026 · 89 €',
+  },
   jour: {
     date: '2026-10-18',
     sub: {
@@ -44,7 +49,11 @@ window.LTF = {
       fr: 'Dimanche 18 octobre 2026 · Dîner 19h00–22h00 · 9 réservations · 26 couverts (mise à jour 14h57 · ⭕ = entouré sur la feuille)',
       en: 'Sunday 18 October 2026 · Dinner 7–10 pm · 9 bookings · 26 covers (updated 2:57 pm · ⭕ = circled on the sheet)',
     },
-    peche: [],
+    // retour de pêche of the latest tasting sheet (Sat 31 Oct 2026) [fr, en, quantity]
+    peche: [
+      ['Loup 600 g (31 oct.)', 'Sea bass 600 g (31 Oct)', '1'],
+      ['Loup 900 g (31 oct.)', 'Sea bass 900 g (31 Oct)', '1–2'],
+    ],
     tables: [
       [
         '19:00',
@@ -185,9 +194,9 @@ window.LTF = {
       ],
       [
         'Menu dégustation du jour : quel poisson ?',
-        'Saint-Pierre, clémentine',
-        ['Filet de loup, clémentine', 'Rouget de roche', 'Dos de maigre'],
-        "D'après la dernière fiche dégustation (17 oct.).",
+        'Turbot, mousseline de chou-fleur',
+        ['Saint-Pierre, clémentine', 'Filet de loup, clémentine', 'Dos de maigre'],
+        "D'après la dernière fiche dégustation (samedi 31 oct.) : vinaigrette de palourdes et sabayon aux agrumes.",
       ],
     ],
     en: [
@@ -282,9 +291,9 @@ window.LTF = {
       ],
       [
         "Today's tasting menu: which fish?",
-        'John Dory, clementine',
-        ['Sea bass fillet, clementine', 'Rock red mullet', 'Meagre'],
-        'From the latest tasting sheet (17 Oct).',
+        'Turbot, cauliflower mousseline',
+        ['John Dory, clementine', 'Sea bass fillet, clementine', 'Meagre'],
+        'From the latest tasting sheet (Saturday 31 Oct): clam vinaigrette and citrus sabayon.',
       ],
     ],
   },
@@ -320,9 +329,9 @@ window.LTF = {
       ],
       [
         "Durée de maturation du faux-filet de la carte d'hiver ?",
-        '1 mois',
-        ['2 semaines', '2 mois', '3 mois'],
-        'La viande goûtée avait 2 mois, jugée trop forte : on passe à 1 mois.',
+        '2 mois',
+        ['2 semaines', '1 mois', '3 mois'],
+        'Maturé 2 mois : un goût plus puissant, à annoncer au client.',
       ],
       [
         'Qui a codifié la tapenade, à Marseille, en 1880 ?',
@@ -498,7 +507,7 @@ window.LTF = {
         'Faux-filet de bœuf maturé : quel poids ?',
         '180 g',
         ['250 g', '300 g', '120 g'],
-        'Maturé 1 mois ; gnocchis butternut et graines de courge à part.',
+        'Maturé 2 mois ; gnocchis butternut et graines de courge à part.',
       ],
       [
         "Qu'y a-t-il au centre de l'assiette des pieds paquets de calamar ?",
@@ -552,9 +561,9 @@ window.LTF = {
       ],
       [
         'How long is the winter-menu sirloin aged?',
-        '1 month',
-        ['2 weeks', '2 months', '3 months'],
-        'The tasting meat was aged 2 months, judged too strong: it moves to 1 month.',
+        '2 months',
+        ['2 weeks', '1 month', '3 months'],
+        'Aged 2 months: a stronger flavour, worth telling the guest.',
       ],
       [
         'Who first wrote down tapenade, in Marseille, in 1880?',
@@ -717,7 +726,7 @@ window.LTF = {
         'Aged beef sirloin: what weight?',
         '180 g',
         ['250 g', '300 g', '120 g'],
-        'Aged 1 month; butternut gnocchi and pumpkin seeds on the side.',
+        'Aged 2 months; butternut gnocchi and pumpkin seeds on the side.',
       ],
       [
         'What sits in the centre of the squid pieds paquets plate?',
@@ -1092,11 +1101,12 @@ window.LTF = {
       svc: ['hiver', 'dej', 'diner'],
       p: 30,
     },
-    // service "deg": Menu Dégustation du jour (fiche du 17 oct. 2026 — change souvent). "hiver": carte d'hiver, lancement 19 oct. 2026.
+    // service "deg": Menu Dégustation du jour (fiche du samedi 31 oct. 2026 — change presque chaque jour, menu surprise).
+    // "hiver": carte d'hiver, lancement 19 oct. 2026.
     {
-      n: 'Amuse-bouche du jour',
-      d: "meringue à l'aneth, crémeux de citron, œufs de hareng, moules",
-      en: 'Dill meringue, lemon crémeux, herring roe, mussels',
+      n: 'Tartare de maigre',
+      d: "gelée d'aguachile (citron épicé), mousse d'eau de mer",
+      en: 'Meagre tartare, spicy citrus aguachile jelly, sea water foam',
       s: 'Amuse-bouche',
       svc: ['deg'],
       p: null,
@@ -1110,25 +1120,25 @@ window.LTF = {
       p: null,
     },
     {
-      n: 'Saint-Pierre, clémentine',
-      d: "butternut en pickles, gel à l'orange, tapioca, butternut, sauce pil pil",
-      en: 'John Dory, clementine, pickled butternut, orange gel, tapioca, butternut, pil pil sauce',
+      n: 'Turbot, mousseline de chou-fleur',
+      d: 'pickles de chou-fleur, vinaigrette de palourdes, sabayon aux agrumes',
+      en: 'Turbot, cauliflower mousseline, pickled cauliflower, clam vinaigrette, citrus sabayon',
       s: 'Poisson',
       svc: ['deg'],
       p: null,
     },
     {
-      n: 'Paleron de bœuf Angus',
-      d: 'crémeux de courgette, mini-courgettes, billes de courgette, girolles',
-      en: 'Angus beef chuck, courgette cream, baby courgettes, courgette pearls, chanterelles',
+      n: 'Suprême de volaille, mousseline de carotte',
+      d: 'carottes fanes glacées, maïs brûlé, sauce vadouvan',
+      en: 'Chicken supreme, carrot mousseline, glazed bunch carrots, charred corn, vadouvan sauce',
       s: 'Viande',
       svc: ['deg'],
       p: null,
     },
     {
-      n: 'Sablé, poire pochée',
-      d: 'crémeux fève tonka, caramel',
-      en: 'Shortbread with poached pear, tonka bean cream, caramel',
+      n: 'Sablé amande, ganache montée vanille-rose',
+      d: 'pamplemousse confit, gelée de pamplemousse, biscuit madeleine',
+      en: 'Almond shortbread, whipped vanilla-rose ganache, candied grapefruit, grapefruit jelly, madeleine sponge',
       s: 'Dessert dégustation',
       svc: ['deg'],
       p: null,

@@ -112,16 +112,16 @@ window.LTF.fun = {
       'La maturation à sec concentre les saveurs et attendrit la viande, avec des notes de noisette. Demandez la cuisson, saignant ou à point de préférence.',
     'd:Champignons des bois':
       "L'oignon doux des Cévennes (AOP) est si sucré qu'il se croque cru. Le vinaigre de Xérès vient de Jerez, en Andalousie. Plat végétarien.",
-    'd:Amuse-bouche du jour':
-      "Offert par le chef pour ouvrir le menu. La meringue ici est salée, à l'aneth : un effet surprise à annoncer avec le sourire.",
+    'd:Tartare de maigre':
+      "L'aguachile (« eau de piment ») vient du nord-ouest du Mexique : du poisson cru « cuit » au citron vert et au piment. Le maigre est un grand poisson de Méditerranée.",
     'd:Ravioles de Saint-Jacques':
       "Le Vaucluse voisin est l'un des grands terroirs de la truffe noire en France. Foie gras, truffe, soja : un plat riche et umami.",
-    'd:Saint-Pierre, clémentine':
-      "Le pil pil est une sauce basque : huile d'olive et ail émulsionnés avec la gélatine du poisson. Son nom imite le bruit du frémissement.",
-    'd:Paleron de bœuf Angus':
-      "L'Angus est une race écossaise réputée pour son persillé. Le paleron, morceau de l'épaule, devient fondant après une longue cuisson.",
-    'd:Sablé, poire pochée':
-      "La fève tonka vient d'un arbre d'Amazonie ; elle a des notes d'amande, de vanille et de caramel qui se marient très bien à la poire.",
+    'd:Turbot, mousseline de chou-fleur':
+      "Le turbot est surnommé le « roi des poissons plats » : une chair blanche, ferme et fine. Le sabayon est une émulsion de jaunes d'œufs montée à chaud.",
+    'd:Suprême de volaille, mousseline de carotte':
+      'Le vadouvan est un « curry à la française » né à Pondichéry, ancien comptoir français en Inde : oignon, échalote et ail frits avec des épices.',
+    'd:Sablé amande, ganache montée vanille-rose':
+      "La madeleine est née à Commercy, en Lorraine. Rose et pamplemousse se marient bien : le floral adoucit l'amertume de l'agrume.",
     'd:Poire / marrons, comme un mont blanc':
       'Le mont-blanc doit son nom au sommet des Alpes : la crème de marron figure la montagne et la meringue, la neige.',
     'd:Pommes façon tatin, infusion vanille-anis étoilé':
@@ -474,16 +474,16 @@ window.LTF.fun = {
       'Dry-ageing concentrates flavour and tenderises the beef, with nutty notes. Ask for the doneness; rare or medium suits it best.',
     'd:Champignons des bois':
       'Cévennes sweet onions (AOP) are so mild you can eat them raw. Sherry vinegar comes from Jerez in Andalusia. A vegetarian main.',
-    'd:Amuse-bouche du jour':
-      'Offered by the chef to open the menu. The meringue is savoury, with dill, a little surprise worth announcing with a smile.',
+    'd:Tartare de maigre':
+      'Aguachile ("chilli water") comes from north-west Mexico: raw fish "cooked" in lime and chilli. Meagre is a large Mediterranean fish.',
     'd:Ravioles de Saint-Jacques':
       "Nearby Vaucluse is one of France's great black truffle areas. Foie gras, truffle and soy make this a rich, umami dish.",
-    'd:Saint-Pierre, clémentine':
-      "Pil pil is a Basque sauce: olive oil and garlic emulsified with the fish's own gelatin. The name mimics the sound of it bubbling.",
-    'd:Paleron de bœuf Angus':
-      'Angus is a Scottish breed famous for its marbling. Chuck, from the shoulder, turns meltingly tender after slow cooking.',
-    'd:Sablé, poire pochée':
-      'Tonka beans come from an Amazonian tree; their almond, vanilla and caramel notes go beautifully with pear.',
+    'd:Turbot, mousseline de chou-fleur':
+      'Turbot is called the "king of flat fish": firm, fine white flesh. A sabayon is egg yolks whisked over heat into a light foam.',
+    'd:Suprême de volaille, mousseline de carotte':
+      'Vadouvan is a "French curry" born in Pondicherry, a former French trading post in India: onion, shallot and garlic fried with spices.',
+    'd:Sablé amande, ganache montée vanille-rose':
+      'The madeleine was born in Commercy, Lorraine. Rose and grapefruit work well together: the floral notes soften the citrus bitterness.',
     'd:Poire / marrons, comme un mont blanc':
       'The Mont Blanc is named after the Alpine peak: the chestnut cream is the mountain and the meringue is the snow.',
     'd:Pommes façon tatin, infusion vanille-anis étoilé':

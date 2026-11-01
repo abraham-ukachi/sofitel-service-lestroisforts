@@ -191,9 +191,9 @@ window.LTF_INFO_FR = {
       words: 'Céleri possible (bouillon) : vérifier en cuisine.',
     },
     'Faux-filet de bœuf maturé': {
-      chef: 'Bœuf maturé 1 mois, 180 g, sucrine braisée à la moelle. Maturation 1 mois (la viande goûtée avait 2 mois, jugée trop forte).',
+      chef: 'Bœuf maturé 2 mois, 180 g, sucrine braisée à la moelle.',
       serv: "Assiette d'accompagnement à part : gnocchis à la courge butternut et graines de courge. Prévenir le client que la viande est maturée (goût plus prononcé).",
-      say: "C'est un faux-filet de bœuf maturé un mois, donc avec plus de goût, avec une sucrine braisée à la moelle et des gnocchis à la courge butternut.",
+      say: "C'est un faux-filet de bœuf maturé deux mois, donc avec plus de goût, avec une sucrine braisée à la moelle et des gnocchis à la courge butternut.",
       words: 'Contient gluten, œuf (gnocchis).',
     },
     'Champignons des bois': {
@@ -202,21 +202,21 @@ window.LTF_INFO_FR = {
       say: "C'est notre plat végétarien : des champignons des bois, des oignons doux des Cévennes confits au vinaigre de Xérès, et un croustillant de pomme de terre.",
       words: 'Végétarien.',
     },
-    'Amuse-bouche du jour': {
-      say: "C'est la petite bouchée du chef pour ouvrir le menu : une meringue à l'aneth avec un crémeux citron, des œufs de hareng et des moules. Salé, frais et léger.",
-      words: 'Contient œuf, poisson (œufs de hareng), mollusques (moules), lait.',
+    'Tartare de maigre': {
+      say: "C'est la petite bouchée du chef pour ouvrir le menu : un tartare de maigre avec une gelée d'aguachile, à la mexicaine, citron vert et une pointe de piment, et une mousse légère d'eau de mer. Frais et un peu relevé.",
+      words: 'Contient poisson (cru). Aguachile = citron vert + piment : légèrement relevé, à annoncer.',
     },
-    'Saint-Pierre, clémentine': {
-      say: "C'est du Saint-Pierre à la clémentine, avec du butternut en pickles et en purée, un gel à l'orange et des perles de tapioca. La sauce, c'est un pil pil, une émulsion basque huile d'olive, ail et piment.",
-      words: 'Contient poisson.',
+    'Turbot, mousseline de chou-fleur': {
+      say: "C'est du turbot, un poisson blanc noble, avec le chou-fleur en deux façons, une mousseline bien lisse et des pickles croquants. Une vinaigrette de palourdes et un sabayon aux agrumes, léger et acidulé.",
+      words: 'Contient poisson, mollusques (palourdes), œuf (sabayon). Vérifier le lait avec la cuisine.',
     },
-    'Paleron de bœuf Angus': {
-      say: "C'est du paleron de bœuf Angus, cuit très longtemps, donc bien fondant. Avec la courgette en crémeux, en mini-courgettes et en petites billes, et des girolles.",
-      words: 'Vérifier le lait dans le crémeux de courgette avec la cuisine.',
+    'Suprême de volaille, mousseline de carotte': {
+      say: "C'est un suprême de volaille, le filet avec l'os de l'aile, avec une mousseline de carotte, des carottes fanes glacées et du maïs brûlé. La sauce, c'est un vadouvan, un mélange d'épices façon curry à la française, parfumé mais pas piquant.",
+      words: 'Vérifier le lait (mousseline, sauce) et la moutarde dans le vadouvan avec la cuisine.',
     },
-    'Sablé, poire pochée': {
-      say: "C'est le dessert du menu : un sablé pur beurre, une poire pochée, un crémeux à la fève tonka et du caramel.",
-      words: 'Contient gluten, beurre/lait, œuf.',
+    'Sablé amande, ganache montée vanille-rose': {
+      say: "C'est le dessert du menu : un sablé aux amandes, une ganache montée vanille et rose, du pamplemousse confit, une gelée de pamplemousse et un biscuit madeleine. Floral, frais et légèrement amer.",
+      words: 'Contient gluten, fruits à coque (amande), lait, œuf.',
     },
     'Ravioles de Saint-Jacques': {
       say: 'Ce sont de fines ravioles de Saint-Jacques, au foie gras et à la truffe, avec une émulsion légère au soja par-dessus.',
