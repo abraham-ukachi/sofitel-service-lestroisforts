@@ -255,7 +255,32 @@
   // ===== MCQ HELPER ❓ ===== //
 
   // the accented letters & their plain version (to compare two answers) 🔤
-  const ACCENTS = { à: 'a', â: 'a', ä: 'a', á: 'a', ã: 'a', ç: 'c', é: 'e', è: 'e', ê: 'e', ë: 'e', î: 'i', ï: 'i', í: 'i', ô: 'o', ö: 'o', ó: 'o', ù: 'u', û: 'u', ü: 'u', ú: 'u', ÿ: 'y', ñ: 'n', œ: 'oe', æ: 'ae' };
+  const ACCENTS = {
+    à: 'a',
+    â: 'a',
+    ä: 'a',
+    á: 'a',
+    ã: 'a',
+    ç: 'c',
+    é: 'e',
+    è: 'e',
+    ê: 'e',
+    ë: 'e',
+    î: 'i',
+    ï: 'i',
+    í: 'i',
+    ô: 'o',
+    ö: 'o',
+    ó: 'o',
+    ù: 'u',
+    û: 'u',
+    ü: 'u',
+    ú: 'u',
+    ÿ: 'y',
+    ñ: 'n',
+    œ: 'oe',
+    æ: 'ae',
+  };
 
   /**
    * `answerKey` - Function 🔑
