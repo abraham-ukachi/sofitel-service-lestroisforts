@@ -203,14 +203,20 @@ NODE_PATH=/tmp/jt/node_modules node rust/tools/check_readable.js rust/dist pwa r
 
 ```js
 /*
-* @license MIT
+* @license Proprietary - All Rights Reserved
 * ~~~~~~~~~~~~
 * sofitel-service-lestroisforts
 * ~~~~~~~~~~~~
-* Copyright (c) 2026 Abraham Ukachi. The Les Trois Forts Project.
+* Copyright (c) 2026 Abraham Ukachi. The Les Trois Forts Project. All rights reserved.
 *
-* Permission is hereby granted, free of charge, to any person obtaining a copy
-* ...(the rest of the MIT license text, as in any source file)...
+* This source code is proprietary and confidential. It is shown publicly for
+* viewing only. No permission is granted to copy, modify, merge, publish,
+* distribute, sublicense, sell, host or deploy this software, in whole or in
+* part, or to use it to build another product or service, without the prior
+* written permission of the copyright holder. See the LICENSE file for the
+* full terms.
+*
+* THE SOFTWARE IS PROVIDED 'AS IS', WITHOUT WARRANTY OF ANY KIND.
 *
 * @project: sofitel-service-lestroisforts
 * @name: Les Trois Forts - Team Chat
@@ -279,9 +285,9 @@ Open an issue in [abraham-ukachi/sofitel-service-lestroisforts/issues](https://g
 
 ## License
 
-This **`sofitel-service-lestroisforts`** project is [MIT Licensed](./LICENSE) ;)
+This **`sofitel-service-lestroisforts`** project is **proprietary** (all rights reserved), see the [LICENSE](./LICENSE).
 
-By contributing, you agree that your contributions will be licensed under the same license.
+Contributions are by invitation only. By contributing, you agree that your contributions become part of the Software and are covered by the same proprietary license, owned by Abraham Ukachi.
 
 
 ## Contact

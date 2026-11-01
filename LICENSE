@@ -1,23 +1,56 @@
-MIT License
+Proprietary License - All Rights Reserved
 ~~~~~~~~~~~
-sofitel-service-lestroisforts
+sofitel-service-lestroisforts (Les Trois Forts - Service Academy)
 ~~~~~~~~~~~
-Copyright (c) 2026 Abraham Ukachi. The Les Trois Forts Project.
+Copyright (c) 2026 Abraham Ukachi. The Les Trois Forts Project. All rights reserved.
 
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
+This software, including its source code, compiled code (WebAssembly), data,
+texts, translations, images, audio, stickers, designs and documentation
+(together, the "Software"), is the proprietary and confidential property of
+Abraham Ukachi (the "Copyright Holder").
 
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
+1. NO LICENSE GRANTED
+   The Software is NOT open-source software. No license or right of any kind
+   is granted to you, whether expressly, by implication, by estoppel or
+   otherwise, except as written in section 2.
 
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
+2. WHAT YOU MAY DO
+   a) View the source code in this repository on GitHub, as allowed by the
+      GitHub Terms of Service for public repositories.
+   b) Use the hosted app at https://sofitel-service-lestroisforts.vercel.app,
+      if you are a member of staff of the restaurant Les Trois Forts (Sofitel
+      Marseille Vieux-Port) or have been invited by the Copyright Holder.
+
+3. WHAT YOU MAY NOT DO
+   Without the prior written permission of the Copyright Holder, you may not:
+   a) copy, download for reuse, reproduce or mirror the Software, in whole or
+      in part;
+   b) modify, translate, adapt or create derivative works of the Software;
+   c) publish, distribute, sublicense, sell, rent, lend or otherwise make the
+      Software available to anyone;
+   d) host, deploy or run the Software (or a copy of it) on any server,
+      domain, app store or device other than the official hosted app;
+   e) use the Software, its code, its data or its design to build, train or
+      improve another product, service or model;
+   f) remove or change any copyright, license or proprietary notice.
+
+4. THIRD-PARTY COMPONENTS
+   Third-party libraries included in the Software (for example the files in
+   pwa/scan/vendor/, TensorFlow.js, MobileNet, Tesseract.js, web-push and the
+   Firebase SDK) remain under their own licenses, which are not changed by
+   this document.
+
+5. PREVIOUS VERSIONS
+   Versions up to and including 0.49.0 were published under the MIT License.
+   Starting with version 0.50.0 (2026-11-01), every version of the Software
+   is published only under this Proprietary License.
+
+6. NO WARRANTY
+   THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+   IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+   FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+   COPYRIGHT HOLDER BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY ARISING
+   FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR ITS USE.
+
+7. CONTACT
+   To ask for a permission: Abraham Ukachi <abrahamukachi@gmail.com>.

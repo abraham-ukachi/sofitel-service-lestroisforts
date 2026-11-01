@@ -1,28 +1,19 @@
 #!/bin/bash
 # 
-# @license MIT
+# @license Proprietary - All Rights Reserved
 # ~~~~~~~~~~~~
 # sofitel-service-lestroisforts
 # ~~~~~~~~~~~~
-# Copyright (c) 2026 Abraham Ukachi. The Les Trois Forts Project.
+# Copyright (c) 2026 Abraham Ukachi. The Les Trois Forts Project. All rights reserved.
 #
-# Permission is hereby granted, free of charge, to any person obtaining a copy
-# of this software and associated documentation files (the 'Software'), to deal
-# in the Software without restriction, including without limitation the rights
-# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-# copies of the Software, and to permit persons to whom the Software is
-# furnished to do so, subject to the following conditions:
+# This source code is proprietary and confidential. It is shown publicly for
+# viewing only. No permission is granted to copy, modify, merge, publish,
+# distribute, sublicense, sell, host or deploy this software, in whole or in
+# part, or to use it to build another product or service, without the prior
+# written permission of the copyright holder. See the LICENSE file for the
+# full terms.
 #
-# The above copyright notice and this permission notice shall be included in all
-# copies or substantial portions of the Software.
-#
-# THE SOFTWARE IS PROVIDED 'AS IS', WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-# SOFTWARE.
+# THE SOFTWARE IS PROVIDED 'AS IS', WITHOUT WARRANTY OF ANY KIND.
 #
 # @project: sofitel-service-lestroisforts
 # @name: Les Trois Forts - Build
@@ -99,9 +90,11 @@ cp ltf/Cargo.toml ltf/Cargo.lock "$DIST/src/rust/ltf/"
 cp ltf/src/*.rs "$DIST/src/rust/ltf/src/"
 cp tools/*.js tools/*.py "$DIST/src/rust/tools/"
 cp tools/scan/*.js "$DIST/src/rust/tools/scan/"
-cp web/sw.js "$DIST/src/rust/web/"
+cp web/sw.js web/vercel.json web/firestore.rules "$DIST/src/rust/web/"
 mkdir -p "$DIST/src/rust/web/api" && cp web/api/notify.js "$DIST/src/rust/web/api/" && cp web/package.json "$DIST/src/rust/web/"
 cp build.sh setup_toolchain.sh "$DIST/src/rust/"
+# the tests too, so a clean checkout can run them 🧪
+mkdir -p "$DIST/src/rust/tests" && cp tests/*.js tests/run_all.sh "$DIST/src/rust/tests/"
 
 # ✅ report
 ls -la "$DIST"; echo "wasm: $(stat -c %s "$DIST/ltf_bg.wasm") bytes, gzip: $(gzip -9c "$DIST/ltf_bg.wasm" | wc -c) bytes"

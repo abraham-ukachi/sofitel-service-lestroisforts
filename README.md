@@ -165,6 +165,8 @@ The app started as a JavaScript PWA (`pwa/app.js`) and was then rewritten, scree
 
 ## Getting Started 🚀
 
+> NOTE: These steps are for the author and the contributors he invited (see the [License](#license)).
+
 To build from the full project (`pwa/` + `rust/`):
 
 ```bash
@@ -213,7 +215,10 @@ NODE_PATH=/tmp/jt/node_modules bash rust/tests/run_all.sh
 ## Privacy & security 🛡️
 
 - 🙈 **No guest data in clear**: the briefing never shows guest names unless the team code is typed; the names ship encrypted (AES-GCM 256, PBKDF2-SHA256 600 000 rounds) in `names.js`.
-- 🔐 **Firestore rules**: `users/{uid}` can only be read & written by that user; the chat is readable by signed-in users only, each user can only write their own messages and their own reaction, and delete their own messages.
+- 👥 **Approved team only**: a Google sign-in is not enough for the chat. Each waiter asks for access, and an admin (the owner, or an admin he named) approves them in Profil > Équipe; an admin can remove anyone at any time.
+- 🔐 **Firestore rules** (versioned in [`rust/web/firestore.rules`](./src/rust/web/firestore.rules)): `users/{uid}` only by that user; the chat, the team list and the push devices for approved members only; every chat field is checked (author, server time, photo format, GIF address, sticker name, reaction size); one push per message (`pushlog`).
+- 🧱 **Security headers** (`vercel.json`): Content-Security-Policy, no framing (`frame-ancestors 'none'`, `X-Frame-Options`), `nosniff`, `Referrer-Policy`, `Permissions-Policy` (camera for the scanner only).
+- 🧼 **Escaped chat**: every database value is escaped or validated before it reaches the page (photos must be real image data URLs, reactions short emojis, ids plain Firestore ids).
 - 📸 **Photos stay on the phone** (IndexedDB), except the ones a team member chooses to post in the chat.
 - 🔑 The Firebase web config in `cloud.js` / `chat.js` is a public identifier by design; access is enforced by the rules above.
 
@@ -277,4 +282,6 @@ The design & development of this project was inspired by the following:
 
 ## License
 
-This **`sofitel-service-lestroisforts`** project is [MIT Licensed](./LICENSE) ;)
+This **`sofitel-service-lestroisforts`** project is **proprietary**: Copyright (c) 2026 Abraham Ukachi, all rights reserved. See the [LICENSE](./LICENSE).
+
+> WARNING: This is **not** open-source software. The code is public for viewing only: copying, modifying, redistributing, hosting or reusing it in any form needs the written permission of the author. Versions up to `0.49.0` were MIT; `0.50.0` and later are proprietary.
