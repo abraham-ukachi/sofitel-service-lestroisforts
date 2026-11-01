@@ -1,9 +1,18 @@
 /**
- * @license MIT
+ * @license Proprietary - All Rights Reserved
  * ~~~~~~~~~~~~
  * sofitel-service-lestroisforts
  * ~~~~~~~~~~~~
- * Copyright (c) 2026 Abraham Ukachi. The Les Trois Forts Project.
+ * Copyright (c) 2026 Abraham Ukachi. The Les Trois Forts Project. All rights reserved.
+ *
+ * This source code is proprietary and confidential. It is shown publicly for
+ * viewing only. No permission is granted to copy, modify, merge, publish,
+ * distribute, sublicense, sell, host or deploy this software, in whole or in
+ * part, or to use it to build another product or service, without the prior
+ * written permission of the copyright holder. See the LICENSE file for the
+ * full terms.
+ *
+ * THE SOFTWARE IS PROVIDED 'AS IS', WITHOUT WARRANTY OF ANY KIND.
  *
  * @project: sofitel-service-lestroisforts
  * @name: Les Trois Forts - Readability checker
@@ -52,6 +61,8 @@ const WHITELISTED_LINE_PATTERNS = [
   /^\s*["'`]?[\w$.\-]*["'`]?\s*[:=]?\s*["'`][0-9a-f]{400,}["'`][,;]?\s*$/,
   // 🧠 a scan embedding record: {"k": name, "i": photo, "e": "<base64 vector>"} (data, not code)
   /^\s*\{\s*"k":\s*"[^"]*",\s*"i":\s*"[^"]*",\s*"e":\s*"[A-Za-z0-9+/=]{400,}"\s*\},?\s*$/,
+  // 🛡️ the Content-Security-Policy value in vercel.json (JSON has no multi-line strings; one directive list)
+  /^\s*"value":\s*"default-src [^"]+"\s*,?\s*$/,
 ];
 
 // the problems found, one line each 📝
