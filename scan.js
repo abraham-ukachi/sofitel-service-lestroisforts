@@ -171,7 +171,7 @@
   /**
    * `precache` - Async Function 📦
    *
-   * Puts every scan asset in the persistent `ltf-scan-v3` cache (skips the ones already there).
+   * Puts every scan asset in the persistent `ltf-scan-v4` cache (skips the ones already there).
    *
    * @param { (progress: number) => void } [onProgress] - called with 0..1 after each file
    * @returns { Promise<void> }
@@ -179,7 +179,7 @@
   async function precache(onProgress) {
     // the files done & the cache (when the browser has one)
     let doneCount = 0;
-    const cache = window.caches ? await caches.open('ltf-scan-v3') : null;
+    const cache = window.caches ? await caches.open('ltf-scan-v4') : null;
     for (const asset of ASSETS) {
       const url = BASE + asset;
       // not cached yet? fetch & store it (errors are ignored: we'll try again next time) 🔁
@@ -535,6 +535,41 @@
   }
 
   /**
+   * `embedViews` - Async Function 🔭
+   *
+   * Embeds the photo 3 times: whole, and two centred zooms (75% & 55%). A real photo has table,
+   * hands & background around the plate or bottle; the zooms see mostly the subject itself.
+   *
+   * @param { HTMLCanvasElement } canvas - the photo
+   * @returns { Promise<Array<Float32Array>> } - the unit vectors (whole photo first)
+   */
+  async function embedViews(canvas) {
+    const views = [await embed(canvas)];
+    for (const zoom of VIEW_ZOOMS) {
+      const width = Math.round(canvas.width * zoom),
+        height = Math.round(canvas.height * zoom);
+      const zoomed = document.createElement('canvas');
+      zoomed.width = width;
+      zoomed.height = height;
+      zoomed
+        .getContext('2d')
+        .drawImage(
+          canvas,
+          (canvas.width - width) / 2,
+          (canvas.height - height) / 2,
+          width,
+          height,
+          0,
+          0,
+          width,
+          height,
+        );
+      views.push(await embed(zoomed));
+    }
+    return views;
+  }
+
+  /**
    * `userRefs` - Async Function 📸
    *
    * The extra references: the waiter's own photos + the scans they confirmed.
@@ -579,6 +614,11 @@
 
   // ===== ANALYSIS 🔬 ===== //
 
+  // the centred zooms embedded next to the whole photo 🔭
+  const VIEW_ZOOMS = [0.75, 0.55];
+  // a small head start for the waiter's own photos & confirmed scans (same light, same plates) 🧠
+  const OWN_BONUS = 0.04;
+
   /**
    * `analyse` - Async Function 🔬
    *
@@ -594,15 +634,17 @@
     const groups = buildCatalog();
     const groupByKey = Object.fromEntries(groups.map((group) => [group.k, group]));
     status(translate('Analyse de la photo…', 'Analysing the photo…'));
-    // the photo embedding 🧠
-    const vector = await embed(canvas);
+    // the photo embeddings: whole + zooms 🧠
+    const views = await embedViews(canvas);
+    const vector = views[0];
     // the references: shipped + own photos + learned scans
     const allRefs = refs.concat(await userRefs());
     // the best image similarity per item 🖼️
     const imageScores = {};
     allRefs.forEach((ref) => {
       if (!groupByKey[ref.k]) return;
-      const similarity = dot(vector, ref.v);
+      // the best view for this reference (+ the bonus for the waiter's own references)
+      const similarity = Math.max(...views.map((view) => dot(view, ref.v))) + (ref.own ? OWN_BONUS : 0);
       if (!(imageScores[ref.k] >= similarity)) imageScores[ref.k] = similarity;
     });
     // the label text (when OCR is available) 🏷️
@@ -622,18 +664,18 @@
       (firstScore, secondScore) => secondScore - firstScore,
     );
     const imageMax = imageValues[0] || 0;
-    // final score = image + a bonus for the label (an extra +0.3 when the label clearly wins) ⚖️
+    // final score = image + a bonus for the label (an extra +0.35 when the label clearly wins) ⚖️
     const ranked = groups
       .map((group) => {
         const imageScore = imageScores[group.k] || 0,
           labelScore = labelScores[group.k] || 0;
         const labelNormalized = labelMax ? labelScore / labelMax : 0;
-        const strongLabel = labelScore >= 4 && labelNormalized === 1;
+        const strongLabel = labelScore >= 3 && labelNormalized === 1;
         return {
           g: group,
           i: imageScore,
           t: labelScore,
-          score: imageScore + 0.35 * labelNormalized * Math.min(1, labelScore / 3) + (strongLabel ? 0.3 : 0),
+          score: imageScore + 0.5 * labelNormalized * Math.min(1, labelScore / 3) + (strongLabel ? 0.35 : 0),
         };
       })
       .sort((firstRanked, secondRanked) => secondRanked.score - firstRanked.score);
