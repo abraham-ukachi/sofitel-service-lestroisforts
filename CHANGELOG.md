@@ -2,6 +2,15 @@
 
 All notable changes to this project will be documented in this file. Versions follow the service-worker cache (`ltf-vNN` → `0.NN.0`), see [CONTRIBUTING.md](./CONTRIBUTING.md#git-commit-messages) for the commit guidelines.
 
+### 0.59.0 (2026-11-01)
+
+* :zap: Scan ranks the right dish / bottle first much more often: the photo is also read through two centred zooms (75 % & 55 %), so table, hands & background count less (simulated off-centre shots: top-1 72 % → 96 %)
+* :zap: Scan: the label text weighs more, and the waiter's own photos & confirmed scans get a small head start
+* :bento: Scan references rebuilt with the 4 dishes of the 31 Oct tasting menu (scan cache `ltf-scan-v4`)
+* :sparkles: Typo-tolerant search: « Pidarnon » finds Château Pibarnon (1 typo, 2 for long words, also while typing), only when nothing matches exactly
+* :lipstick: Dashboard redesign: compact segmented tabs, one search bar across the whole menu (tap a result to edit it), section tiles, tap-to-edit rows, a filter in every section, a sticky « Publier » bar that shows unpublished changes, and a search in Équipe
+* :bento: Service-worker cache `ltf-v59-rs`
+
 ### 0.58.0 (2026-11-01)
 
 * :sparkles: Red « Rupture » badge on out-of-stock wines in La Carte + a « Ruptures » list in the Briefing (Château Pibarnon blanc, Château Cruzeau Saint-Émilion Grand Cru, sheet of 31 Oct 2026)
@@ -71,7 +80,7 @@ All notable changes to this project will be documented in this file. Versions fo
 * :lock: Escape and validate every chat value before it reaches the page (photo data URLs, reactions, message ids, reply colours) so a crafted database entry can't inject HTML
 * :lock: Add security headers on Vercel: Content-Security-Policy, `frame-ancestors 'none'` + `X-Frame-Options`, `nosniff`, `Referrer-Policy`, `Permissions-Policy`, `Cross-Origin-Opener-Policy`
 * :lock: Harden the push server (`api/notify.js`): one notification per message (`pushlog`), per-user rate limit, timeouts, error logs, approved teammates only
-* :bug: Service worker: fall back to `index.html` for page navigations only, cache successful answers only (inside `waitUntil`), never cache `/api/`, version the scanner cache (`ltf-scan-v3`)
+* :bug: Service worker: fall back to `index.html` for page navigations only, cache successful answers only (inside `waitUntil`), never cache `/api/`, version the scanner cache (`ltf-scan-v4`)
 * :page_facing_up: Change the license from MIT to a proprietary All Rights Reserved license (LICENSE, every file header, README, CONTRIBUTING, package.json `UNLICENSED`)
 * :bento: Bump the service-worker cache to `ltf-v50-rs`
 
