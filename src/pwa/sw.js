@@ -1,27 +1,18 @@
 /*
- * @license MIT
+ * @license Proprietary - All Rights Reserved
  * ~~~~~~~~~~~~
  * sofitel-service-lestroisforts
  * ~~~~~~~~~~~~
- * Copyright (c) 2026 Abraham Ukachi. The Les Trois Forts Project.
+ * Copyright (c) 2026 Abraham Ukachi. The Les Trois Forts Project. All rights reserved.
  *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the 'Software'), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
+ * This source code is proprietary and confidential. It is shown publicly for
+ * viewing only. No permission is granted to copy, modify, merge, publish,
+ * distribute, sublicense, sell, host or deploy this software, in whole or in
+ * part, or to use it to build another product or service, without the prior
+ * written permission of the copyright holder. See the LICENSE file for the
+ * full terms.
  *
- * The above copyright notice and this permission notice shall be included in all
- * copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED 'AS IS', WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
+ * THE SOFTWARE IS PROVIDED 'AS IS', WITHOUT WARRANTY OF ANY KIND.
  *
  * @project: sofitel-service-lestroisforts
  * @name: Les Trois Forts - Service Worker (JavaScript build)
@@ -45,7 +36,9 @@
 // network first, cache as a fallback (📴 offline).
 
 // the cache of this version 🏷️
-const CACHE = 'ltf-v49';
+const CACHE = 'ltf-v50';
+// the scanner cache (big model files, kept across app versions): bump it when pwa/scan/ changes 📷
+const SCAN_CACHE = 'ltf-scan-v3';
 // the app shell, precached on install 📦
 const ASSETS = [
   './',
@@ -89,24 +82,57 @@ self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches
       .keys()
-      .then((keys) => Promise.all(keys.filter((key) => key !== CACHE).map((key) => caches.delete(key)))),
+      .then((keys) =>
+        Promise.all(
+          keys.filter((key) => key !== CACHE && key !== SCAN_CACHE).map((key) => caches.delete(key)),
+        ),
+      ),
   );
   self.clients.claim();
 });
 
-// 🔗 fetch: network first (and refresh the cache), else the cache, else index.html
+// 🔗 fetch: same-origin GET requests only (Firebase, Google & co. go straight to the network)
 self.addEventListener('fetch', (event) => {
-  // only GET requests are cached
-  if (event.request.method !== 'GET') return;
+  // not a GET, or another origin? let the browser handle it
+  if (event.request.method !== 'GET' || new URL(event.request.url).origin !== location.origin) return;
+  // the push server & any other API never get cached 🚫
+  if (new URL(event.request.url).pathname.startsWith('/api/')) return;
+  // 📷 scan assets: cache first (ignoring the query), then the network (and keep a good copy)
+  if (new URL(event.request.url).pathname.includes('/scan/')) {
+    event.respondWith(
+      caches.open(SCAN_CACHE).then((cache) =>
+        cache.match(event.request, { ignoreSearch: true }).then(
+          (match) =>
+            match ||
+            fetch(event.request).then((response) => {
+              if (response.ok) event.waitUntil(cache.put(event.request, response.clone()));
+              return response;
+            }),
+        ),
+      ),
+    );
+    return;
+  }
+  // 🌐 everything else: network first (and refresh the cache with good answers only), else the cache,
+  // else (pages only) the app shell `index.html`
   event.respondWith(
     fetch(event.request)
       .then((response) => {
-        // keep a copy for offline use
-        const copy = response.clone();
-        caches.open(CACHE).then((cache) => cache.put(event.request, copy));
+        // keep a copy of a complete, successful answer for offline use (finished before the worker sleeps)
+        if (response.ok && response.status === 200) {
+          const copy = response.clone();
+          event.waitUntil(caches.open(CACHE).then((cache) => cache.put(event.request, copy)));
+        }
         return response;
       })
-      .catch(() => caches.match(event.request).then((match) => match || caches.match('index.html'))),
+      .catch(() =>
+        caches
+          .match(event.request)
+          .then(
+            (match) =>
+              match || (event.request.mode === 'navigate' ? caches.match('index.html') : Response.error()),
+          ),
+      ),
   );
 });
 
