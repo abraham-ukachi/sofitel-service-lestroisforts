@@ -234,11 +234,47 @@ let loading = false;
 let currentTab = 'overview';
 // the tabs of the dashboard (id, FR, EN) 📑
 const TABS = [
-  ['overview', '📊 Aperçu', '📊 Overview'],
-  ['manage', '👥 Gérer', '👥 Manage'],
-  ['content', '📝 Contenu', '📝 Content'],
-  ['announce', '📣 Annonce', '📣 Announce'],
+  ['overview', '📊', 'Aperçu', 'Overview'],
+  ['manage', '👥', 'Équipe', 'Team'],
+  ['content', '📝', 'Carte', 'Menu'],
+  ['announce', '📣', 'Annonce', 'Notice'],
 ];
+
+// the dashboard look: compact segmented tabs, search bars, tiles, rows & the publish bar 🎨
+const DASHBOARD_CSS = `
+.admtabs{display:grid;grid-template-columns:repeat(4,1fr);gap:4px;margin:8px 14px 0;padding:4px;
+  border-radius:14px;background:rgba(127,127,127,.12);flex:none}
+.admtab{display:flex;flex-direction:column;align-items:center;gap:1px;padding:6px 2px;border:0;border-radius:10px;
+  background:none;color:inherit;font:inherit;font-size:11.5px;font-weight:600;opacity:.65;cursor:pointer;min-width:0}
+.admtab .ic{font-size:17px;line-height:1.2}
+.admtab.on{background:var(--gold,#c9a45c);color:#111;opacity:1;box-shadow:0 1px 4px rgba(0,0,0,.25)}
+.admsticky{position:sticky;top:-14px;z-index:2;margin:-14px -14px 10px;padding:12px 14px 8px;
+  background:var(--bg,#0e0e10);display:flex;flex-direction:column;gap:8px}
+.admsearch{display:flex;align-items:center;gap:8px;padding:0 12px;border-radius:12px;
+  background:rgba(127,127,127,.14);font-size:15px}
+.admsearch input{flex:1;min-width:0;border:0;background:none;color:inherit;font:inherit;padding:11px 0;outline:none}
+.admgrid{display:grid;grid-template-columns:repeat(2,1fr);gap:8px}
+.admtile{position:relative;text-align:left;padding:12px;border:0;border-radius:14px;background:rgba(127,127,127,.1);
+  color:inherit;font:inherit;cursor:pointer;min-width:0}
+.admtile .n{font-weight:700;margin-top:4px;overflow-wrap:anywhere}
+.admtileicon{font-size:24px}
+.admchip{position:absolute;top:8px;right:8px;font-size:10.5px;padding:2px 7px;border-radius:99px;
+  background:var(--gold,#c9a45c);color:#111;font-weight:700}
+.admrow{display:flex;align-items:center;gap:8px;padding:10px 0;border-bottom:1px solid rgba(127,127,127,.12);cursor:pointer}
+.admrow:last-child{border-bottom:0}
+.admrow .n{font-weight:700;overflow-wrap:anywhere}
+.admclip{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.admicon{flex:none;width:36px;height:36px;border:0;border-radius:10px;background:rgba(127,127,127,.14);
+  color:inherit;font-size:16px;cursor:pointer}
+.admicon.gold{background:var(--gold,#c9a45c);color:#111;font-weight:800}
+.admicon.danger{color:#e5484d}
+.admbar{position:sticky;bottom:-14px;z-index:2;display:flex;align-items:center;gap:8px;margin:12px -14px -14px;
+  padding:10px 14px calc(10px + env(safe-area-inset-bottom));background:var(--bg,#0e0e10);
+  border-top:1px solid rgba(127,127,127,.18)}
+.admbar.dirty .grow{color:var(--gold,#c9a45c);opacity:1}
+.admbar button[disabled]{opacity:.4}
+.admempty{text-align:center;opacity:.6;padding:24px 0}
+`;
 
 // ===== GATHER THE NUMBERS 📥 ===== //
 
@@ -765,7 +801,7 @@ function reloadSoon() {
 function showTab(tab) {
   currentTab = tab;
   overlay.querySelectorAll('[data-tab]').forEach((button) => {
-    button.className = button.dataset.tab === tab ? 'btn' : 'btn sec';
+    button.classList.toggle('on', button.dataset.tab === tab);
   });
   const body = overlay.querySelector('.cbody');
   delete body.dataset.ready;
@@ -784,6 +820,13 @@ function showTab(tab) {
 function openDashboard() {
   // only the owner, only once
   if (overlay || !isOwner(user)) return;
+  // 🎨 the dashboard styles (once)
+  if (!document.getElementById('admStyle')) {
+    const style = document.createElement('style');
+    style.id = 'admStyle';
+    style.textContent = DASHBOARD_CSS;
+    document.head.appendChild(style);
+  }
   overlay = document.createElement('div');
   overlay.className = 'chatov';
   overlay.innerHTML =
@@ -792,14 +835,16 @@ function openDashboard() {
     '</div><div class="muted sm">' +
     translate('Coulisses de l’app · vous seul', 'Behind the scenes · only you') +
     '</div></div><button class="cx" id="admRefresh" aria-label="refresh">↻</button></div>' +
-    '<div class="row" style="gap:6px;padding:8px 14px 0;overflow-x:auto;flex:none">' +
+    '<div class="admtabs" role="tablist">' +
     TABS.map(
-      ([tab, french, english]) =>
-        '<button data-tab="' +
+      ([tab, icon, french, english]) =>
+        '<button role="tab" data-tab="' +
         tab +
-        '" class="' +
-        (tab === currentTab ? 'btn' : 'btn sec') +
-        '" style="padding:7px 12px;font-size:13px;min-height:0;flex:none">' +
+        '" class="admtab' +
+        (tab === currentTab ? ' on' : '') +
+        '"><span class="ic">' +
+        icon +
+        '</span>' +
         translate(french, english) +
         '</button>',
     ).join('') +

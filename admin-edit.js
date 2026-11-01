@@ -217,7 +217,7 @@ const buttonHtml = (action, id, label, danger) =>
  * @returns { string } - one managed row
  */
 const rowHtml = (title, subtitle, buttons) =>
-  '<div style="padding:9px 0;border-bottom:1px solid rgba(127,127,127,.12)"><div style="font-weight:700;overflow-wrap:anywhere">' +
+  '<div class="admline" style="padding:9px 0;border-bottom:1px solid rgba(127,127,127,.12)"><div style="font-weight:700;overflow-wrap:anywhere">' +
   title +
   '</div>' +
   (subtitle ? '<div class="muted sm" style="overflow-wrap:anywhere">' + subtitle + '</div>' : '') +
@@ -389,6 +389,13 @@ export function renderManage(body, data, user, reload) {
   const none = '<p class="muted sm">' + translate('Rien pour l’instant.', 'Nothing yet.') + '</p>';
 
   body.innerHTML =
+    '<div class="admsticky">' +
+    searchBarHtml(
+      'admPeople',
+      '',
+      translate('Chercher une personne, un message…', 'Search a person, a message…'),
+    ) +
+    '</div>' +
     cardHtml('🛂 ' + translate('Demandes d’accès', 'Access requests'), requestRows || none) +
     cardHtml('👥 ' + translate('Équipe', 'Team'), teamRows || none) +
     cardHtml('🎓 ' + translate('Comptes & XP', 'Accounts & XP'), accountRows || none) +
@@ -402,6 +409,20 @@ export function renderManage(body, data, user, reload) {
     ) +
     cardHtml('🏆 ' + translate('Classement', 'Leaderboard'), boardRows || none) +
     cardHtml('🔔 ' + translate('Appareils notifiés', 'Push devices'), deviceRows || none);
+
+  // 🔍 the filter: hides the rows (and the cards) that don't match
+  const peopleInput = body.querySelector('#admPeople');
+  peopleInput.oninput = () =>
+    body.querySelectorAll('.card').forEach((card) => {
+      const rows = card.querySelectorAll('.admline');
+      let shown = 0;
+      rows.forEach((row) => {
+        const visible = matchesQuery(plainText(row.textContent), peopleInput.value);
+        row.style.display = visible ? '' : 'none';
+        if (visible) shown++;
+      });
+      card.style.display = !peopleInput.value.trim() || shown ? '' : 'none';
+    });
 
   // 👆 one listener for every button
   body.onclick = (event) => {
@@ -869,6 +890,247 @@ export async function renderContent(body) {
   drawContent(body, redraw);
 }
 
+// ===== CONTENT SEARCH 🔍 ===== //
+
+// the icon of every section (for the tiles & the search results) 🎨
+const SECTION_ICONS = {
+  dishes: '🍽️',
+  jour: '📋',
+  hq: '❄️',
+  wines: '🍷',
+  champagnes: '🥂',
+  cocktails: '🍸',
+  softs: '🥤',
+  coffee: '☕',
+  coffeeNote: '📝',
+  teas: '🫖',
+  digestifs: '🥃',
+  fromages: '🧀',
+  facts: '🏛️',
+  pairing: '🤝',
+  taste: '👅',
+  tables: '🪑',
+  counters: '🍸',
+};
+// what the waiter typed in the search bars (kept while moving around) 🔍
+let contentQuery = '';
+let sectionQuery = '';
+
+/**
+ * `plainText` - Function 🔤
+ *
+ * @param { any } value - any text
+ * @returns { string } - lowercase, no accents, œ → oe (for the searches)
+ */
+const plainText = (value) =>
+  String(value || '')
+    .toLowerCase()
+    .replace(/œ/g, 'oe')
+    .replace(/æ/g, 'ae')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '');
+
+/**
+ * `entryText` - Function 📄
+ *
+ * @param { any } entry - one entry (any JSON)
+ * @returns { string } - every text & number inside it, searchable
+ */
+function entryText(entry) {
+  if (entry === null || entry === undefined) return '';
+  if (typeof entry !== 'object') return plainText(entry);
+  return Object.values(entry).map(entryText).join(' ');
+}
+
+/**
+ * `matchesQuery` - Function ✅
+ *
+ * @param { string } text - the searchable text of an entry
+ * @param { string } query - what was typed
+ * @returns { boolean } - true when every typed word is in the text
+ */
+const matchesQuery = (text, query) =>
+  plainText(query)
+    .split(/\s+/)
+    .filter(Boolean)
+    .every((word) => text.includes(word));
+
+/**
+ * `sectionValue` - Function 📦
+ *
+ * @param { string } section - a content section
+ * @returns { any } - its live version, else its built-in one
+ */
+const sectionValue = (section) =>
+  liveContent[section] !== undefined ? liveContent[section] : builtInData[section];
+
+/**
+ * `isListSection` - Function 📋
+ *
+ * @param { any } value - a section value
+ * @returns { boolean } - true for a list of objects (edited entry by entry)
+ */
+const isListSection = (value) =>
+  Array.isArray(value) && value.every((entry) => entry && typeof entry === 'object' && !Array.isArray(entry));
+
+/**
+ * `entryRowHtml` - Function ➖
+ *
+ * One tappable entry row (tap = edit), with its small ↑ / 🗑️ buttons.
+ *
+ * @param { string } title - the row title (plain text)
+ * @param { string } subtitle - the row subtitle (plain text)
+ * @param { string } attributes - the data-* attributes of the row
+ * @param { boolean } withTools - show ↑ & 🗑️
+ * @param { number } index - the entry position (for the tools)
+ * @returns { string } - the row
+ */
+const entryRowHtml = (title, subtitle, attributes, withTools, index) =>
+  '<div class="admrow" ' +
+  attributes +
+  '><div class="grow" style="min-width:0"><div class="n">' +
+  escapeHtml(title) +
+  '</div>' +
+  (subtitle ? '<div class="muted sm admclip">' + escapeHtml(subtitle) + '</div>' : '') +
+  '</div>' +
+  (withTools
+    ? '<button class="admicon" data-do="up" data-index="' +
+      index +
+      '" aria-label="up">↑</button><button class="admicon danger" data-do="remove" data-index="' +
+      index +
+      '" aria-label="delete">🗑️</button>'
+    : '<div class="muted">›</div>') +
+  '</div>';
+
+/**
+ * `searchBarHtml` - Function 🔍
+ *
+ * @param { string } id - the input id
+ * @param { string } value - the current query
+ * @param { string } placeholder - the hint
+ * @returns { string } - a rounded search field (with a ✕ to clear it)
+ */
+const searchBarHtml = (id, value, placeholder) =>
+  '<label class="admsearch">🔍<input id="' +
+  id +
+  '" type="search" autocomplete="off" value="' +
+  escapeHtml(value) +
+  '" placeholder="' +
+  escapeHtml(placeholder) +
+  '"></label>';
+
+/**
+ * `globalResultsHtml` - Function 🔎
+ *
+ * Searches every section at once (names, descriptions, prices, any text inside).
+ *
+ * @returns { string } - the results (max 60), or the section tiles when nothing is typed
+ */
+function globalResultsHtml() {
+  const sections = CONTENT_SECTIONS.filter((section) => builtInData[section] !== undefined);
+  // 🧱 nothing typed: the section tiles
+  if (!contentQuery.trim())
+    return (
+      '<div class="admgrid">' +
+      sections
+        .map((section) => {
+          const names = SECTION_NAMES[section] || [section, section],
+            value = sectionValue(section);
+          return (
+            '<button class="admtile" data-section="' +
+            section +
+            '"><div class="admtileicon">' +
+            (SECTION_ICONS[section] || '📄') +
+            '</div><div class="n">' +
+            escapeHtml(translate(names[0], names[1])) +
+            '</div><div class="muted sm">' +
+            (Array.isArray(value)
+              ? value.length + translate(' éléments', ' items')
+              : translate('fiche', 'sheet')) +
+            '</div>' +
+            (liveContent[section] !== undefined
+              ? '<span class="admchip">✏️ ' + translate('en direct', 'live') + '</span>'
+              : '') +
+            '</button>'
+          );
+        })
+        .join('') +
+      '</div>'
+    );
+  // 🔎 something typed: every matching entry, all sections together
+  const results = [];
+  sections.forEach((section) => {
+    const value = sectionValue(section),
+      names = SECTION_NAMES[section] || [section, section, 'n'];
+    if (isListSection(value))
+      value.forEach((entry, index) => {
+        if (matchesQuery(entryText(entry), contentQuery)) results.push({ section, index, entry, names });
+      });
+    else if (matchesQuery(entryText(value), contentQuery))
+      results.push({ section, index: -1, entry: null, names });
+  });
+  if (!results.length)
+    return (
+      '<p class="admempty">' +
+      translate('Aucun résultat pour « ', 'No result for "') +
+      escapeHtml(contentQuery) +
+      translate(' »', '"') +
+      '</p>'
+    );
+  return (
+    '<p class="muted sm" style="margin:2px 4px 8px">' +
+    results.length +
+    translate(' résultat(s)', ' result(s)') +
+    (results.length > 60 ? translate(' · 60 premiers', ' · first 60') : '') +
+    '</p><div class="card" style="padding:4px 12px;margin:0">' +
+    results
+      .slice(0, 60)
+      .map((result) =>
+        entryRowHtml(
+          result.entry
+            ? entryLabel(result.entry, result.names[2], result.index)
+            : translate(result.names[0], result.names[1]),
+          (SECTION_ICONS[result.section] || '📄') +
+            ' ' +
+            translate(result.names[0], result.names[1]) +
+            (result.entry
+              ? ' · ' + (result.entry.d || result.entry.desc || result.entry.s || result.entry.a || '')
+              : ''),
+          'data-section="' + result.section + '" data-open="' + result.index + '"',
+          false,
+          result.index,
+        ),
+      )
+      .join('') +
+    '</div>'
+  );
+}
+
+/**
+ * `sectionRowsHtml` - Function 📋
+ *
+ * @param { Array<object> } entries - the working entries
+ * @param { string } nameField - the field that names an entry
+ * @returns { string } - the rows that match the section filter
+ */
+function sectionRowsHtml(entries, nameField) {
+  const rows = entries
+    .map((entry, index) => ({ entry, index }))
+    .filter((row) => !sectionQuery.trim() || matchesQuery(entryText(row.entry), sectionQuery));
+  if (!rows.length) return '<p class="admempty">' + translate('Aucun élément', 'No item') + '</p>';
+  return rows
+    .map((row) =>
+      entryRowHtml(
+        entryLabel(row.entry, nameField, row.index),
+        String(row.entry.d || row.entry.desc || row.entry.s || row.entry.a || ''),
+        'data-do="edit" data-index="' + row.index + '"',
+        true,
+        row.index,
+      ),
+    )
+    .join('');
+}
+
 /**
  * `drawContent` - Function 🎨
  *
@@ -877,97 +1139,96 @@ export async function renderContent(body) {
  */
 function drawContent(body) {
   const redraw = () => drawContent(body);
-  // 📚 no section open: the list of sections
+  // 📚 no section open: one search bar for everything + the section tiles
   if (!workingSection) {
-    body.innerHTML = cardHtml(
-      '📝 ' + translate('Contenu de l’app', 'App content'),
-      '<p class="muted sm" style="margin-top:0">' +
-        translate(
-          'Modifiez la carte sans redéployer. Chaque téléphone prend la nouvelle version à son prochain lancement. Renommer un plat peut détacher sa photo et ses notes.',
-          'Edit the menu without a redeploy. Every phone takes the new version on its next start. Renaming a dish can detach its photo and notes.',
-        ) +
-        '</p>' +
-        CONTENT_SECTIONS.filter((section) => builtInData[section] !== undefined)
-          .map((section) => {
-            const names = SECTION_NAMES[section] || [section, section],
-              value = liveContent[section] !== undefined ? liveContent[section] : builtInData[section];
-            return (
-              '<button class="li" data-section="' +
-              section +
-              '" style="text-align:left;width:100%"><div class="grow"><div class="n">' +
-              escapeHtml(translate(names[0], names[1])) +
-              '</div><div class="muted sm">' +
-              (Array.isArray(value)
-                ? value.length + translate(' éléments', ' items')
-                : translate('texte / fiche', 'text / sheet')) +
-              (liveContent[section] !== undefined
-                ? ' · ✏️ ' + translate('modifié en direct', 'edited live')
-                : '') +
-              '</div></div><div class="muted">›</div></button>'
-            );
-          })
-          .join(''),
-    );
+    body.innerHTML =
+      '<div class="admsticky">' +
+      searchBarHtml(
+        'admFind',
+        contentQuery,
+        translate('Chercher un plat, un vin, un prix…', 'Search a dish, a wine, a price…'),
+      ) +
+      '</div><div id="admFound">' +
+      globalResultsHtml() +
+      '</div><p class="muted sm" style="margin:14px 4px">' +
+      translate(
+        'Modifiez la carte sans redéployer : chaque téléphone prend la nouvelle version à son prochain lancement. Renommer un plat peut détacher sa photo et ses notes.',
+        'Edit the menu without a redeploy: every phone takes the new version on its next start. Renaming a dish can detach its photo and notes.',
+      ) +
+      '</p>';
+    const findInput = body.querySelector('#admFind');
+    findInput.oninput = () => {
+      contentQuery = findInput.value;
+      body.querySelector('#admFound').innerHTML = globalResultsHtml();
+    };
     body.onclick = (event) => {
       const button = event.target.closest('[data-section]');
       if (!button) return;
       workingSection = button.dataset.section;
-      workingValue = copyOf(
-        liveContent[workingSection] !== undefined ? liveContent[workingSection] : builtInData[workingSection],
-      );
+      workingValue = copyOf(sectionValue(workingSection));
+      sectionQuery = '';
       redraw();
+      // 🔎 a search result: straight to its form
+      const openIndex = button.dataset.open === undefined ? -1 : Number(button.dataset.open);
+      if (openIndex >= 0) openEntry(body, openIndex, redraw, false);
     };
     return;
   }
 
   const names = SECTION_NAMES[workingSection] || [workingSection, workingSection, 'n'],
-    isLive = liveContent[workingSection] !== undefined;
+    isLive = liveContent[workingSection] !== undefined,
+    // ✏️ changes that aren't published yet?
+    isDirty = JSON.stringify(workingValue) !== JSON.stringify(sectionValue(workingSection)),
+    isList = isListSection(workingValue);
   const header =
-    '<div class="row" style="gap:8px;margin-bottom:10px"><button class="btn sec" data-do="back" style="padding:6px 12px">← ' +
-    translate('Sections', 'Sections') +
-    '</button><div class="grow" style="font-weight:800">' +
+    '<div class="admsticky"><div class="row" style="gap:8px"><button class="admicon" data-do="back" aria-label="back">←</button>' +
+    '<div class="grow" style="min-width:0"><div style="font-weight:800">' +
+    (SECTION_ICONS[workingSection] || '📄') +
+    ' ' +
     escapeHtml(translate(names[0], names[1])) +
-    '</div></div>';
-  const footer =
-    '<div class="row" style="gap:8px;margin-top:12px"><button class="btn grow" data-do="publish">🚀 ' +
-    translate('Publier', 'Publish') +
-    '</button>' +
-    (isLive
-      ? '<button class="btn sec" data-do="restore">↩️ ' + translate('Origine', 'Built-in') + '</button>'
+    '</div><div class="muted sm">' +
+    (isList ? workingValue.length + translate(' éléments', ' items') : 'JSON') +
+    (isLive ? ' · ✏️ ' + translate('en direct', 'live') : '') +
+    '</div></div>' +
+    (isList ? '<button class="admicon gold" data-do="add" aria-label="add">＋</button>' : '') +
+    '</div>' +
+    (isList
+      ? searchBarHtml('admFilter', sectionQuery, translate('Filtrer cette section…', 'Filter this section…'))
       : '') +
     '</div>';
+  // 🚀 the bottom bar: publish (highlighted when something changed) & restore
+  const footer =
+    '<div class="admbar' +
+    (isDirty ? ' dirty' : '') +
+    '"><div class="grow muted sm">' +
+    (isDirty
+      ? '● ' + translate('Modifications non publiées', 'Unpublished changes')
+      : translate('À jour', 'Up to date')) +
+    '</div>' +
+    (isLive
+      ? '<button class="btn sec" data-do="restore" style="min-height:0;padding:8px 12px">↩️ ' +
+        translate('Origine', 'Built-in') +
+        '</button>'
+      : '') +
+    '<button class="btn" data-do="publish" style="min-height:0;padding:8px 14px"' +
+    (isDirty || !isList ? '' : ' disabled') +
+    '>🚀 ' +
+    translate('Publier', 'Publish') +
+    '</button></div>';
 
-  // 📋 a list section: its entries
-  if (
-    Array.isArray(workingValue) &&
-    workingValue.every((entry) => entry && typeof entry === 'object' && !Array.isArray(entry))
-  ) {
+  if (isList) {
+    // 📋 a list section: its entries (tap one to edit it)
     body.innerHTML =
       header +
-      cardHtml(
-        workingValue.length + translate(' éléments', ' items'),
-        workingValue
-          .map((entry, index) =>
-            rowHtml(
-              escapeHtml(entryLabel(entry, names[2], index)),
-              escapeHtml(entry.d || entry.desc || entry.s || entry.a || ''),
-              '<button class="btn sec" data-do="edit" data-index="' +
-                index +
-                '" style="padding:6px 10px;font-size:13px">✏️ ' +
-                translate('Modifier', 'Edit') +
-                '</button><button class="btn sec" data-do="up" data-index="' +
-                index +
-                '" style="padding:6px 10px;font-size:13px">↑</button><button class="btn sec" data-do="remove" data-index="' +
-                index +
-                '" style="padding:6px 10px;font-size:13px;color:#e5484d">🗑️</button>',
-            ),
-          )
-          .join('') +
-          '<button class="btn sec" data-do="add" style="width:100%;margin-top:10px">➕ ' +
-          translate('Ajouter', 'Add') +
-          '</button>',
-      ) +
+      '<div class="card" style="padding:4px 12px;margin:10px 0 0" id="admRows">' +
+      sectionRowsHtml(workingValue, names[2]) +
+      '</div>' +
       footer;
+    const filterInput = body.querySelector('#admFilter');
+    filterInput.oninput = () => {
+      sectionQuery = filterInput.value;
+      body.querySelector('#admRows').innerHTML = sectionRowsHtml(workingValue, names[2]);
+    };
   } else {
     // 🧾 any other section: a JSON editor
     body.innerHTML =
@@ -987,6 +1248,8 @@ function drawContent(body) {
     const index = Number(button.dataset.index);
     switch (button.dataset.do) {
       case 'back':
+        if (isDirty && !confirmAction(translate('Quitter sans publier ?', 'Leave without publishing?')))
+          return;
         workingSection = '';
         workingValue = null;
         redraw();
