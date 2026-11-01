@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file. Versions follow the service-worker cache (`ltf-vNN` → `0.NN.0`), see [CONTRIBUTING.md](./CONTRIBUTING.md#git-commit-messages) for the commit guidelines.
 
+### 0.52.0 (2026-11-01)
+
+* :trophy: Add a team leaderboard (`board.js`): a "Classement de l'équipe" row under the rank card on the home screen opens a podium + ranking with two tabs, this month (resets on the 1st) and all-time, showing each teammate's XP, streak and mastered cards
+* :lock: Firestore rules for `board/{uid}`: approved teammates read, each one writes only their own whole-number score with a server time
+* :bento: Bump the service-worker cache to `ltf-v52-rs`
+
 ### 0.51.0 (2026-11-01)
 
 * :lock: Sign in with Google through the app's own address: Vercel proxies `/__/auth/*` to Firebase and `authDomain` is the live host, so Google names `sofitel-service-lestroisforts.vercel.app` and Safari/iPhone keeps the sign-in (other hosts still use `les-trois-forts.firebaseapp.com`)

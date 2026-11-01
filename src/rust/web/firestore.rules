@@ -22,6 +22,7 @@
 // - chat/{id}      : team members only, every field checked (no HTML tricks, no fake authors, server time).
 // - push/{uid}     : my own devices; team members (and newcomers, for admins only) can read for the push server.
 // - pushlog/{id}   : one row per announced message / request, so a push can never be replayed.
+// - board/{uid}    : the team leaderboard (XP, month base, streak, mastered), teammates only, my own row only.
 
 rules_version = '2';
 service cloud.firestore {
@@ -64,6 +65,26 @@ service cloud.firestore {
     // ===== MY PROGRESS 📈 ===== //
     match /users/{uid} {
       allow read, write: if signedIn() && request.auth.uid == uid;
+    }
+
+    // ===== TEAM LEADERBOARD 🏆 ===== //
+    match /board/{uid} {
+      // teammates see everybody's score
+      allow read: if isMember();
+      // my own score only, whole numbers, this month's base never above my XP, server time
+      allow create, update: if isMember() && request.auth.uid == uid
+        && request.resource.data.keys().hasOnly(['name', 'pic', 'xp', 'base', 'month', 'streak', 'mastered', 'ts'])
+        && isText(request.resource.data.name, 60)
+        && isPicture(request.resource.data.pic)
+        && request.resource.data.xp is int && request.resource.data.xp >= 0 && request.resource.data.xp <= 10000000
+        && request.resource.data.base is int && request.resource.data.base >= 0
+        && request.resource.data.base <= request.resource.data.xp
+        && request.resource.data.month is string && request.resource.data.month.matches('^20[0-9]{2}-[01][0-9]$')
+        && request.resource.data.streak is int && request.resource.data.streak >= 0 && request.resource.data.streak <= 100000
+        && request.resource.data.mastered is int && request.resource.data.mastered >= 0 && request.resource.data.mastered <= 100000
+        && request.resource.data.ts == request.time;
+      // I can leave the board, admins can clean it up
+      allow delete: if isAdmin() || (signedIn() && request.auth.uid == uid);
     }
 
     // ===== THE TEAM 👥 ===== //
