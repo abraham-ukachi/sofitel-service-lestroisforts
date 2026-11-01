@@ -158,6 +158,14 @@ const STEPS = [
     },
   ],
   [
+    'carte search oe ligature',
+    (window) => {
+      const searchInput = window.document.querySelector('#srch');
+      searchInput.value = 'boeuf';
+      searchInput.oninput();
+    },
+  ],
+  [
     'carte all',
     (window) => {
       const searchInput = window.document.querySelector('#srch');

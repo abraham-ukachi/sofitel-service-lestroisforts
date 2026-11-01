@@ -368,7 +368,8 @@ pub fn strip(text: &str) -> String {
 pub fn norm(text: &str) -> String {
     let decomposed: String = JsString::from(text).normalize("NFD").into();
     let stripped: String = decomposed.chars().filter(|character| !('\u{300}'..='\u{36f}').contains(character)).collect();
-    stripped.to_lowercase()
+    // œ / æ don't decompose: "boeuf" must find "bœuf" 🔎
+    stripped.to_lowercase().replace('œ', "oe").replace('æ', "ae")
 }
 
 /// `re` - Function 🔎
@@ -565,4 +566,87 @@ pub fn set_style(el: &Element, prop: &str, val: &str) {
         let st = get(el, "style");
         set(&st, prop, &JsValue::from_str(val));
     }
+}
+
+/// `highlight` - Function 🖍️
+/// Escapes a text and wraps every match of the search needle in a <mark>,
+/// accent-insensitive ("boeuf" lights up "bœuf").
+///
+/// @param { &str } text - the plain text
+/// @param { &str } needle - the normalized search needle
+/// @returns { String } - the escaped text, with the matches marked
+pub fn highlight(text: &str, needle: &str) -> String {
+    if needle.is_empty() {
+        return esc(text);
+    }
+    // the normalized text, with the original index of every normalized character (in UTF-16 like JS)
+    let characters: Vec<char> = text.chars().collect();
+    let mut normalized: Vec<u16> = Vec::new();
+    let mut origins: Vec<usize> = Vec::new();
+    for (index, character) in characters.iter().enumerate() {
+        let normalized_character: Vec<u16> = norm(&character.to_string()).encode_utf16().collect();
+        for unit in normalized_character {
+            normalized.push(unit);
+            origins.push(index);
+        }
+    }
+    let needle_units: Vec<u16> = needle.encode_utf16().collect();
+    // every match, as ranges of original characters
+    let mut ranges: Vec<(usize, usize)> = Vec::new();
+    let mut from = 0;
+    while from + needle_units.len() <= normalized.len() {
+        if normalized[from..from + needle_units.len()] == needle_units[..] {
+            ranges.push((origins[from], origins[from + needle_units.len() - 1] + 1));
+            from += needle_units.len();
+        } else {
+            from += 1;
+        }
+    }
+    if ranges.is_empty() {
+        return esc(text);
+    }
+    // ✍️ rebuild the text with the marks
+    let slice = |start: usize, end: usize| -> String { characters[start..end].iter().collect() };
+    let mut out = String::new();
+    let mut cursor = 0;
+    for (start, end) in ranges {
+        if start < cursor {
+            continue;
+        }
+        out += &esc(&slice(cursor, start));
+        out += "<mark>";
+        out += &esc(&slice(start, end));
+        out += "</mark>";
+        cursor = end;
+    }
+    out + &esc(&slice(cursor, characters.len()))
+}
+
+/// `highlight_html` - Function 🖍️
+/// Same as `highlight`, for a name that holds a little HTML (e.g. `<br><small>`): only the text is marked.
+///
+/// @param { &str } html - the name, with its tags
+/// @param { &str } needle - the normalized search needle
+/// @returns { String } - the name, with the matches marked
+pub fn highlight_html(html: &str, needle: &str) -> String {
+    if needle.is_empty() {
+        return html.to_string();
+    }
+    let mut out = String::new();
+    let mut rest = html;
+    // text, then a tag, until the end
+    while let Some(start) = rest.find('<') {
+        out += &highlight(&rest[..start], needle);
+        match rest[start..].find('>') {
+            Some(end) => {
+                out += &rest[start..start + end + 1];
+                rest = &rest[start + end + 1..];
+            }
+            None => {
+                out += &highlight(&rest[start..], needle);
+                rest = "";
+            }
+        }
+    }
+    out + &highlight(rest, needle)
 }
