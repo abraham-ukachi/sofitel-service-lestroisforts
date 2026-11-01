@@ -86,6 +86,42 @@ pub fn pick_idx(length: usize) -> usize {
 ///
 /// @param { &[String] } items - the strings
 /// @returns { Vec<String> } - without duplicates (first occurrence kept, like `[...new Set(a)]`)
+/// `answer_key` - Function 🔑
+///
+/// Same as `answerKey(text)` in app.js: two answers with the same key read the same to a waiter
+/// (case, accents, spaces & punctuation ignored).
+///
+/// @param { &str } text - an answer or a question
+/// @returns { String } - its comparison key, like "creme brulee"
+pub fn answer_key(text: &str) -> String {
+    let mut folded = String::with_capacity(text.len());
+    for character in text.to_lowercase().chars() {
+        // 🔤 the accented letters & their plain version
+        let plain = match character {
+            'à' | 'â' | 'ä' | 'á' | 'ã' => "a",
+            'ç' => "c",
+            'é' | 'è' | 'ê' | 'ë' => "e",
+            'î' | 'ï' | 'í' => "i",
+            'ô' | 'ö' | 'ó' => "o",
+            'ù' | 'û' | 'ü' | 'ú' => "u",
+            'ÿ' => "y",
+            'ñ' => "n",
+            'œ' => "oe",
+            'æ' => "ae",
+            _ => "",
+        };
+        if !plain.is_empty() {
+            folded.push_str(plain);
+        } else if character.is_ascii_lowercase() || character.is_ascii_digit() {
+            folded.push(character);
+        } else {
+            // anything else (space, punctuation, other letters) = one separator
+            folded.push(' ');
+        }
+    }
+    folded.split_whitespace().collect::<Vec<&str>>().join(" ")
+}
+
 pub fn uniq(items: &[String]) -> Vec<String> {
     let mut out: Vec<String> = Vec::with_capacity(items.len());
     for item in items {

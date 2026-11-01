@@ -1042,17 +1042,33 @@ pub fn q_for(item_index: usize) -> Option<Question> {
 /// `rand_q` - Function 🎲
 ///
 /// Picks a random question, weighted by mastery: new items x2, mastered x1, failing x3.
+/// With a `seen` list (one per quiz, exam or chrono), an item is never asked twice in the same round
+/// (until every item of the pool was asked) and the same question + answer never comes back.
 ///
 /// @param { Option<&str> } ch - a chapter id (all chapters when None)
+/// @param { Option<&mut Vec<String>> } seen - the item ids & question keys already asked in this round
 /// @returns { Option<Q> } - a question
-pub fn rand_q(ch: Option<&str>) -> Option<Question> {
+pub fn rand_q(ch: Option<&str>, mut seen: Option<&mut Vec<String>>) -> Option<Question> {
     let built_app = app();
+    // the items of the pool
+    let pool: Vec<usize> = built_app
+        .items
+        .iter()
+        .enumerate()
+        .filter(|(_, it)| ch.map_or(true, |chapter| it.ch == chapter))
+        .map(|(index, _)| index)
+        .collect();
+    // every item of the pool was asked? a new round starts (the question keys stay)
+    if let Some(asked) = seen.as_deref_mut() {
+        if pool.iter().all(|index| asked.contains(&built_app.items[*index].id)) {
+            asked.retain(|key| !pool.iter().any(|index| &built_app.items[*index].id == key));
+        }
+    }
     let mut weighted: Vec<usize> = vec![];
-    for (index, it) in built_app.items.iter().enumerate() {
-        if let Some(chapter) = ch {
-            if it.ch != chapter {
-                continue;
-            }
+    for index in pool {
+        let it = &built_app.items[index];
+        if seen.as_deref().map_or(false, |asked| asked.contains(&it.id)) {
+            continue;
         }
         let weight = match m_of(&it.id) { None => 2, Some(stats) => if num(stats.get("s").unwrap_or(&Value::Null)) >= 3.0 { 1 } else { 3 } };
         for _ in 0..weight {
@@ -1062,12 +1078,28 @@ pub fn rand_q(ch: Option<&str>) -> Option<Question> {
     if weighted.is_empty() {
         return None;
     }
+    let mut fallback: Option<Question> = None;
     for _ in 0..10 {
-        if let Some(question) = q_for(weighted[pick_idx(weighted.len())]) {
-            return Some(question);
+        let question = match q_for(weighted[pick_idx(weighted.len())]) { Some(question) => question, None => continue };
+        let asked = match seen.as_deref_mut() { Some(asked) => asked, None => return Some(question) };
+        // the same question with the same answer already came up? try another one
+        let question_key = format!("q:{}|{}", answer_key(&question.prompt), answer_key(&question.answer));
+        if !question.prompt.is_empty() && asked.contains(&question_key) {
+            if fallback.is_none() {
+                fallback = Some(question);
+            }
+            continue;
         }
+        asked.push(built_app.items[question.item].id.clone());
+        if !question.prompt.is_empty() {
+            asked.push(question_key);
+        }
+        return Some(question);
     }
-    None
+    if let (Some(question), Some(asked)) = (fallback.as_ref(), seen.as_deref_mut()) {
+        asked.push(built_app.items[question.item].id.clone());
+    }
+    fallback
 }
 
 /// `plan_q` - Function 🗺️
@@ -1282,8 +1314,10 @@ fn quiz() {
     }
     let cc = cur_ch();
     let mut qs = vec![];
+    // the questions already asked in this quiz (no repeats) 🧹
+    let mut seen: Vec<String> = vec![];
     for _ in 0..10 {
-        if let Some(question) = rand_q(Some(&cc)) {
+        if let Some(question) = rand_q(Some(&cc), Some(&mut seen)) {
             qs.push(question);
         }
     }
@@ -1374,9 +1408,11 @@ fn exam() {
     }
     let built_app = app();
     let mut qs = vec![];
+    // the questions already asked in this exam (no repeats) 🧹
+    let mut seen: Vec<String> = vec![];
     for chapter in &built_app.ch {
         for _ in 0..3 {
-            if let Some(question) = rand_q(Some(chapter.id)) {
+            if let Some(question) = rand_q(Some(chapter.id), Some(&mut seen)) {
                 qs.push(question);
             }
         }
@@ -1484,6 +1520,8 @@ struct Chrono {
     combo: Cell<i64>,
     best: f64,
     ch: String,
+    // the questions already asked in this run (no repeats) 🧹
+    seen: RefCell<Vec<String>>,
 }
 
 /// `chrono` - Function ⏱️
@@ -1493,7 +1531,7 @@ struct Chrono {
 /// @returns { void }
 fn chrono() {
     let cc = cur_ch();
-    let game = Rc::new(Chrono { seconds_left: Cell::new(60), score: Cell::new(0), combo: Cell::new(1), best: best(&cc), ch: cc });
+    let game = Rc::new(Chrono { seconds_left: Cell::new(60), score: Cell::new(0), combo: Cell::new(1), best: best(&cc), ch: cc, seen: RefCell::new(vec![]) });
     set_app(&(flowbar(100.0, "") + &format!("<div class=\"pad\"><div class=\"hud\"><div>{}<b id=\"ct\">60</b>s</div><div>Score <b id=\"cs\">0</b></div><div>Combo <b id=\"cc\">×1</b></div></div><div id=\"cq\"></div><div class=\"opts\" id=\"co\"></div></div>", ic("timer", 18))));
     bind_x("chapter", true);
     let pb = qin(&app_el(), ".pbar i");
@@ -1552,7 +1590,7 @@ fn chrono() {
 /// @param { Rc<Chrono> } chrono - the game
 /// @returns { void } - shows the next question
 fn chrono_next(chrono: Rc<Chrono>) {
-    let mut qq = match rand_q(Some(&chrono.ch)) { Some(question) => question, None => return };
+    let mut qq = match rand_q(Some(&chrono.ch), Some(&mut chrono.seen.borrow_mut())) { Some(question) => question, None => return };
     if qq.plan.is_some() {
         plan_q(&mut qq);
     }

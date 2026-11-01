@@ -254,6 +254,25 @@
 
   // ===== MCQ HELPER ❓ ===== //
 
+  // the accented letters & their plain version (to compare two answers) 🔤
+  const ACCENTS = { à: 'a', â: 'a', ä: 'a', á: 'a', ã: 'a', ç: 'c', é: 'e', è: 'e', ê: 'e', ë: 'e', î: 'i', ï: 'i', í: 'i', ô: 'o', ö: 'o', ó: 'o', ù: 'u', û: 'u', ü: 'u', ú: 'u', ÿ: 'y', ñ: 'n', œ: 'oe', æ: 'ae' };
+
+  /**
+   * `answerKey` - Function 🔑
+   *
+   * Two answers with the same key read the same to a waiter (case, accents, spaces & punctuation ignored).
+   *
+   * @param { string } text - an answer or a question
+   * @returns { string } - its comparison key, like "creme brulee"
+   */
+  function answerKey(text) {
+    return [...String(text).toLowerCase()]
+      .map((character) => ACCENTS[character] || character)
+      .join('')
+      .replace(/[^a-z0-9]+/g, ' ')
+      .trim();
+  }
+
   /**
    * `mcq` - Function ❓
    *
@@ -268,7 +287,15 @@
    */
   function mcq(question, correct, pool, expl, extra) {
     correct = String(correct);
-    const opts = shuffle(uniq(pool.map(String)).filter((option) => option !== correct && option)).slice(0, 3);
+    // 🧹 one choice per meaning: "Truffe" & "truffe ", or the right answer written twice, never show up together
+    const seenKeys = new Set([answerKey(correct)]);
+    const distinct = uniq(pool.map(String)).filter((option) => {
+      const key = answerKey(option);
+      if (!key || seenKeys.has(key)) return false;
+      seenKeys.add(key);
+      return true;
+    });
+    const opts = shuffle(distinct).slice(0, 3);
     if (opts.length < 1) return null;
     return Object.assign(
       { q: question, options: shuffle([correct, ...opts]), answer: correct, expl: expl || '' },
@@ -2040,22 +2067,40 @@
    * `randQ` - Function 🎲
    *
    * Picks a random question, weighted by mastery: new items x2, mastered x1, failing x3.
+   * With a `seen` set (one per quiz, exam or chrono), an item is never asked twice in the same round
+   * (until every item of the pool was asked) and the same question + answer never comes back.
    *
    * @param { string } [chapterId] - a chapter id (all chapters when empty)
+   * @param { Set<string> } [seen] - the item ids & question keys already asked in this round
    * @returns { object | null } - a question
    */
-  function randQ(chapterId) {
+  function randQ(chapterId, seen) {
     const pool = chapterId ? items.filter((item) => item.ch === chapterId) : items;
-    const weighted = pool.flatMap((item) => {
+    // every item of the pool was asked? a new round starts (the question keys stay)
+    if (seen && pool.every((item) => seen.has(item.id))) pool.forEach((item) => seen.delete(item.id));
+    const fresh = seen ? pool.filter((item) => !seen.has(item.id)) : pool;
+    const weighted = fresh.flatMap((item) => {
       const stats = progress.m[item.id];
       const weight = !stats ? 2 : stats.s >= 3 ? 1 : 3;
       return Array(weight).fill(item);
     });
+    let fallback = null;
     for (let attempt = 0; attempt < 10; attempt++) {
       const question = qFor(pick(weighted));
-      if (question) return question;
+      if (!question) continue;
+      if (!seen) return question;
+      // the same question with the same answer already came up? try another one
+      const questionKey = 'q:' + answerKey(question.q || '') + '|' + answerKey(question.answer || '');
+      if (question.q && seen.has(questionKey)) {
+        fallback = fallback || question;
+        continue;
+      }
+      seen.add(question.item.id);
+      if (question.q) seen.add(questionKey);
+      return question;
     }
-    return null;
+    if (fallback) seen.add(fallback.item.id);
+    return fallback;
   }
 
   // ===== PROGRESS 🎓 ===== //
@@ -3253,9 +3298,10 @@
    * @returns { void }
    */
   function quiz() {
-    const questions = [];
+    const questions = [],
+      seen = new Set();
     for (let index = 0; index < 10; index++) {
-      const question = randQ(curCh);
+      const question = randQ(curCh, seen);
       if (question) questions.push(question);
     }
     runQuiz('Quiz', questions, 'chapter', (score, total, seconds) =>
@@ -3324,10 +3370,11 @@
    * @returns { void }
    */
   function exam() {
-    const questions = [];
+    const questions = [],
+      seen = new Set();
     CHAPTERS.forEach((chapter) => {
       for (let index = 0; index < 3; index++) {
-        const question = randQ(chapter.id);
+        const question = randQ(chapter.id, seen);
         if (question) questions.push(question);
       }
     });
@@ -3450,9 +3497,11 @@
       score = 0,
       combo = 1,
       best = progress.best[curCh] || 0;
+    // the questions already asked in this run (no repeats) 🧹
+    const seen = new Set();
     // the next question
     const next = () => {
-      const question = randQ(curCh);
+      const question = randQ(curCh, seen);
       if (!question) return;
       if (question.plan) planQ(question);
       queryOne('#cq').innerHTML =

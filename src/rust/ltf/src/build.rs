@@ -335,7 +335,19 @@ fn eur_o(object: &Value, key: &str) -> String {
 /// @param { usize } item - the item index
 /// @returns { Option<Q> } - the question, or None without a wrong answer
 pub fn mcq(prompt: &str, correct: &str, pool: &[String], expl: &str, item: usize) -> Option<Question> {
-    let cands: Vec<String> = uniq(pool).into_iter().filter(|candidate| candidate != correct && !candidate.is_empty()).collect();
+    // 🧹 one choice per meaning: "Truffe" & "truffe ", or the right answer written twice, never show up together
+    let mut seen_keys: Vec<String> = vec![answer_key(correct)];
+    let cands: Vec<String> = uniq(pool)
+        .into_iter()
+        .filter(|candidate| {
+            let key = answer_key(candidate);
+            if key.is_empty() || seen_keys.contains(&key) {
+                return false;
+            }
+            seen_keys.push(key);
+            true
+        })
+        .collect();
     let opts: Vec<String> = shuffle(&cands).into_iter().take(3).collect();
     if opts.is_empty() {
         return None;

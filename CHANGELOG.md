@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. Versions follow the service-worker cache (`ltf-vNN` → `0.NN.0`), see [CONTRIBUTING.md](./CONTRIBUTING.md#git-commit-messages) for the commit guidelines.
 
+### 0.53.0 (2026-11-01)
+
+* :sparkles: Tap a teammate on the leaderboard: a bottom drawer slides up with a 14-day XP bar chart, their month XP, streak, mastered cards, right-answer rate, answers given, final exam, and where the XP came from (quiz, flashcards, chrono, exam, mistakes, revision, other games)
+* :chart_with_upwards_trend: Count the XP of every save per day (last 30 days) and per activity (from the screen on display) in `ltf_board_v1`, synced to `board/{uid}` and merged across phones; XP from before this version shows as "Avant le suivi"
+* :lock: Firestore rules: `board/{uid}` also accepts `right`, `wrong`, `exam` (0-100), `days` (<= 31) and `modes` (<= 7); every value is whitelisted and escaped again when shown
+* :bento: Bump the service-worker cache to `ltf-v53-rs`
+
 ### 0.52.0 (2026-11-01)
 
 * :trophy: Add a team leaderboard (`board.js`): a "Classement de l'équipe" row under the rank card on the home screen opens a podium + ranking with two tabs, this month (resets on the 1st) and all-time, showing each teammate's XP, streak and mastered cards
