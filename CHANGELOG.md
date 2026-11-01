@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. Versions follow the service-worker cache (`ltf-vNN` → `0.NN.0`), see [CONTRIBUTING.md](./CONTRIBUTING.md#git-commit-messages) for the commit guidelines.
 
+### 0.51.0 (2026-11-01)
+
+* :lock: Sign in with Google through the app's own address: Vercel proxies `/__/auth/*` to Firebase and `authDomain` is the live host, so Google names `sofitel-service-lestroisforts.vercel.app` and Safari/iPhone keeps the sign-in (other hosts still use `les-trois-forts.firebaseapp.com`)
+* :lock: Keep the security headers off the proxied sign-in pages and allow them in `frame-src 'self'`
+* :bug: Service worker: never cache the `/__/` sign-in pages
+* :bento: Bump the service-worker cache to `ltf-v51-rs`
+
 ### 0.50.0 (2026-11-01)
 
 * :lock: Lock the team chat to approved members: a Google sign-in now sends an access request, an admin approves or refuses it in Profil > Équipe (approve all, remove, make admin), the owner is always admin, admins get a push for each new request

@@ -58,10 +58,15 @@ import {
 
 // ===== FIREBASE 🔥 ===== //
 
+// 🔑 the live app signs in through its own domain (Vercel proxies `/__/auth/*` to Firebase, see vercel.json),
+// so Google shows our address and Safari keeps the session; any other host uses the Firebase domain 🌍
+const LIVE_HOST = 'sofitel-service-lestroisforts.vercel.app';
+const AUTH_DOMAIN = location.hostname === LIVE_HOST ? LIVE_HOST : 'les-trois-forts.firebaseapp.com';
+
 // the public web config of the `les-trois-forts` Firebase project (safe to ship: access is guarded by the Firestore rules 🛡️)
 const firebaseConfig = {
   apiKey: 'AIzaSyDOkFXbEGOS1i-k2TcU9eSrlOubGWaN-Q0',
-  authDomain: 'les-trois-forts.firebaseapp.com',
+  authDomain: AUTH_DOMAIN,
   projectId: 'les-trois-forts',
   storageBucket: 'les-trois-forts.firebasestorage.app',
   messagingSenderId: '416441759360',
