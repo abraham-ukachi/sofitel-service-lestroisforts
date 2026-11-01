@@ -2,6 +2,15 @@
 
 All notable changes to this project will be documented in this file. Versions follow the service-worker cache (`ltf-vNN` → `0.NN.0`), see [CONTRIBUTING.md](./CONTRIBUTING.md#git-commit-messages) for the commit guidelines.
 
+### 0.54.0 (2026-11-01)
+
+* :sparkles: Owner dashboard (Profil › Tableau de bord, owner's verified Google account only): live Firestore storage measured with Firestore's size rules against the 1 GiB Spark limit, per collection; team, access requests & every account with its last sync; chat activity, photos & GIF weight; leaderboard & learning totals; push devices; the live deployment; this phone's storage & caches
+* :lock: `api/admin.js`: a Vercel function that verifies the Firebase ID token's Google RS256 signature, project, dates and owner email before answering the deployment info
+* :lock: Firestore rules: the owner can read `users` and `pushlog` (for the dashboard)
+* :bug: Quiz, exam & chrono never ask the same item twice in a round (until the whole chapter was asked) nor the same question with the same answer
+* :bug: Answer choices that read the same (case, accents, spaces, punctuation) are never shown together, and never next to the right answer
+* :bento: Bump the service-worker cache to `ltf-v54-rs`
+
 ### 0.53.0 (2026-11-01)
 
 * :sparkles: Tap a teammate on the leaderboard: a bottom drawer slides up with a 14-day XP bar chart, their month XP, streak, mastered cards, right-answer rate, answers given, final exam, and where the XP came from (quiz, flashcards, chrono, exam, mistakes, revision, other games)

@@ -65,6 +65,8 @@ service cloud.firestore {
     // ===== MY PROGRESS 📈 ===== //
     match /users/{uid} {
       allow read, write: if signedIn() && request.auth.uid == uid;
+      // 🛠️ the owner's dashboard reads every account (progress size, last sync)
+      allow read: if isOwner();
     }
 
     // ===== TEAM LEADERBOARD 🏆 ===== //
@@ -178,6 +180,8 @@ service cloud.firestore {
 
     // ===== PUSH LOG 🔒 (one push per message / request, never twice) ===== //
     match /pushlog/{key} {
+      // 🛠️ the owner's dashboard counts the pushes sent
+      allow read: if isOwner();
       allow create: if signedIn()
         && request.resource.data.keys().hasOnly(['at'])
         && (key == 'req_' + request.auth.uid
