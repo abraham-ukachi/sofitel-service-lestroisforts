@@ -36,7 +36,7 @@
 // network first, cache as a fallback (📴 offline).
 
 // the cache of this version 🏷️
-const CACHE = 'ltf-v54';
+const CACHE = 'ltf-v55';
 // the scanner cache (big model files, kept across app versions): bump it when pwa/scan/ changes 📷
 const SCAN_CACHE = 'ltf-scan-v3';
 // the app shell, precached on install 📦

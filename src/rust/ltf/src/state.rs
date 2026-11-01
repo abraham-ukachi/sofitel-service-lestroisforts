@@ -331,12 +331,16 @@ pub fn add_xp(amount: f64) {
 ///
 /// Same as `record(it, ok, xp)` in app.js: right = streak +1 & XP (and out of the review list),
 /// wrong = streak reset & added to the review list. Then saves.
+/// 🛡️ Anti-farming (same as `fairXp` in app.js): the same item pays 100 % → 50 % → 25 % → 0 of its XP
+/// for its 1st, 2nd, 3rd, 4th+ right answer of the same (UTC) day, counted in `xd` = { day, n }.
 ///
 /// @param { &str } id - the item id
 /// @param { bool } ok - right answer?
-/// @param { f64 } xpv - the XP to earn (0 = the default 10)
-/// @returns { void }
-pub fn record(id: &str, ok: bool, xpv: f64) {
+/// @param { f64 } xpv - the full XP of the answer (0 = the default 10)
+/// @returns { f64 } - the XP really earned
+pub fn record(id: &str, ok: bool, xpv: f64) -> f64 {
+    let today = today();
+    let mut earned = 0.0;
     with_progress(|progress| {
         let object = match progress.as_object_mut() { Some(object) => object, None => return };
         // the mastery of the item (or a fresh one) & the review list
@@ -348,8 +352,20 @@ pub fn record(id: &str, ok: bool, xpv: f64) {
             let (s1, c1) = (field(&stats, "s") + 1.0, field(&stats, "c") + 1.0);
             stats["s"] = num_val(s1);
             stats["c"] = num_val(c1);
+            // 🛡️ today's right answers per item: a new day starts a new count
+            let full_xp = if xpv != 0.0 { xpv } else { 10.0 };
+            let same_day = object.get("xd").and_then(|daily| daily.get("day")).and_then(|day| day.as_str()) == Some(today.as_str());
+            if !same_day {
+                object.insert("xd".into(), json!({ "day": today.clone(), "n": {} }));
+            }
+            let count = object.get("xd").and_then(|daily| daily.get("n")).and_then(|counts| counts.get(id)).map(num).unwrap_or(0.0);
+            if let Some(counts) = object.get_mut("xd").and_then(|daily| daily.get_mut("n")).and_then(|counts| counts.as_object_mut()) {
+                counts.insert(id.into(), num_val(count + 1.0));
+            }
+            let share = match count as i64 { 0 => 1.0, 1 => 0.5, 2 => 0.25, _ => 0.0 };
+            earned = (full_xp * share).round();
             let cur = num(object.get("xp").unwrap_or(&Value::Null));
-            object.insert("xp".into(), num_val(cur + if xpv != 0.0 { xpv } else { 10.0 }));
+            object.insert("xp".into(), num_val(cur + earned));
             review.retain(|review_id| review_id.as_str() != Some(id));
         // ❌ wrong: streak back to 0, +1 wrong, into the review list
         } else {
@@ -368,4 +384,5 @@ pub fn record(id: &str, ok: bool, xpv: f64) {
         }
     });
     save();
+    earned
 }

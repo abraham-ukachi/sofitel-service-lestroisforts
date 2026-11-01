@@ -2159,18 +2159,22 @@
    * `record` - Function ✅
    *
    * Records an answer: right = streak +1 & XP (and out of the review list), wrong = streak reset & to review.
+   * 🛡️ Anti-farming: the same item pays less each time it's answered right on the same day
+   * (100 % → 50 % → 25 % → 0), so replaying one easy round earns nothing more.
    *
    * @param { object } item - the item
    * @param { boolean } ok - right answer?
-   * @param { number } [xp] - the XP to earn (10 by default)
-   * @returns { void }
+   * @param { number } [xp] - the full XP of the answer (10 by default)
+   * @returns { number } - the XP really earned
    */
   function record(item, ok, xp) {
     const stats = progress.m[item.id] || { s: 0, c: 0, w: 0 };
+    let earned = 0;
     if (ok) {
       stats.s++;
       stats.c++;
-      progress.xp += xp || 10;
+      earned = fairXp(item.id, xp || 10);
+      progress.xp += earned;
       progress.review = progress.review.filter((reviewId) => reviewId !== item.id);
     } else {
       stats.s = 0;
@@ -2179,6 +2183,28 @@
     }
     progress.m[item.id] = stats;
     save();
+    return earned;
+  }
+
+  // 🛡️ the share of the XP paid for the 1st, 2nd, 3rd... right answer to one item on the same day
+  const XP_SHARES = [1, 0.5, 0.25];
+
+  /**
+   * `fairXp` - Function 🛡️
+   *
+   * Counts today's right answers per item in `progress.xd` = { day, n: { itemId: count } } (UTC day,
+   * reset every day, synced with the rest of the progress) and pays the matching share of the XP.
+   *
+   * @param { string } itemId - the item answered right
+   * @param { number } fullXp - the XP of a first right answer
+   * @returns { number } - the XP to earn now (whole number, 0 once the item was farmed today)
+   */
+  function fairXp(itemId, fullXp) {
+    const today = new Date().toISOString().slice(0, 10);
+    if (!progress.xd || progress.xd.day !== today) progress.xd = { day: today, n: {} };
+    const count = progress.xd.n[itemId] || 0;
+    progress.xd.n[itemId] = count + 1;
+    return Math.round(fullXp * (XP_SHARES[count] || 0));
   }
 
   // ===== ICONS 🎨 ===== //
@@ -3292,13 +3318,13 @@
             if (!ok) button.classList.add('wrong');
             if (ok) score++;
             beep(ok);
-            record(question.item, ok, xp || 10);
+            const earned = record(question.item, ok, xp || 10);
             const feedback = document.createElement('div');
             feedback.id = 'fb';
             feedback.className = 'ov fbsheet ' + (ok ? 'okc' : 'koc');
             feedback.innerHTML =
               `<div class="fbt">${svgIcon(ok ? 'check' : 'x', 22)} ` +
-              `${ok ? translate('Bonne réponse !', 'Correct!') + ` +${xp || 10} XP` : translate('Pas tout à fait', 'Not quite')}` +
+              `${ok ? translate('Bonne réponse !', 'Correct!') + ` +${earned} XP` : translate('Pas tout à fait', 'Not quite')}` +
               `</div><div class="fbx">` +
               `${ok ? '' : translate('Réponse', 'Answer') + ' : <b>' + esc(question.answer) + '</b>. '}` +
               `${question.expl ? esc(question.expl) : ''}</div><div class="fbb">` +
@@ -3577,8 +3603,10 @@
       if (secondsLeft <= 0) {
         clearInterval(timer);
         closeOverlays();
-        progress.xp += Math.round(score / 5);
-        const rec = score > best;
+        // 🛡️ the end bonus pays only the points above the record: replaying below it earns nothing
+        const rec = score > best,
+          bonus = rec ? Math.round((score - best) / 5) : 0;
+        progress.xp += bonus;
         if (rec) {
           progress.best[curCh] = score;
         }
@@ -3588,8 +3616,9 @@
           `<div class="dic">${svgIcon(rec ? 'award' : 'timer', 40)}</div><div class="dscore">${score}` +
             `</div><div class="dt">` +
             `${rec ? translate('Nouveau record !', 'New record!') : translate('Record', 'Best') + ' : ' + best}` +
-            `</div><div class="muted">+${Math.round(score / 5)}` +
-            ` XP</div><div class="dstats"></div><button class="btn" id="dag">` +
+            `</div><div class="muted">+${bonus} XP` +
+            `${rec ? '' : ' · ' + translate('Bats ton record pour gagner le bonus', 'Beat your best to earn the bonus')}` +
+            `</div><div class="dstats"></div><button class="btn" id="dag">` +
             `${translate('Rejouer', 'Play again')}</button><button class="btn txt" id="dbk">` +
             `${translate('Terminer', 'Done')}</button>`,
           false,

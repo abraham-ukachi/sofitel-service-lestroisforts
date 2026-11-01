@@ -1278,9 +1278,8 @@ fn run_show(run: Rc<Run>) {
             }
             beep(ok);
             let it = &built_app.items[q2.item];
-            record(&it.id, ok, if r2.xp != 0.0 { r2.xp } else { 10.0 });
+            let xpl = record(&it.id, ok, if r2.xp != 0.0 { r2.xp } else { 10.0 });
             run_persist(&r2, r2.index.get() + 1);
-            let xpl = if r2.xp != 0.0 { r2.xp } else { 10.0 };
             let feedback = create("div");
             feedback.set_id("fb");
             feedback.set_class_name(&format!("ov fbsheet {}", if ok { "okc" } else { "koc" }));
@@ -1554,9 +1553,10 @@ fn chrono() {
                 }
                 close_overlays();
                 let score = game.score.get() as f64;
-                let gain = round(score / 5.0);
-                add_xp(gain);
+                // 🛡️ the end bonus pays only the points above the record: replaying below it earns nothing
                 let rec = score > game.best;
+                let gain = if rec { round((score - game.best) / 5.0) } else { 0.0 };
+                add_xp(gain);
                 if rec {
                     set_best(&game.ch, score);
                 }
@@ -1566,11 +1566,12 @@ fn chrono() {
                 }
                 let dialog_element = dialog(
                     &format!(
-                        "<div class=\"dic\">{}</div><div class=\"dscore\">{}</div><div class=\"dt\">{}</div><div class=\"muted\">+{} XP</div><div class=\"dstats\"></div><button class=\"btn\" id=\"dag\">{}</button><button class=\"btn txt\" id=\"dbk\">{}</button>",
+                        "<div class=\"dic\">{}</div><div class=\"dscore\">{}</div><div class=\"dt\">{}</div><div class=\"muted\">+{} XP{}</div><div class=\"dstats\"></div><button class=\"btn\" id=\"dag\">{}</button><button class=\"btn txt\" id=\"dbk\">{}</button>",
                         ic(if rec { "award" } else { "timer" }, 40),
                         jsnum(score),
                         if rec { translate("Nouveau record !", "New record!") } else { format!("{} : {}", translate("Record", "Best"), jsnum(game.best)) },
                         jsnum(gain),
+                        if rec { String::new() } else { format!(" · {}", translate("Bats ton record pour gagner le bonus", "Beat your best to earn the bonus")) },
                         translate("Rejouer", "Play again"),
                         translate("Terminer", "Done")
                     ),

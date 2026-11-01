@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. Versions follow the service-worker cache (`ltf-vNN` → `0.NN.0`), see [CONTRIBUTING.md](./CONTRIBUTING.md#git-commit-messages) for the commit guidelines.
 
+### 0.55.0 (2026-11-01)
+
+* :lock: Fair XP: the same card pays 100 % → 50 % → 25 % → 0 of its XP for its 1st, 2nd, 3rd and later right answers of the day (`xd` in the progress, synced), so replaying one easy round can't farm XP
+* :lock: Chrono end bonus only pays the points above your record (replaying below it gives no bonus)
+* :lipstick: The quiz feedback shows the XP really earned
+* :bento: Bump the service-worker cache to `ltf-v55-rs`
+
 ### 0.54.0 (2026-11-01)
 
 * :sparkles: Owner dashboard (Profil › Tableau de bord, owner's verified Google account only): live Firestore storage measured with Firestore's size rules against the 1 GiB Spark limit, per collection; team, access requests & every account with its last sync; chat activity, photos & GIF weight; leaderboard & learning totals; push devices; the live deployment; this phone's storage & caches
