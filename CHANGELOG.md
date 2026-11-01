@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file. Versions follow the service-worker cache (`ltf-vNN` → `0.NN.0`), see [CONTRIBUTING.md](./CONTRIBUTING.md#git-commit-messages) for the commit guidelines.
 
+### 0.58.0 (2026-11-01)
+
+* :sparkles: Red « Rupture » badge on out-of-stock wines in La Carte + a « Ruptures » list in the Briefing (Château Pibarnon blanc, Château Cruzeau Saint-Émilion Grand Cru, sheet of 31 Oct 2026)
+* :bento: Service-worker cache `ltf-v58-rs`
+
 ### 0.57.0 (2026-11-01)
 
 * :sparkles: New chapter « Menu Dégustation » 🎁: the surprise menu that changes every day, apart from the fixed dinner carte (the chapter « Dîner » is now the evening menu only)
