@@ -2,6 +2,16 @@
 
 All notable changes to this project will be documented in this file. Versions follow the service-worker cache (`ltf-vNN` → `0.NN.0`), see [CONTRIBUTING.md](./CONTRIBUTING.md#git-commit-messages) for the commit guidelines.
 
+### 0.57.0 (2026-11-01)
+
+* :sparkles: New chapter « Menu Dégustation » 🎁: the surprise menu that changes every day, apart from the fixed dinner carte (the chapter « Dîner » is now the evening menu only)
+* :memo: Tasting menu of Saturday 31 Oct 2026: tartare de maigre (aguachile), ravioles de Saint-Jacques, turbot & chou-fleur, suprême de volaille vadouvan, sablé amande vanille-rose & pamplemousse
+* :memo: Retour de pêche of the sheet in the daily briefing
+* :sparkles: Carte search highlights the matching letters 🖍️ (accent-insensitive)
+* :bug: Search: « boeuf » now finds « bœuf » (œ / æ ligatures)
+* :pencil2: Faux-filet de bœuf maturé: aged 2 months (not 1)
+* :bento: New dish photos & service-worker cache `ltf-v57-rs`
+
 ### 0.56.0 (2026-11-01)
 
 * :sparkles: Owner dashboard tabs: Aperçu, Gérer, Contenu, Annonce
