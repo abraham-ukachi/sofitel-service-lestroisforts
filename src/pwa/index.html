@@ -3888,6 +3888,117 @@ body:has(.ov.scrim) {
 })();
 </script>
 
+<!-- 🚫 out-of-stock wines (La Carte + Briefing) -->
+<style>
+/* 🚫 the red "Rupture" badge */
+.rup {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  padding: 2px 8px;
+  border-radius: 10px;
+  background: #d64545;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+.rupcard .b {
+  color: #d64545;
+}
+</style>
+<script>
+// 🚫 Rupture: a red badge on every out-of-stock wine of La Carte, and a "Ruptures" list in the Briefing.
+// UPDATE this list with each new sheet (the "Rupture" box of the tasting sheet).
+(function () {
+  // the out-of-stock wines { appellation, colour, wine } & the date of the sheet
+  var SHEET_DATE = { fr: 'samedi 31 octobre 2026', en: 'Saturday 31 October 2026' },
+    OUT_OF_STOCK = [
+      { appellation: 'Bandol', colour: 'Blanc', colourEn: 'White', wine: 'Château Pibarnon' },
+      { appellation: 'Saint-Émilion Grand Cru', colour: 'Rouge', colourEn: 'Red', wine: 'Château Cruzeau' },
+    ],
+    queued = 0;
+
+  /**
+   * `english` - Function 🌍
+   *
+   * @returns { boolean } - true when the app is in English
+   */
+  function english() {
+    return (document.documentElement.lang || '').indexOf('en') === 0;
+  }
+
+  /**
+   * `findWine` - Function 🔎
+   *
+   * @param { Element } row - a row of La Carte
+   * @returns { object | undefined } - the out-of-stock wine of this row, if any
+   */
+  function findWine(row) {
+    var nameElement = row.querySelector('.n'),
+      detailElement = row.querySelector('.muted');
+    if (!nameElement || !detailElement) return undefined;
+    var name = nameElement.textContent,
+      detail = detailElement.textContent.trim();
+    return OUT_OF_STOCK.find(function (outWine) {
+      return (
+        name.indexOf(outWine.appellation) === 0 &&
+        (name.indexOf(outWine.colour) !== -1 || name.indexOf(outWine.colourEn) !== -1) &&
+        detail.indexOf(outWine.wine + ' ') === 0
+      );
+    });
+  }
+
+  /**
+   * `run` - Function ✨
+   *
+   * @returns { void } - adds the badges & the briefing list where they're missing
+   */
+  function run() {
+    queued = 0;
+    var isEnglish = english();
+    // 🍷 La Carte
+    document.querySelectorAll('.li.menu:not([data-rup])').forEach(function (row) {
+      row.setAttribute('data-rup', '1');
+      if (findWine(row)) row.insertAdjacentHTML('beforeend', '<span class="rup">Rupture</span>');
+    });
+    // 📋 the Briefing, before the "Tables" heading
+    var guestBox = document.getElementById('gnBox');
+    if (guestBox && !document.getElementById('rupBox')) {
+      var tablesHeading = guestBox.previousElementSibling;
+      if (!tablesHeading) return;
+      var cards = OUT_OF_STOCK.map(function (outWine) {
+        return (
+          '<div class="card sm row rupcard"><div class="tx"><div class="b">' +
+          outWine.wine +
+          '</div><div class="muted sm">' +
+          outWine.appellation +
+          ' · ' +
+          (isEnglish ? outWine.colourEn : outWine.colour) +
+          '</div></div></div>'
+        );
+      }).join('');
+      tablesHeading.insertAdjacentHTML(
+        'beforebegin',
+        '<div class="sh" id="rupBox">' +
+          (isEnglish ? 'Out of stock' : 'Ruptures') +
+          ' <span class="muted sm">(' +
+          (isEnglish ? SHEET_DATE.en : SHEET_DATE.fr) +
+          ')</span></div>' +
+          cards,
+      );
+    }
+  }
+  // 👂 at most one pass per frame
+  new MutationObserver(function () {
+    if (!queued) {
+      queued = 1;
+      requestAnimationFrame(run);
+    }
+  }).observe(document.body, { childList: true, subtree: true });
+  run();
+})();
+</script>
 
 <!-- 📲 install prompt -->
 <script>
