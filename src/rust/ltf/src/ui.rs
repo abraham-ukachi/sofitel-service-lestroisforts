@@ -1973,15 +1973,19 @@ pub fn carte_render() {
     let (cat, course) = ui(|ui_state| (ui_state.carte_cat.clone(), ui_state.carte_course.clone()));
     let rx = carte_strip_re();
     let mut blocks = String::new();
+    // typo tolerance only when nothing matches exactly 🧐
+    let fuzzy = !needle.is_empty() && !(0..built_app.items.len()).any(|index| !built_app.items[index].fact && built_app.items[index].ch != "plan" && hay(index).contains(&needle));
     for chapter in built_app.ch.iter().filter(|chapter| chapter.id != "plan" && if course != "all" { ["dej", "diner", "deg", "dess"].contains(&chapter.id) } else { cat == "all" || cat == chapter.id }) {
-        let mut its: Vec<usize> = (0..built_app.items.len()).filter(|&index| built_app.items[index].ch == chapter.id && !built_app.items[index].fact && hay(index).contains(&needle)).collect();
+        let mut its: Vec<usize> = (0..built_app.items.len()).filter(|&index| built_app.items[index].ch == chapter.id && !built_app.items[index].fact && (hay(index).contains(&needle) || (fuzzy && fuzzy_terms(&hay(index), &needle).is_some()))).collect();
+        // the words to highlight in each result 🖍️
+        let terms_of = |index: usize| -> Vec<String> { if needle.is_empty() { vec![] } else if hay(index).contains(&needle) { vec![needle.clone()] } else { fuzzy_terms(&hay(index), &needle).unwrap_or_default() } };
         if course != "all" {
             its.retain(|&index| built_app.items[index].course == Some(course.as_str()));
         }
         if !needle.is_empty() {
             let wd = |text: &str| -> String { text.chars().map(|character| if character.is_ascii_lowercase() || character.is_ascii_digit() { character } else { ' ' }).collect::<String>().split_whitespace().collect::<Vec<_>>().join(" ") };
             let fw = format!(" {}", wd(&needle));
-            let sc = |index: usize| -> u8 { if norm(&built_app.items[index].front).contains(&needle) { 0 } else if format!(" {}", wd(&hay(index))).contains(&fw) { 1 } else { 2 } };
+            let sc = |index: usize| -> u8 { if !hay(index).contains(&needle) { 3 } else if norm(&built_app.items[index].front).contains(&needle) { 0 } else if format!(" {}", wd(&hay(index))).contains(&fw) { 1 } else { 2 } };
             its.sort_by_key(|&index| sc(index));
         }
         if its.iter().any(|&index| built_app.items[index].course.is_some()) {
@@ -2005,8 +2009,8 @@ pub fn carte_render() {
                 if it.has_info() { format!("onclick=\"LTFinfo('{}')\"", it.id) } else { String::new() },
                 match ph { Some(photo) => format!("<img class=\"thumb zoomable\" src=\"{}\" loading=\"lazy\" alt=\"\" onclick=\"LTFzoom('{}',event)\">", photo, it.id), None => format!("<div class=\"av\">{}</div>", ic(chic(chapter.id), 20)) },
                 match it.course { Some(course_key) => format!("<span class=\"cb cb-{}\">{}{}</span>", course_key, c_lab(course_key), if !it.csub.is_empty() { format!(" · {}", it.csub) } else { String::new() }), None => String::new() },
-                highlight_html(&it.front, &needle),
-                highlight(&re_replace(&strip(&it.back), &rx, ""), &needle),
+                highlight_html(&it.front, &terms_of(index)),
+                highlight_terms(&re_replace(&strip(&it.back), &rx, ""), &terms_of(index)),
                 say_btn(it),
                 if it.has_info() { format!("<span class=\"rt\">{}</span>", ic("chev", 18)) } else { String::new() }
             );

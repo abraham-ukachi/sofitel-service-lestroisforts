@@ -576,7 +576,18 @@ pub fn set_style(el: &Element, prop: &str, val: &str) {
 /// @param { &str } needle - the normalized search needle
 /// @returns { String } - the escaped text, with the matches marked
 pub fn highlight(text: &str, needle: &str) -> String {
-    if needle.is_empty() {
+    let terms: Vec<String> = if needle.is_empty() { vec![] } else { vec![needle.to_string()] };
+    highlight_terms(text, &terms)
+}
+
+/// `highlight_terms` - Function 🖍️
+/// Escapes a text and wraps every match of any of the (normalized) terms in a <mark>.
+///
+/// @param { &str } text - the plain text
+/// @param { &[String] } terms - the normalized terms to mark
+/// @returns { String } - the escaped text, with the matches marked
+pub fn highlight_terms(text: &str, terms: &[String]) -> String {
+    if terms.is_empty() {
         return esc(text);
     }
     // the normalized text, with the original index of every normalized character (in UTF-16 like JS)
@@ -590,18 +601,24 @@ pub fn highlight(text: &str, needle: &str) -> String {
             origins.push(index);
         }
     }
-    let needle_units: Vec<u16> = needle.encode_utf16().collect();
-    // every match, as ranges of original characters
+    // every match of every term, as ranges of original characters (in text order)
     let mut ranges: Vec<(usize, usize)> = Vec::new();
-    let mut from = 0;
-    while from + needle_units.len() <= normalized.len() {
-        if normalized[from..from + needle_units.len()] == needle_units[..] {
-            ranges.push((origins[from], origins[from + needle_units.len() - 1] + 1));
-            from += needle_units.len();
-        } else {
-            from += 1;
+    for term in terms {
+        let needle_units: Vec<u16> = term.encode_utf16().collect();
+        if needle_units.is_empty() {
+            continue;
+        }
+        let mut from = 0;
+        while from + needle_units.len() <= normalized.len() {
+            if normalized[from..from + needle_units.len()] == needle_units[..] {
+                ranges.push((origins[from], origins[from + needle_units.len() - 1] + 1));
+                from += needle_units.len();
+            } else {
+                from += 1;
+            }
         }
     }
+    ranges.sort_by(|first_range, second_range| first_range.0.cmp(&second_range.0).then(second_range.1.cmp(&first_range.1)));
     if ranges.is_empty() {
         return esc(text);
     }
@@ -626,27 +643,82 @@ pub fn highlight(text: &str, needle: &str) -> String {
 /// Same as `highlight`, for a name that holds a little HTML (e.g. `<br><small>`): only the text is marked.
 ///
 /// @param { &str } html - the name, with its tags
-/// @param { &str } needle - the normalized search needle
+/// @param { &[String] } terms - the normalized terms to mark
 /// @returns { String } - the name, with the matches marked
-pub fn highlight_html(html: &str, needle: &str) -> String {
-    if needle.is_empty() {
+pub fn highlight_html(html: &str, terms: &[String]) -> String {
+    if terms.is_empty() {
         return html.to_string();
     }
     let mut out = String::new();
     let mut rest = html;
     // text, then a tag, until the end
     while let Some(start) = rest.find('<') {
-        out += &highlight(&rest[..start], needle);
+        out += &highlight_terms(&rest[..start], terms);
         match rest[start..].find('>') {
             Some(end) => {
                 out += &rest[start..start + end + 1];
                 rest = &rest[start + end + 1..];
             }
             None => {
-                out += &highlight(&rest[start..], needle);
+                out += &highlight_terms(&rest[start..], terms);
                 rest = "";
             }
         }
     }
-    out + &highlight(rest, needle)
+    out + &highlight_terms(rest, terms)
+}
+
+/// `edit_distance` - Function 🔤
+/// The Levenshtein distance of two words (9 right away when the lengths differ by more than 2).
+///
+/// @param { &[u8] } source - a word (ASCII)
+/// @param { &[u8] } target - another word (ASCII)
+/// @returns { usize } - the number of edits
+pub fn edit_distance(source: &[u8], target: &[u8]) -> usize {
+    if source.len().abs_diff(target.len()) > 2 {
+        return 9;
+    }
+    let mut previous_row: Vec<usize> = (0..=target.len()).collect();
+    for row in 1..=source.len() {
+        let mut current_row = vec![row];
+        for column in 1..=target.len() {
+            let substitution = previous_row[column - 1] + if source[row - 1] == target[column - 1] { 0 } else { 1 };
+            current_row.push((previous_row[column] + 1).min(current_row[column - 1] + 1).min(substitution));
+        }
+        previous_row = current_row;
+    }
+    previous_row[target.len()]
+}
+
+/// `fuzzy_terms` - Function 🧐
+/// Typo-tolerant search: every word of the needle must be in the haystack, or close to one of
+/// its words (1 typo, 2 for long words; also while typing, against the start of a word).
+///
+/// @param { &str } haystack - the normalized text of an item
+/// @param { &str } needle - the normalized search needle
+/// @returns { Option<Vec<String>> } - the words to highlight, or None when it doesn't match
+pub fn fuzzy_terms(haystack: &str, needle: &str) -> Option<Vec<String>> {
+    let is_word_character = |character: char| character.is_ascii_lowercase() || character.is_ascii_digit();
+    let words: Vec<&str> = haystack.split(|character: char| !is_word_character(character)).filter(|word| !word.is_empty()).collect();
+    let needle_words: Vec<&str> = needle.split(|character: char| !is_word_character(character)).filter(|word| !word.is_empty()).collect();
+    if needle_words.is_empty() {
+        return None;
+    }
+    let mut terms = Vec::new();
+    for needle_word in needle_words {
+        if haystack.contains(needle_word) {
+            terms.push(needle_word.to_string());
+            continue;
+        }
+        if needle_word.len() < 4 {
+            return None;
+        }
+        let limit = if needle_word.len() >= 8 { 2 } else { 1 };
+        let close = words.iter().find(|word| {
+            edit_distance(needle_word.as_bytes(), word.as_bytes()) <= limit
+                || (word.len() > needle_word.len() && edit_distance(needle_word.as_bytes(), &word.as_bytes()[..needle_word.len()]) <= limit)
+        })?;
+        terms.push(close.to_string());
+    }
+    Some(terms)
 }

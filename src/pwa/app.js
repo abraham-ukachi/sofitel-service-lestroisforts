@@ -119,9 +119,19 @@
    * @param { string } needle - the normalized search needle
    * @returns { string } - the escaped text, with the matches marked
    */
-  const highlight = (text, needle) => {
+  const highlight = (text, needle) => highlightTerms(text, needle ? [needle] : []);
+
+  /**
+   * `highlightTerms` - Function 🖍️
+   * Escapes a text and wraps every match of any of the (normalized) terms in a <mark>.
+   *
+   * @param { string } text - the plain text
+   * @param { Array<string> } terms - the normalized terms to mark
+   * @returns { string } - the escaped text, with the matches marked
+   */
+  const highlightTerms = (text, terms) => {
     const plain = String(text);
-    if (!needle) return esc(plain);
+    if (!terms.length) return esc(plain);
     // the normalized text, with the original index of every normalized character
     const characters = Array.from(plain);
     let normalized = '';
@@ -131,13 +141,18 @@
       normalized += normalizedCharacter;
       for (let count = 0; count < normalizedCharacter.length; count++) origins.push(index);
     });
-    // every match, as ranges of original characters
+    // every match of every term, as ranges of original characters (in text order)
     const ranges = [];
-    let from = normalized.indexOf(needle);
-    while (from !== -1) {
-      ranges.push([origins[from], origins[from + needle.length - 1] + 1]);
-      from = normalized.indexOf(needle, from + needle.length);
-    }
+    terms.forEach((term) => {
+      let from = normalized.indexOf(term);
+      while (term && from !== -1) {
+        ranges.push([origins[from], origins[from + term.length - 1] + 1]);
+        from = normalized.indexOf(term, from + term.length);
+      }
+    });
+    ranges.sort(
+      (firstRange, secondRange) => firstRange[0] - secondRange[0] || secondRange[1] - firstRange[1],
+    );
     if (!ranges.length) return esc(plain);
     // ✍️ rebuild the text with the marks
     let out = '';
@@ -162,13 +177,70 @@
    * @param { string } needle - the normalized search needle
    * @returns { string } - the name, with the matches marked
    */
-  const highlightHtml = (html, needle) =>
-    needle
+  const highlightHtml = (html, terms) =>
+    terms.length
       ? String(html)
           .split(/(<[^>]*>)/)
-          .map((part, index) => (index % 2 ? part : highlight(part, needle)))
+          .map((part, index) => (index % 2 ? part : highlightTerms(part, terms)))
           .join('')
       : html;
+
+  /**
+   * `editDistance` - Function 🔤
+   * The Levenshtein distance of two words (9 right away when the lengths differ by more than 2).
+   *
+   * @param { string } source - a word
+   * @param { string } target - another word
+   * @returns { number } - the number of edits
+   */
+  const editDistance = (source, target) => {
+    if (Math.abs(source.length - target.length) > 2) return 9;
+    let previousRow = Array.from({ length: target.length + 1 }, (unused, column) => column);
+    for (let row = 1; row <= source.length; row++) {
+      const currentRow = [row];
+      for (let column = 1; column <= target.length; column++)
+        currentRow[column] = Math.min(
+          previousRow[column] + 1,
+          currentRow[column - 1] + 1,
+          previousRow[column - 1] + (source[row - 1] === target[column - 1] ? 0 : 1),
+        );
+      previousRow = currentRow;
+    }
+    return previousRow[target.length];
+  };
+
+  /**
+   * `fuzzyTerms` - Function 🧐
+   * Typo-tolerant search: every word of the needle must be in the haystack, or close to one of
+   * its words (1 typo, 2 for long words; also while typing, against the start of a word).
+   *
+   * @param { string } haystack - the normalized text of an item
+   * @param { string } needle - the normalized search needle
+   * @returns { Array<string> | null } - the words to highlight, or null when it doesn't match
+   */
+  const fuzzyTerms = (haystack, needle) => {
+    const words = haystack.split(/[^a-z0-9]+/).filter(Boolean);
+    const needleWords = needle.split(/[^a-z0-9]+/).filter(Boolean);
+    if (!needleWords.length) return null;
+    const terms = [];
+    for (const needleWord of needleWords) {
+      if (haystack.includes(needleWord)) {
+        terms.push(needleWord);
+        continue;
+      }
+      if (needleWord.length < 4) return null;
+      const limit = needleWord.length >= 8 ? 2 : 1;
+      const close = words.find(
+        (word) =>
+          editDistance(needleWord, word) <= limit ||
+          (word.length > needleWord.length &&
+            editDistance(needleWord, word.slice(0, needleWord.length)) <= limit),
+      );
+      if (!close) return null;
+      terms.push(close);
+    }
+    return terms;
+  };
 
   // ===== STORAGE 💾 ===== //
 
@@ -4019,6 +4091,11 @@
     // renders the list for the current filters & search 🔎
     const render = () => {
       const needle = norm(queryOne('#srch').value);
+      // the haystack of an item & typo tolerance only when nothing matches exactly 🧐
+      const hayOf = (item) => norm(item.front + ' ' + strip(item.back) + ' ' + strip(item.info));
+      const fuzzy =
+        needle !== '' &&
+        !items.some((item) => !item.fact && item.ch !== 'plan' && hayOf(item).includes(needle));
       // one block per chapter
       const blocks = CHAPTERS.filter(
         (chapter) =>
@@ -4028,17 +4105,22 @@
             : carteCat === 'all' || carteCat === chapter.id),
       )
         .map((chapter) => {
+          // exact matches, else typo-tolerant ones 🧐
           let its = items.filter(
             (item) =>
               item.ch === chapter.id &&
               !item.fact &&
-              norm(item.front + ' ' + strip(item.back) + ' ' + strip(item.info)).includes(needle),
+              (hayOf(item).includes(needle) || (fuzzy && fuzzyTerms(hayOf(item), needle) !== null)),
           );
+          // the words to highlight in each result 🖍️
+          const termsOf = (item) =>
+            !needle ? [] : hayOf(item).includes(needle) ? [needle] : fuzzyTerms(hayOf(item), needle) || [];
           // the course filter
           if (carteCourse !== 'all') its = its.filter((item) => item.course === carteCourse);
           // 🔎 search ranking: name match > word start > anywhere
           if (needle) {
             const searchRank = (item) => {
+              if (!hayOf(item).includes(needle)) return 3;
               if (norm(item.front).includes(needle)) return 0;
               const haystack =
                 ' ' +
@@ -4077,8 +4159,8 @@
                     `${photo ? `<img class="thumb zoomable" src="${photo}" loading="lazy" alt="" onclick="LTFzoom('${item.id}',event)">` : `<div class="av">${svgIcon(CHIC[chapter.id] || 'star', 20)}</div>`}` +
                     `<div class="tx">` +
                     `${item.course ? `<span class="cb cb-${item.course}">${cLab(item.course)}${item.csub ? ' · ' + item.csub : ''}</span>` : ''}` +
-                    `<div class="n">${highlightHtml(item.front, needle)}</div><div class="muted sm clamp">` +
-                    `${highlight(strip(item.back).replace(/^(Pour commencer|Entrée|Plat principal|Fromage|Dessert|Appetizer|Starter|Main course|Cheese)( · (poisson|viande|fish|meat))? /, ''), needle)}` +
+                    `<div class="n">${highlightHtml(item.front, termsOf(item))}</div><div class="muted sm clamp">` +
+                    `${highlightTerms(strip(item.back).replace(/^(Pour commencer|Entrée|Plat principal|Fromage|Dessert|Appetizer|Starter|Main course|Cheese)( · (poisson|viande|fish|meat))? /, ''), termsOf(item))}` +
                     `</div></div>${sayBtn(item)}${item.info ? `<span class="rt">${svgIcon('chev', 18)}</span>` : ''}` +
                     `</div>`)
                 );

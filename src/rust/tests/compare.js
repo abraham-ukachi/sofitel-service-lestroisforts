@@ -166,6 +166,14 @@ const STEPS = [
     },
   ],
   [
+    'carte search typo',
+    (window) => {
+      const searchInput = window.document.querySelector('#srch');
+      searchInput.value = 'pidarnon';
+      searchInput.oninput();
+    },
+  ],
+  [
     'carte all',
     (window) => {
       const searchInput = window.document.querySelector('#srch');
