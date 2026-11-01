@@ -65,8 +65,8 @@ service cloud.firestore {
     // ===== MY PROGRESS 📈 ===== //
     match /users/{uid} {
       allow read, write: if signedIn() && request.auth.uid == uid;
-      // 🛠️ the owner's dashboard reads every account (progress size, last sync)
-      allow read: if isOwner();
+      // 🛠️ the owner's dashboard reads every account & can delete one (XP reset)
+      allow read, delete: if isOwner();
     }
 
     // ===== TEAM LEADERBOARD 🏆 ===== //
@@ -176,6 +176,8 @@ service cloud.firestore {
         || (signedIn() && request.auth.uid == uid)
         || (signedIn() && exists(teamPath(uid)) && get(teamPath(uid)).data.role == 'admin');
       allow write: if signedIn() && request.auth.uid == uid;
+      // 🛠️ the owner can remove a device
+      allow delete: if isOwner();
     }
 
     // ===== PUSH LOG 🔒 (one push per message / request, never twice) ===== //
@@ -188,6 +190,32 @@ service cloud.firestore {
           || (isMember()
             && exists(/databases/$(database)/documents/chat/$(key))
             && get(/databases/$(database)/documents/chat/$(key)).data.uid == request.auth.uid));
+    }
+
+    // ===== LIVE CONTENT 📝 (the owner edits the menu in the dashboard, everybody reads it) ===== //
+    match /content/{section} {
+      allow read: if true;
+      allow create, update: if isOwner()
+        && section.matches('^[A-Za-z]{1,20}$')
+        && request.resource.data.keys().hasOnly(['data', 'ts'])
+        && request.resource.data.data is string
+        && request.resource.data.data.size() < 1000000
+        && request.resource.data.ts == request.time;
+      allow delete: if isOwner();
+    }
+
+    // ===== CONFIG ⚙️ (the team announcement, the XP resets) ===== //
+    match /config/announce {
+      allow read: if true;
+      allow write: if isOwner()
+        && request.resource.data.keys().hasOnly(['text', 'on', 'ts'])
+        && isText(request.resource.data.text, 500)
+        && request.resource.data.on is bool
+        && request.resource.data.ts == request.time;
+    }
+    match /config/resets {
+      allow read: if signedIn();
+      allow write: if isOwner() && request.resource.data.size() <= 500;
     }
   }
 }

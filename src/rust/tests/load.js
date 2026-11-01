@@ -102,6 +102,8 @@ function load(kind, opts) {
         window.indexedDB = opts.idb;
       }
       if (opts.storage !== undefined) window.localStorage.setItem('ltf_v1', opts.storage);
+      // 📝 the owner's live content (see pwa/content-boot.js)
+      if (opts.content !== undefined) window.localStorage.setItem('ltf_content_v1', opts.content);
       if (opts.seed !== undefined) {
         const random = mulberry(opts.seed);
         window.Math.random = random;

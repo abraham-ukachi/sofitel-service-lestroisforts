@@ -2617,7 +2617,7 @@ body.notabs .toast {
 <div id="app"></div>
 
 <!-- 📚 the data + the JavaScript app (the Rust build swaps this exact line for the WASM glue: rust/tools/make_index.js) -->
-<script src="ltf.js"></script><script>wasm_bindgen({module_or_path:'ltf_bg.wasm'});</script>
+<script src="content-boot.js"></script><script src="ltf.js"></script><script>wasm_bindgen({module_or_path:'ltf_bg.wasm'});</script>
 
 <!-- 📲 the "Installer l'app" button (shown by the beforeinstallprompt script below) -->
 <button id="inst" style="display:none;position:fixed;right:14px;bottom:14px;z-index:40;background:#c9a24b;color:#0f1d33;border:0;border-radius:24px;padding:12px 18px;font-weight:600;box-shadow:0 4px 14px rgba(0,0,0,.4)">Installer l'app</button>
@@ -3514,7 +3514,7 @@ body:has(.ov.scrim) {
 })();
 </script>
 <!-- ☁️ Google sign-in & cloud sync + 💬 the team chat (Firebase, ES modules) -->
-<script type="module" src="cloud.js"></script><script type="module" src="chat.js"></script><script type="module" src="board.js"></script><script type="module" src="admin.js"></script>
+<script type="module" src="cloud.js"></script><script type="module" src="chat.js"></script><script type="module" src="board.js"></script><script type="module" src="content.js"></script><script type="module" src="admin.js"></script>
 <style>
 /* 🍸 bar game: the icons inside the chips */
 .chip .bi {

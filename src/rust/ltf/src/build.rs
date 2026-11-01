@@ -382,6 +382,38 @@ fn obj_keys(value: &Value) -> Vec<String> {
 
 /// `build` - Function 🏗️
 ///
+/// `apply_live_content` - Function 📝
+///
+/// Replaces the sections of the embedded data with the owner's live content (localStorage
+/// `ltf_content_v1` = { section: value }), only when the value has the same kind (list, object, text),
+/// exactly like pwa/content-boot.js does for the JS app.
+///
+/// @param { &mut Value } data - the embedded data
+/// @returns { void }
+fn apply_live_content(data: &mut Value) {
+    let saved = web_sys::window()
+        .and_then(|window| window.local_storage().ok().flatten())
+        .and_then(|storage| storage.get_item("ltf_content_v1").ok().flatten());
+    let content: Value = match saved.and_then(|text| serde_json::from_str(&text).ok()) {
+        Some(content) => content,
+        None => return,
+    };
+    let (content, sections) = match (content.as_object(), data.as_object_mut()) {
+        (Some(content), Some(sections)) => (content, sections),
+        _ => return,
+    };
+    for (section, replacement) in content {
+        if let Some(original) = sections.get_mut(section) {
+            let same_kind = (original.is_array() && replacement.is_array())
+                || (original.is_object() && replacement.is_object())
+                || (original.is_string() && replacement.is_string());
+            if same_kind {
+                *original = replacement.clone();
+            }
+        }
+    }
+}
+
 /// Builds the whole app from the embedded JSON (generated from pwa/*.js by tools/gen_data.js):
 /// chapters, then every item with its question generators, chapter by chapter, in the exact
 /// order (and with the exact random draws) of app.js.
@@ -389,7 +421,9 @@ fn obj_keys(value: &Value) -> Vec<String> {
 /// @returns { App } - the app
 pub fn build() -> App {
     // 📦 the embedded data (data.js, i18n.js, i18n_fr.js, images.js + the tables lifted from app.js)
-    let data: Value = serde_json::from_str(include_str!("../data/data.json")).unwrap();
+    let mut data: Value = serde_json::from_str(include_str!("../data/data.json")).unwrap();
+    // 📝 the owner's live content (dashboard), saved on this phone by content.js (see pwa/content-boot.js)
+    apply_live_content(&mut data);
     let le: Value = serde_json::from_str(include_str!("../data/en.json")).unwrap();
     let info_en: Value = serde_json::from_str(include_str!("../data/info_en.json")).unwrap();
     let info_fr: Value = serde_json::from_str(include_str!("../data/info_fr.json")).unwrap();

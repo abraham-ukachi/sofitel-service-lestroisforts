@@ -2,6 +2,16 @@
 
 All notable changes to this project will be documented in this file. Versions follow the service-worker cache (`ltf-vNN` → `0.NN.0`), see [CONTRIBUTING.md](./CONTRIBUTING.md#git-commit-messages) for the commit guidelines.
 
+### 0.56.0 (2026-11-01)
+
+* :sparkles: Owner dashboard tabs: Aperçu, Gérer, Contenu, Annonce
+* :sparkles: Gérer: approve / refuse / delete access requests, make admin or member, remove a teammate, reset a waiter's XP, delete chat messages & old photos, leaderboard entries and push devices
+* :sparkles: Contenu: edit, add, reorder & delete dishes, wines, champagnes, cocktails, cheeses, fact cards, the daily briefing... live (`content/{section}`), applied on every phone's next start, one tap back to the built-in version
+* :sparkles: Annonce: a message banner for the whole team (`config/announce`)
+* :shield: `content-boot.js` crash guard: live content that stops the app from starting is set aside automatically
+* :lock: Firestore rules: owner-only writes for `content`, `config`, and deleting accounts & push devices
+* :bento: Bump the service-worker cache to `ltf-v56-rs`
+
 ### 0.55.0 (2026-11-01)
 
 * :lock: Fair XP: the same card pays 100 % → 50 % → 25 % → 0 of its XP for its 1st, 2nd, 3rd and later right answers of the day (`xd` in the progress, synced), so replaying one easy round can't farm XP

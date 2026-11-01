@@ -45,9 +45,9 @@ const pwaDir = process.argv[2],
 let html = fs.readFileSync(path.join(pwaDir, 'index.html'), 'utf8');
 // the JS app scripts (this exact line must stay in pwa/index.html) ...
 const OLD =
-  '<script src="hero.js"></script><script src="data.js"></script><script src="fun.js"></script><script src="i18n.js"></script><script src="i18n_fr.js"></script><script src="images.js"></script><script src="app.js"></script>';
+  '<script src="hero.js"></script><script src="data.js"></script><script src="fun.js"></script><script src="i18n.js"></script><script src="i18n_fr.js"></script><script src="images.js"></script><script src="content-boot.js"></script><script src="app.js"></script>';
 // ... become the wasm-bindgen glue + the bootstrap 🦀
-const NEW = '<script src="ltf.js"></script><script>wasm_bindgen({module_or_path:\'ltf_bg.wasm\'});</script>';
+const NEW = '<script src="content-boot.js"></script><script src="ltf.js"></script><script>wasm_bindgen({module_or_path:\'ltf_bg.wasm\'});</script>';
 // not found? stop here ❌
 if (!html.includes(OLD)) throw Error('script block not found in pwa/index.html');
 // swap & write ✅

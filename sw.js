@@ -36,7 +36,7 @@
 // cache as a fallback (📴 offline), and a separate persistent cache for the heavy scan assets.
 
 // the cache of this version (bump it on every deploy, so phones pick up the new build 🚀)
-const CACHE = 'ltf-v55-rs';
+const CACHE = 'ltf-v56-rs';
 // the scanner cache (big model files, kept across app versions): bump it when pwa/scan/ changes 📷
 const SCAN_CACHE = 'ltf-scan-v3';
 // the app shell, precached on install 📦
@@ -70,6 +70,9 @@ const ASSETS = [
   'chat.js',
   'board.js',
   'admin.js',
+  'admin-edit.js',
+  'content.js',
+  'content-boot.js',
   'scan.js',
 ];
 

@@ -57,3 +57,4 @@ echo "== async_boot.js (deployed index.html, async wasm load) =="; node "$TESTS_
 node "$TESTS_DIR/route.js"
 # 🛡️ chat safety: crafted database values never reach the page as HTML
 echo "== chat_safety.js (chat escaping & validation) =="; node "$TESTS_DIR/chat_safety.js" "$TESTS_DIR/../../pwa/chat.js"
+echo "== content.js (live content from the owner dashboard, JS & Rust) =="; node "$TESTS_DIR/content.js"

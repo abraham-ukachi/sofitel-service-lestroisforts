@@ -51,6 +51,8 @@ import {
   collection,
   getDocs,
 } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
+// import the hands-on tabs (manage, content, announcement) 🎛️
+import { renderManage, renderContent, renderAnnounce } from './admin-edit.js';
 
 // ===== FIREBASE 🔥 ===== //
 
@@ -228,6 +230,15 @@ let user = null;
 let overlay = null;
 // true while the dashboard loads 🔄
 let loading = false;
+// the open tab ('overview' | 'manage' | 'content' | 'announce') 🗂️
+let currentTab = 'overview';
+// the tabs of the dashboard (id, FR, EN) 📑
+const TABS = [
+  ['overview', '📊 Aperçu', '📊 Overview'],
+  ['manage', '👥 Gérer', '👥 Manage'],
+  ['content', '📝 Contenu', '📝 Content'],
+  ['announce', '📣 Annonce', '📣 Announce'],
+];
 
 // ===== GATHER THE NUMBERS 📥 ===== //
 
@@ -711,10 +722,19 @@ async function refresh() {
       translate('Chargement…', 'Loading…') +
       '</p>';
   try {
-    const data = await gather();
-    // closed meanwhile? nothing to draw
-    if (!overlay) return;
-    body.innerHTML = dashboardHtml(data);
+    // 📝📣 the content & announcement tabs read their own data
+    if (currentTab === 'content') await renderContent(body);
+    else if (currentTab === 'announce') await renderAnnounce(body);
+    else {
+      const data = await gather();
+      // closed meanwhile? nothing to draw
+      if (!overlay) return;
+      if (currentTab === 'manage') renderManage(body, data, user, reloadSoon);
+      else {
+        body.onclick = null;
+        body.innerHTML = dashboardHtml(data);
+      }
+    }
     body.dataset.ready = '1';
   } catch (error) {
     body.innerHTML = '<p class="muted">⚠️ ' + escapeHtml(String(error)) + '</p>';
@@ -722,6 +742,36 @@ async function refresh() {
     loading = false;
     if (button) button.style.opacity = '';
   }
+}
+
+/**
+ * `reloadSoon` - Function 🔄
+ *
+ * Reads everything again right after a change (waits for a refresh already running).
+ *
+ * @returns { void }
+ */
+function reloadSoon() {
+  if (loading) setTimeout(reloadSoon, 300);
+  else refresh();
+}
+
+/**
+ * `showTab` - Function 📑
+ *
+ * @param { string } tab - the tab to open
+ * @returns { void }
+ */
+function showTab(tab) {
+  currentTab = tab;
+  overlay.querySelectorAll('[data-tab]').forEach((button) => {
+    button.className = button.dataset.tab === tab ? 'btn' : 'btn sec';
+  });
+  const body = overlay.querySelector('.cbody');
+  delete body.dataset.ready;
+  body.onclick = null;
+  body.scrollTop = 0;
+  reloadSoon();
 }
 
 /**
@@ -742,8 +792,23 @@ function openDashboard() {
     '</div><div class="muted sm">' +
     translate('Coulisses de l’app · vous seul', 'Behind the scenes · only you') +
     '</div></div><button class="cx" id="admRefresh" aria-label="refresh">↻</button></div>' +
+    '<div class="row" style="gap:6px;padding:8px 14px 0;overflow-x:auto;flex:none">' +
+    TABS.map(
+      ([tab, french, english]) =>
+        '<button data-tab="' +
+        tab +
+        '" class="' +
+        (tab === currentTab ? 'btn' : 'btn sec') +
+        '" style="padding:7px 12px;font-size:13px;min-height:0;flex:none">' +
+        translate(french, english) +
+        '</button>',
+    ).join('') +
+    '</div>' +
     '<div class="cbody" style="display:block;padding:14px"></div>';
   document.body.appendChild(overlay);
+  overlay
+    .querySelectorAll('[data-tab]')
+    .forEach((button) => (button.onclick = () => showTab(button.dataset.tab)));
   history.pushState({ admin: 1 }, '');
   overlay.querySelector('.cx').addEventListener('click', () => history.back());
   overlay.querySelector('#admRefresh').addEventListener('click', refresh);
