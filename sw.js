@@ -36,7 +36,7 @@
 // cache as a fallback (📴 offline), and a separate persistent cache for the heavy scan assets.
 
 // the cache of this version (bump it on every deploy, so phones pick up the new build 🚀)
-const CACHE = 'ltf-v60-rs';
+const CACHE = 'ltf-v61-rs';
 // the scanner cache (big model files, kept across app versions): bump it when pwa/scan/ changes 📷
 const SCAN_CACHE = 'ltf-scan-v4';
 // the app shell, precached on install 📦
@@ -51,6 +51,7 @@ const ASSETS = [
   'icon-512.png',
   'apple-touch-icon.png',
   'welcome.js',
+  'about.js',
   'emoji.json',
   'stickers/bell.webp',
   'stickers/bouillabaisse.webp',

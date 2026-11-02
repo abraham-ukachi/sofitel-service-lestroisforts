@@ -36,7 +36,7 @@
 // network first, cache as a fallback (📴 offline).
 
 // the cache of this version 🏷️
-const CACHE = 'ltf-v60';
+const CACHE = 'ltf-v61';
 // the scanner cache (big model files, kept across app versions): bump it when pwa/scan/ changes 📷
 const SCAN_CACHE = 'ltf-scan-v4';
 // the app shell, precached on install 📦
@@ -55,6 +55,7 @@ const ASSETS = [
   'icon-512.png',
   'apple-touch-icon.png',
   'welcome.js',
+  'about.js',
   'emoji.json',
   'stickers/bell.webp',
   'stickers/bouillabaisse.webp',
