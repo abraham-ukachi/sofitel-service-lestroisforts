@@ -39,6 +39,7 @@
 <!-- 🔎 SEO: description, canonical, robots, Open Graph & Twitter cards, structured data -->
 <meta name="description" content="Application d’entraînement au service du restaurant Les Trois Forts (Sofitel Marseille Vieux-Port) : la carte, les accords mets-vins, les vins, cocktails et fromages, le briefing du jour, des quiz et un scanner de plats.">
 <meta name="robots" content="index, follow, max-image-preview:large">
+<meta name="google-site-verification" content="vr_KLi88G1HCmc--d1B9Djorv50L_oN6PP2seJ9jNa8">
 <link rel="canonical" href="https://sofitel-service-lestroisforts.vercel.app/">
 <meta name="author" content="Abraham Ukachi">
 <meta property="og:type" content="website">
@@ -2777,6 +2778,16 @@ body.notabs .toast {
   .ov.out .sheet {
     animation: pop 0.16s reverse forwards;
   }
+  /* 🎯 dialogs sit over the content column (not under the sidebar), and lose the mobile swipe grabber */
+  body:not(.notabs) .ov.scrim {
+    padding-left: calc(248px + 32px);
+  }
+  .sheet .grab {
+    display: none;
+  }
+  .sheet .sbody {
+    padding-top: 16px;
+  }
   /* 📷 💬 floating buttons, toast & install button: bottom right, no tab bar under them */
   .scanfab {
     right: 32px;
@@ -2817,6 +2828,18 @@ body.notabs .toast {
   }
   #app {
     max-width: 860px;
+  }
+  body:not(.notabs) .ov.scrim {
+    padding-left: calc(280px + 32px);
+  }
+}
+/* 🖥️ wide desktop (≥ 1680 px): the content column grows into the free space */
+@media (min-width: 1680px) {
+  #app {
+    max-width: 1000px;
+  }
+  .sheet {
+    max-width: 800px;
   }
 }
 </style></head><body>
