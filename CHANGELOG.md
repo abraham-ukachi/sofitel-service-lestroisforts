@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. Versions follow the service-worker cache (`ltf-vNN` → `0.NN.0`), see [CONTRIBUTING.md](./CONTRIBUTING.md#git-commit-messages) for the commit guidelines.
 
+### 0.60.0 (2026-11-02)
+
+* :lipstick: Laptop & desktop: from 960 px the tab bar becomes a left sidebar, the content column is wider, sheets open as centred dialogs, and the scan / chat buttons, toasts & install button sit bottom-right
+* :lipstick: Mouse & keyboard: hover feedback, themed thin scrollbars and a gold focus ring for keyboard users
+* :mag: SEO: meta description, canonical link, robots meta, Open Graph & Twitter cards (hero image), JSON-LD `WebApplication` structured data, a `<noscript>` fallback with a real `<h1>`
+* :mag: New `robots.txt` & `sitemap.xml`; the manifest no longer locks the app to portrait
+
 ### 0.59.0 (2026-11-01)
 
 * :zap: Scan ranks the right dish / bottle first much more often: the photo is also read through two centred zooms (75 % & 55 %), so table, hands & background count less (simulated off-centre shots: top-1 72 % → 96 %)
