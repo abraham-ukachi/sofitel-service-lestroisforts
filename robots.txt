@@ -1,0 +1,6 @@
+User-agent: *
+Allow: /
+Disallow: /api/
+Disallow: /__/
+
+Sitemap: https://sofitel-service-lestroisforts.vercel.app/sitemap.xml
