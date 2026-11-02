@@ -2,6 +2,10 @@
 
 All notable changes to this project will be documented in this file. Versions follow the service-worker cache (`ltf-vNN` → `0.NN.0`), see [CONTRIBUTING.md](./CONTRIBUTING.md#git-commit-messages) for the commit guidelines.
 
+### 0.61.1 (2026-11-02)
+
+* :bug: About drawer: the Infos / Parcours / Crédits chips stay pinned at the top while the timeline scrolls
+
 ### 0.61.0 (2026-11-02)
 
 * :sparkles: About drawer (`about.js`): Profil › « À propos de l'app » slides up a drawer with three chips: Infos (big logo, what the app is, the developer Abraham Ukachi with GitHub & X links), Parcours (a vertical timeline of the journey since 0.1.0, major milestones in gold) and Crédits (movie-style credits rolling from the bottom to the top, touch to pause)
