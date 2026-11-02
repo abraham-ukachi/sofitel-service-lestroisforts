@@ -596,6 +596,86 @@ export async function renderAnnounce(body) {
     );
 }
 
+// ===== 🎬 CRÉDITS ===== //
+
+/**
+ * `renderCredits` - Async Function 🎬
+ *
+ * Draws the credits editor (one row per person: name & role, move up, delete, add) and saves the list to
+ * `content/credits` (a JSON text, read by the About drawer of every phone, see about.js).
+ *
+ * @param { HTMLElement } body - where to draw
+ * @returns { Promise<void> }
+ */
+export async function renderCredits(body) {
+  let people = [];
+  try {
+    const snapshot = await getDoc(doc(firestore, 'content', 'credits'));
+    if (snapshot.exists()) people = JSON.parse(snapshot.data().data || '[]');
+  } catch (error) {}
+  if (!Array.isArray(people)) people = [];
+
+  // ✍️ keeps what was typed before a redraw
+  const readRows = () =>
+    Array.from(body.querySelectorAll('.crRow')).map((row) => ({
+      name: row.querySelector('.crName').value.trim().slice(0, 80),
+      role: row.querySelector('.crRole').value.trim().slice(0, 80),
+    }));
+
+  // 🖼️ draws the rows
+  const draw = () => {
+    const inputStyle = 'flex:1;min-width:0;border-radius:10px;padding:8px;font:inherit;box-sizing:border-box';
+    const rows = people
+      .map(
+        (person, index) =>
+          `<div class="crRow row" style="gap:6px;margin-bottom:8px">` +
+          `<input class="crName" maxlength="80" placeholder="${translate('Nom', 'Name')}" style="${inputStyle}" value="${escapeHtml(person.name)}">` +
+          `<input class="crRole" maxlength="80" placeholder="${translate('Rôle', 'Role')}" style="${inputStyle}" value="${escapeHtml(person.role)}">` +
+          `<button class="ibtn" data-cr="up" data-index="${index}" aria-label="up">↑</button>` +
+          `<button class="ibtn" data-cr="del" data-index="${index}" aria-label="delete">🗑️</button></div>`,
+      )
+      .join('');
+    body.innerHTML = cardHtml(
+      '🎬 ' + translate('Crédits de l’app', 'App credits'),
+      (rows || `<p class="muted sm">${translate('Personne pour l’instant.', 'Nobody yet.')}</p>`) +
+        `<button class="btn sec" data-cr="add" style="width:100%;margin:4px 0 10px">＋ ${translate('Ajouter une personne', 'Add a person')}</button>` +
+        `<button class="btn" data-cr="save" style="width:100%">${translate('Publier', 'Publish')}</button>` +
+        `<p class="muted sm">${translate(
+          'Ils défilent dans Profil › À propos › Crédits, sur toutes les apps (visible par tous).',
+          'They roll in Profil › About › Credits on every phone (visible to everyone).',
+        )}</p>`,
+    );
+  };
+
+  body.onclick = (event) => {
+    const button = event.target.closest('[data-cr]');
+    if (!button) return;
+    people = readRows();
+    const index = Number(button.dataset.index);
+    if (button.dataset.cr === 'add') people.push({ name: '', role: '' });
+    else if (button.dataset.cr === 'del') people.splice(index, 1);
+    else if (button.dataset.cr === 'up' && index > 0)
+      people.splice(index - 1, 2, people[index], people[index - 1]);
+    else if (button.dataset.cr === 'save') {
+      const clean = people.filter((person) => person.name).slice(0, 200);
+      return runAction(
+        () =>
+          setDoc(doc(firestore, 'content', 'credits'), {
+            data: JSON.stringify(clean),
+            ts: serverTimestamp(),
+          }),
+        translate('Crédits publiés', 'Credits published'),
+      );
+    }
+    draw();
+    if (button.dataset.cr === 'add') {
+      const names = body.querySelectorAll('.crName');
+      if (names.length) names[names.length - 1].focus();
+    }
+  };
+  draw();
+}
+
 // ===== 📝 CONTENU ===== //
 
 // the state of the content editor: the built-in data, the live content & the section being edited 📦

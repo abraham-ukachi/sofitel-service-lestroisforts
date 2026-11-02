@@ -52,7 +52,7 @@ import {
   getDocs,
 } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
 // import the hands-on tabs (manage, content, announcement) 🎛️
-import { renderManage, renderContent, renderAnnounce } from './admin-edit.js';
+import { renderManage, renderContent, renderAnnounce, renderCredits } from './admin-edit.js';
 
 // ===== FIREBASE 🔥 ===== //
 
@@ -230,7 +230,7 @@ let user = null;
 let overlay = null;
 // true while the dashboard loads 🔄
 let loading = false;
-// the open tab ('overview' | 'manage' | 'content' | 'announce') 🗂️
+// the open tab ('overview' | 'manage' | 'content' | 'announce' | 'credits') 🗂️
 let currentTab = 'overview';
 // the tabs of the dashboard (id, FR, EN) 📑
 const TABS = [
@@ -238,11 +238,12 @@ const TABS = [
   ['manage', '👥', 'Équipe', 'Team'],
   ['content', '📝', 'Carte', 'Menu'],
   ['announce', '📣', 'Annonce', 'Notice'],
+  ['credits', '🎬', 'Crédits', 'Credits'],
 ];
 
 // the dashboard look: compact segmented tabs, search bars, tiles, rows & the publish bar 🎨
 const DASHBOARD_CSS = `
-.admtabs{display:grid;grid-template-columns:repeat(4,1fr);gap:4px;margin:8px 14px 0;padding:4px;
+.admtabs{display:grid;grid-template-columns:repeat(5,1fr);gap:4px;margin:8px 14px 0;padding:4px;
   border-radius:14px;background:rgba(127,127,127,.12);flex:none}
 .admtab{display:flex;flex-direction:column;align-items:center;gap:1px;padding:6px 2px;border:0;border-radius:10px;
   background:none;color:inherit;font:inherit;font-size:11.5px;font-weight:600;opacity:.65;cursor:pointer;min-width:0}
@@ -761,6 +762,7 @@ async function refresh() {
     // 📝📣 the content & announcement tabs read their own data
     if (currentTab === 'content') await renderContent(body);
     else if (currentTab === 'announce') await renderAnnounce(body);
+    else if (currentTab === 'credits') await renderCredits(body);
     else {
       const data = await gather();
       // closed meanwhile? nothing to draw
