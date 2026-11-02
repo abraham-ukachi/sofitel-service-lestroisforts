@@ -122,6 +122,8 @@ function scriptsOf(filePath, source) {
   let match;
   while ((match = scriptPattern.exec(source))) {
     if (/\bsrc=/.test(match[1])) continue;
+    // 🔎 structured data (JSON-LD) is JSON, not JavaScript: nothing to check
+    if (/type=["']?application\/ld\+json/.test(match[1])) continue;
     scripts.push({
       code: match[2],
       offset: match.index + match[0].indexOf('>') + 1,

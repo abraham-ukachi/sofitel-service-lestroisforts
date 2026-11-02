@@ -36,6 +36,50 @@
 <html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,viewport-fit=cover">
 <link rel="manifest" href="manifest.json"><meta name="theme-color" content="#0d1a2e"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"><meta name="apple-mobile-web-app-title" content="Trois Forts"><link rel="apple-touch-icon" href="apple-touch-icon.png"><link rel="icon" href="icon-192.png"><title>Les Trois Forts — Service Academy</title>
 
+<!-- 🔎 SEO: description, canonical, robots, Open Graph & Twitter cards, structured data -->
+<meta name="description" content="Application d’entraînement au service du restaurant Les Trois Forts (Sofitel Marseille Vieux-Port) : la carte, les accords mets-vins, les vins, cocktails et fromages, le briefing du jour, des quiz et un scanner de plats.">
+<meta name="robots" content="index, follow, max-image-preview:large">
+<link rel="canonical" href="https://sofitel-service-lestroisforts.vercel.app/">
+<meta name="author" content="Abraham Ukachi">
+<meta property="og:type" content="website">
+<meta property="og:locale" content="fr_FR">
+<meta property="og:site_name" content="Les Trois Forts — Service Academy">
+<meta property="og:title" content="Les Trois Forts — Service Academy">
+<meta property="og:description" content="Application d’entraînement au service du restaurant Les Trois Forts (Sofitel Marseille Vieux-Port) : la carte, les accords mets-vins, les vins, cocktails et fromages, le briefing du jour, des quiz et un scanner de plats.">
+<meta property="og:url" content="https://sofitel-service-lestroisforts.vercel.app/">
+<meta property="og:image" content="https://sofitel-service-lestroisforts.vercel.app/hero.jpg">
+<meta property="og:image:alt" content="Le Vieux-Port de Marseille vu du restaurant Les Trois Forts">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Les Trois Forts — Service Academy">
+<meta name="twitter:description" content="Application d’entraînement au service du restaurant Les Trois Forts (Sofitel Marseille Vieux-Port) : la carte, les accords mets-vins, les vins, cocktails et fromages, le briefing du jour, des quiz et un scanner de plats.">
+<meta name="twitter:image" content="https://sofitel-service-lestroisforts.vercel.app/hero.jpg">
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "WebApplication",
+  "name": "Les Trois Forts — Service Academy",
+  "url": "https://sofitel-service-lestroisforts.vercel.app/",
+  "description": "Application d’entraînement au service du restaurant Les Trois Forts (Sofitel Marseille Vieux-Port) : la carte, les accords mets-vins, les vins, cocktails et fromages, le briefing du jour, des quiz et un scanner de plats.",
+  "applicationCategory": "EducationalApplication",
+  "operatingSystem": "Web, Android, iOS, Windows, macOS",
+  "inLanguage": ["fr", "en"],
+  "image": "https://sofitel-service-lestroisforts.vercel.app/hero.jpg",
+  "author": { "@type": "Person", "name": "Abraham Ukachi" },
+  "about": {
+    "@type": "Restaurant",
+    "name": "Les Trois Forts",
+    "servesCuisine": "Méditerranéenne",
+    "address": {
+      "@type": "PostalAddress",
+      "streetAddress": "36 boulevard Charles Livon",
+      "postalCode": "13007",
+      "addressLocality": "Marseille",
+      "addressCountry": "FR"
+    }
+  }
+}
+</script>
+
 <!-- 🌗 the pre-paint theme script (before the CSS, so there is never a flash of the wrong theme) -->
 <script>
 // 🌗 pre-paint theme: runs before anything else, so the page never flashes the wrong theme
@@ -2619,9 +2663,174 @@ body.notabs .toast {
   margin: 10px 2px;
   white-space: pre-wrap;
 }
+
+/* 💻 LAPTOP & DESKTOP (0.60.0): the mobile layout stays as it is, wider screens get a real desktop layout */
+/* 🖱️ keyboard focus ring (every screen size, only for keyboard users) */
+:focus-visible {
+  outline: 2px solid var(--gold);
+  outline-offset: 2px;
+}
+@media (hover: hover) and (pointer: fine) {
+  /* 🖱️ hover feedback for mouse users */
+  .card,
+  #tabbar button .pill,
+  .ibtn,
+  .ib {
+    transition:
+      background 0.15s,
+      transform 0.15s,
+      filter 0.15s;
+  }
+  button.card:hover,
+  a.card:hover {
+    filter: brightness(1.08);
+  }
+  #tabbar button:hover .pill {
+    background: var(--pill);
+  }
+  #tabbar button:hover {
+    color: var(--gold);
+  }
+  .scanfab:hover,
+  .chatfab:hover {
+    transform: scale(1.06);
+  }
+  /* 🧵 thin themed scrollbars */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--trk) transparent;
+  }
+}
+/* 💻 laptop (≥ 960 px): the tab bar becomes a left sidebar, sheets open as centred dialogs */
+@media (min-width: 960px) {
+  body:not(.notabs) {
+    padding-left: 248px;
+  }
+  /* 🧭 sidebar navigation (same buttons as the mobile tab bar) */
+  #tabbar {
+    top: 0;
+    right: auto;
+    width: 248px;
+    flex-direction: column;
+    gap: 4px;
+    border-top: 0;
+    border-right: 1px solid var(--line);
+    padding: 28px 16px;
+  }
+  #tabbar::before {
+    content: 'Les Trois Forts';
+    display: block;
+    font-family: Georgia, 'Times New Roman', serif;
+    font-size: 21px;
+    color: var(--gold);
+    padding: 0 10px 2px;
+  }
+  #tabbar button {
+    flex: none;
+    flex-direction: row;
+    gap: 12px;
+    font-size: 15px;
+    text-align: left;
+    padding: 4px 6px;
+    border-radius: 16px;
+  }
+  #tabbar button:first-of-type {
+    margin-top: 22px;
+  }
+  #tabbar .pill {
+    width: 44px;
+    height: 38px;
+  }
+  /* 📐 the content column: wider, and no room left for a bottom bar */
+  #app {
+    max-width: 780px;
+    padding: 12px 24px 48px;
+  }
+  body.notabs #app {
+    padding-bottom: 64px;
+  }
+  .hero {
+    height: 230px;
+  }
+  /* 📌 bars pinned to the bottom follow the content column */
+  body:not(.notabs) .cta,
+  body:not(.notabs) .abar.fixed,
+  body:not(.notabs) .fbsheet {
+    left: 248px;
+  }
+  .cta {
+    bottom: 16px;
+  }
+  /* 🪟 sheets & dialogs: centred on screen instead of sliding up from the bottom */
+  .ov.scrim {
+    align-items: center;
+    padding: 32px;
+  }
+  .sheet {
+    max-width: 720px;
+    max-height: 86vh;
+    border-radius: 28px;
+    margin-bottom: 0;
+    animation: pop 0.2s ease-out;
+    box-shadow: 0 24px 60px rgba(0, 0, 0, 0.45);
+  }
+  .ov.out .sheet {
+    animation: pop 0.16s reverse forwards;
+  }
+  /* 📷 💬 floating buttons, toast & install button: bottom right, no tab bar under them */
+  .scanfab {
+    right: 32px;
+    bottom: 32px;
+  }
+  .scanfab.up {
+    bottom: 96px;
+  }
+  .chatfab {
+    right: 39px;
+    bottom: 106px;
+  }
+  .chatfab.up {
+    bottom: 170px;
+  }
+  .toast,
+  body.notabs .toast {
+    bottom: 36px;
+  }
+  #inst {
+    bottom: 32px !important;
+    right: 110px !important;
+  }
+}
+/* 🖥️ desktop (≥ 1360 px): a little more room for the content */
+@media (min-width: 1360px) {
+  body:not(.notabs) {
+    padding-left: 280px;
+  }
+  #tabbar {
+    width: 280px;
+    padding: 32px 22px;
+  }
+  body:not(.notabs) .cta,
+  body:not(.notabs) .abar.fixed,
+  body:not(.notabs) .fbsheet {
+    left: 280px;
+  }
+  #app {
+    max-width: 860px;
+  }
+}
 </style></head><body>
 <!-- 📱 the app root: every screen is rendered in here -->
 <div id="app"></div>
+
+<!-- 🔎 what search engines (and browsers without JavaScript) see -->
+<noscript>
+  <main style="max-width:640px;margin:0 auto;padding:32px 20px;line-height:1.5">
+    <h1>Les Trois Forts — Service Academy</h1>
+    <p>Application d’entraînement au service du restaurant Les Trois Forts (Sofitel Marseille Vieux-Port) : la carte, les accords mets-vins, les vins, cocktails et fromages, le briefing du jour, des quiz et un scanner de plats.</p>
+    <p>Activez JavaScript pour utiliser l’application.</p>
+  </main>
+</noscript>
 
 <!-- 📚 the data + the JavaScript app (the Rust build swaps this exact line for the WASM glue: rust/tools/make_index.js) -->
 <script src="content-boot.js"></script><script src="ltf.js"></script><script>wasm_bindgen({module_or_path:'ltf_bg.wasm'});</script>
