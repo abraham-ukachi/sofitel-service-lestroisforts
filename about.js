@@ -166,7 +166,8 @@ const ABOUT_CSS = `
 .abtrow .abtsub{display:block;font-weight:400;font-size:12.5px;color:var(--mu);margin-top:2px}
 .abtrow .abtgo{color:var(--mu);font-size:22px;line-height:1}
 .abtsheet .sbody{padding-top:4px}
-.abtchips{display:flex;gap:6px;justify-content:center;margin:2px 0 16px}
+.abtchips{display:flex;gap:6px;justify-content:center;margin:0 0 12px;padding:6px 0;position:sticky;top:0;
+  z-index:2;background:var(--bar)}
 .abthead{text-align:center;padding:6px 0 4px}
 .abtlogo{width:112px;height:112px;border-radius:28px;box-shadow:0 10px 30px rgba(0,0,0,.35);display:block;
   margin:0 auto 14px}
