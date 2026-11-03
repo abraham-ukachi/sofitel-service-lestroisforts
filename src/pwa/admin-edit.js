@@ -197,18 +197,28 @@ async function runAction(action, doneText, onDone) {
  * @param { string } id - the target id (data-id)
  * @param { string } label - the button label (already escaped)
  * @param { boolean } [danger] - red button?
- * @returns { string } - a small action button
+ * @returns { string } - a small round icon button (the label's first word), its words as the tooltip
  */
-const buttonHtml = (action, id, label, danger) =>
-  '<button class="btn sec" data-act="' +
-  action +
-  '" data-id="' +
-  escapeHtml(id) +
-  '" style="padding:6px 10px;font-size:13px;min-height:0' +
-  (danger ? ';color:#e5484d' : '') +
-  '">' +
-  label +
-  '</button>';
+const buttonHtml = (action, id, label, danger) => {
+  // the first word is the icon, the rest names the action (tooltip & screen readers) 🏷️
+  const [icon, ...words] = String(label).split(' '),
+    title = words.join(' ');
+  return (
+    '<button class="admicon' +
+    (danger ? ' danger' : action === 'approve' ? ' ok' : '') +
+    '" data-act="' +
+    action +
+    '" data-id="' +
+    escapeHtml(id) +
+    '" title="' +
+    title +
+    '" aria-label="' +
+    title +
+    '"><span>' +
+    icon +
+    '</span></button>'
+  );
+};
 
 /**
  * `rowHtml` - Function ➖
@@ -220,26 +230,28 @@ const buttonHtml = (action, id, label, danger) =>
  * @returns { string } - one managed row
  */
 const rowHtml = (title, subtitle, buttons, person) =>
-  '<div class="admline" style="display:flex;gap:10px;padding:10px 0;border-bottom:1px solid rgba(127,127,127,.12)">' +
+  '<div class="admline">' +
   (person ? avatarHtml(person.name || person.email, person.pic) : '') +
-  '<div style="flex:1;min-width:0"><div style="font-weight:700;overflow-wrap:anywhere">' +
+  '<div class="admtext"><div class="admtitle">' +
   title +
   '</div>' +
-  (subtitle ? '<div class="muted sm" style="overflow-wrap:anywhere">' + subtitle + '</div>' : '') +
-  '<div class="row" style="gap:6px;flex-wrap:wrap;margin-top:6px">' +
+  (subtitle ? '<div class="muted sm admclip">' + subtitle + '</div>' : '') +
+  '</div><div class="admacts">' +
   buttons +
-  '</div></div></div>';
+  '</div></div>';
 
 /**
  * `cardHtml` - Function 🗂️
  *
  * @param { string } title - the card title
  * @param { string } body - the card content
+ * @param { number } [count] - a number shown as a pill on the right of the title
  * @returns { string } - one card
  */
-const cardHtml = (title, body) =>
-  '<div class="card" style="margin:0 0 12px"><div style="font-weight:800;margin-bottom:6px">' +
+const cardHtml = (title, body, count) =>
+  '<div class="card" style="margin:0 0 12px"><div class="admcardtitle">' +
   title +
+  (count === undefined ? '' : '<span class="admcount">' + count + '</span>') +
   '</div>' +
   body +
   '</div>';
@@ -406,19 +418,19 @@ export function renderManage(body, data, user, reload) {
       translate('Chercher une personne, un message…', 'Search a person, a message…'),
     ) +
     '</div><div class="admcols">' +
-    cardHtml('🛂 ' + translate('Demandes d’accès', 'Access requests'), requestRows || none) +
-    cardHtml('👥 ' + translate('Équipe', 'Team'), teamRows || none) +
-    cardHtml('🎓 ' + translate('Comptes & XP', 'Accounts & XP'), accountRows || none) +
+    cardHtml('🛂 ' + translate('Demandes d’accès', 'Access requests'), requestRows || none, requests.length) +
+    cardHtml('👥 ' + translate('Équipe', 'Team'), teamRows || none, team.length) +
+    cardHtml('🎓 ' + translate('Comptes & XP', 'Accounts & XP'), accountRows || none, accounts.length) +
     cardHtml(
       '💬 Chat',
       (photoCount
-        ? '<button class="btn sec" data-act="deletePhotos" data-id="all" style="margin-bottom:6px;color:#e5484d">🖼️ ' +
+        ? '<button class="btn sec admwide" data-act="deletePhotos" data-id="all" style="margin:0 0 6px;color:#e5484d">🖼️ ' +
           translate('Supprimer les photos de plus de 30 jours', 'Delete photos older than 30 days') +
           '</button>'
         : '') + (messageRows || none),
     ) +
-    cardHtml('🏆 ' + translate('Classement', 'Leaderboard'), boardRows || none) +
-    cardHtml('🔔 ' + translate('Appareils notifiés', 'Push devices'), deviceRows || none) +
+    cardHtml('🏆 ' + translate('Classement', 'Leaderboard'), boardRows || none, board.length) +
+    cardHtml('🔔 ' + translate('Appareils notifiés', 'Push devices'), deviceRows || none, devices.length) +
     '</div>';
 
   // 🔍 the filter: hides the rows (and the cards) that don't match
@@ -578,29 +590,59 @@ export async function renderAnnounce(body) {
     const snapshot = await getDoc(doc(firestore, 'config', 'announce'));
     if (snapshot.exists()) current = snapshot.data();
   } catch (error) {}
-  body.innerHTML = cardHtml(
-    '📣 ' + translate('Annonce à toute l’équipe', 'Announcement to the whole team'),
-    '<textarea id="annText" maxlength="500" rows="5" style="width:100%;box-sizing:border-box;border-radius:12px;padding:10px;font:inherit">' +
-      escapeHtml(current.text || '') +
-      '</textarea><label class="row" style="gap:8px;margin:10px 0"><input type="checkbox" id="annOn"' +
-      (current.on ? ' checked' : '') +
-      '> ' +
-      translate('Afficher sur toutes les apps', 'Show on every phone') +
-      '</label><button class="btn" id="annSave" style="width:100%">' +
-      translate('Publier', 'Publish') +
-      '</button><p class="muted sm">' +
-      translate(
-        'Un bandeau s’affiche en haut de l’app au prochain lancement. Chaque nouvelle publication réapparaît même si l’ancienne a été fermée.',
-        'A banner shows at the top of the app on its next start. Each new publish shows again, even if the last one was closed.',
-      ) +
-      '</p>',
-  );
+  body.innerHTML =
+    '<div class="admcols">' +
+    cardHtml(
+      '📣 ' + translate('Annonce à toute l’équipe', 'Announcement to the whole team'),
+      '<textarea id="annText" class="admfield" maxlength="500" rows="5" placeholder="' +
+        translate(
+          'Ex. : briefing à 18 h 30, tenue d’hiver ce soir…',
+          'E.g. briefing at 6:30 pm, winter outfit tonight…',
+        ) +
+        '">' +
+        escapeHtml(current.text || '') +
+        '</textarea><div class="admmeta"><span>' +
+        translate('Visible par toute l’équipe', 'Seen by the whole team') +
+        '</span><span id="annCount"></span></div>' +
+        '<label class="admswitch"><input type="checkbox" id="annOn"' +
+        (current.on ? ' checked' : '') +
+        '><span class="admknob"></span><span class="grow"><b>' +
+        translate('Afficher sur toutes les apps', 'Show on every phone') +
+        '</b><span class="muted sm" style="display:block">' +
+        translate('Désactivez pour retirer le bandeau', 'Turn off to remove the banner') +
+        '</span></span></label><button class="btn admwide" id="annSave">🚀 ' +
+        translate('Publier', 'Publish') +
+        '</button>',
+    ) +
+    cardHtml(
+      '👀 ' + translate('Aperçu', 'Preview'),
+      '<div class="admpreview" id="annPreview"><span>📣</span><span class="grow" id="annPreviewText"></span></div>' +
+        '<p class="muted sm" style="margin-bottom:0">' +
+        translate(
+          'Le bandeau s’affiche en haut de l’app au prochain lancement. Chaque nouvelle publication réapparaît, même si l’ancienne a été fermée.',
+          'The banner shows at the top of the app on its next start. Each new publish shows again, even if the last one was closed.',
+        ) +
+        '</p>',
+    ) +
+    '</div>';
+  const textInput = body.querySelector('#annText'),
+    switchInput = body.querySelector('#annOn');
+  // 👀 keeps the preview & the counter in step with what's typed
+  const updatePreview = () => {
+    body.querySelector('#annPreviewText').textContent =
+      textInput.value.trim() || translate('Votre message ici…', 'Your message here…');
+    body.querySelector('#annPreview').classList.toggle('off', !switchInput.checked);
+    body.querySelector('#annCount').textContent = textInput.value.length + ' / 500';
+  };
+  textInput.oninput = updatePreview;
+  switchInput.onchange = updatePreview;
+  updatePreview();
   body.querySelector('#annSave').onclick = () =>
     runAction(
       () =>
         setDoc(doc(firestore, 'config', 'announce'), {
-          text: body.querySelector('#annText').value.trim().slice(0, 500),
-          on: body.querySelector('#annOn').checked,
+          text: textInput.value.trim().slice(0, 500),
+          on: switchInput.checked,
           ts: serverTimestamp(),
         }),
       translate('Annonce publiée', 'Announcement published'),
@@ -635,27 +677,30 @@ export async function renderCredits(body) {
 
   // 🖼️ draws the rows
   const draw = () => {
-    const inputStyle = 'flex:1;min-width:0;border-radius:10px;padding:8px;font:inherit;box-sizing:border-box';
     const rows = people
       .map(
         (person, index) =>
-          `<div class="crRow row" style="gap:6px;margin-bottom:8px">` +
-          `<input class="crName" maxlength="80" placeholder="${translate('Nom', 'Name')}" style="${inputStyle}" value="${escapeHtml(person.name)}">` +
-          `<input class="crRole" maxlength="80" placeholder="${translate('Rôle', 'Role')}" style="${inputStyle}" value="${escapeHtml(person.role)}">` +
-          `<button class="ibtn" data-cr="up" data-index="${index}" aria-label="up">↑</button>` +
-          `<button class="ibtn" data-cr="del" data-index="${index}" aria-label="delete">🗑️</button></div>`,
+          `<div class="crRow admcredit">${avatarHtml(person.name || '?')}<div class="admtext">` +
+          `<input class="crName admfield" maxlength="80" placeholder="${translate('Nom', 'Name')}" value="${escapeHtml(person.name)}">` +
+          `<input class="crRole admfield" maxlength="80" placeholder="${translate('Rôle (ex. Chef de rang)', 'Role (e.g. Head waiter)')}" value="${escapeHtml(person.role)}">` +
+          `</div><div class="admacts">` +
+          `<button class="admicon" data-cr="up" data-index="${index}" title="${translate('Monter', 'Move up')}" aria-label="up"${index ? '' : ' disabled style="opacity:.35"'}><span>↑</span></button>` +
+          `<button class="admicon danger" data-cr="del" data-index="${index}" title="${translate('Supprimer', 'Delete')}" aria-label="delete"><span>🗑️</span></button>` +
+          `</div></div>`,
       )
       .join('');
-    body.innerHTML = cardHtml(
-      '🎬 ' + translate('Crédits de l’app', 'App credits'),
-      (rows || `<p class="muted sm">${translate('Personne pour l’instant.', 'Nobody yet.')}</p>`) +
-        `<button class="btn sec" data-cr="add" style="width:100%;margin:4px 0 10px">＋ ${translate('Ajouter une personne', 'Add a person')}</button>` +
-        `<button class="btn" data-cr="save" style="width:100%">${translate('Publier', 'Publish')}</button>` +
-        `<p class="muted sm">${translate(
-          'Ils défilent dans Profil › À propos › Crédits, sur toutes les apps (visible par tous).',
-          'They roll in Profil › About › Credits on every phone (visible to everyone).',
-        )}</p>`,
-    );
+    body.innerHTML =
+      cardHtml(
+        '🎬 ' + translate('Crédits de l’app', 'App credits'),
+        (rows || `<p class="admempty">${translate('Personne pour l’instant.', 'Nobody yet.')}</p>`) +
+          `<button class="admdashed" data-cr="add">＋ ${translate('Ajouter une personne', 'Add a person')}</button>`,
+        people.length,
+      ) +
+      `<button class="btn admwide" data-cr="save">🚀 ${translate('Publier', 'Publish')}</button>` +
+      `<p class="muted sm" style="text-align:center">${translate(
+        'Ils défilent dans Profil › À propos › Crédits, sur toutes les apps (visible par tous).',
+        'They roll in Profil › About › Credits on every phone (visible to everyone).',
+      )}</p>`;
   };
 
   body.onclick = (event) => {
@@ -753,20 +798,24 @@ function entryLabel(entry, nameField, index) {
 function fieldHtml(key, value) {
   const names = FIELD_NAMES[key],
     label =
-      '<div class="muted sm" style="margin:10px 0 3px">' +
+      '<div class="admlabel">' +
       escapeHtml(names ? translate(names[0], names[1]) : key) +
-      ' <span style="opacity:.6">(' +
+      ' <span class="admkey">(' +
       escapeHtml(key) +
       ')</span></div>';
-  const style = 'width:100%;box-sizing:border-box;border-radius:10px;padding:8px;font:inherit';
+  // closes the style attribute and adds the field class (used as  style="' + style + '" ) 🎨
+  const style = '" class="admfield';
   if (typeof value === 'boolean')
     return (
-      label +
-      '<input type="checkbox" data-key="' +
+      '<label class="admswitch"><input type="checkbox" data-key="' +
       escapeHtml(key) +
       '" data-kind="bool"' +
       (value ? ' checked' : '') +
-      '>'
+      '><span class="admknob"></span><span class="grow">' +
+      escapeHtml(names ? translate(names[0], names[1]) : key) +
+      ' <span class="muted sm">(' +
+      escapeHtml(key) +
+      ')</span></span></label>'
     );
   if (typeof value === 'number' || value === null)
     return (
@@ -822,9 +871,9 @@ function fieldHtml(key, value) {
             lang +
             '" placeholder="' +
             lang.toUpperCase() +
-            '" style="' +
+            '" style="margin-bottom:4px' +
             style +
-            ';margin-bottom:4px">' +
+            '">' +
             escapeHtml(value[lang] || '') +
             '</textarea>',
         )
@@ -834,9 +883,7 @@ function fieldHtml(key, value) {
     label +
     '<textarea rows="4" data-key="' +
     escapeHtml(key) +
-    '" data-kind="json" style="' +
-    style +
-    ';font-family:monospace;font-size:12px">' +
+    '" data-kind="json" class="admfield" style="font-family:monospace;font-size:12px">' +
     escapeHtml(JSON.stringify(value, null, 1)) +
     '</textarea>'
   );
@@ -1412,7 +1459,7 @@ function openEntry(body, index, redraw, isNew) {
     extraKey =
       '<div class="row" style="gap:6px;margin-top:12px"><input id="newKey" placeholder="' +
       translate('nouveau champ', 'new field') +
-      '" style="flex:1;border-radius:10px;padding:8px;font:inherit"><button class="btn sec" data-form="addKey">➕</button></div>';
+      '" class="admfield" style="flex:1"><button class="admicon gold" data-form="addKey" aria-label="add"><span>＋</span></button></div>';
   body.innerHTML = cardHtml(
     '✏️ ' + escapeHtml(entryLabel(entry, (SECTION_NAMES[workingSection] || [])[2], index)),
     '<div id="entryForm">' +

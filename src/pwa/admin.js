@@ -247,7 +247,7 @@ const DASHBOARD_CSS = `
   border-radius:14px;background:rgba(127,127,127,.12);flex:none}
 .admtab{display:flex;flex-direction:column;align-items:center;gap:1px;padding:6px 2px;border:0;border-radius:10px;
   background:none;color:inherit;font:inherit;font-size:11.5px;font-weight:600;opacity:.65;cursor:pointer;min-width:0}
-.admtab .ic{font-size:17px;line-height:1.2}
+.admtab .ic{display:flex;align-items:center;justify-content:center;height:22px;font-size:17px;line-height:1}
 .admtab.on{background:var(--gold,#c9a45c);color:#111;opacity:1;box-shadow:0 1px 4px rgba(0,0,0,.25)}
 .admsticky{position:sticky;top:-14px;z-index:2;margin:-14px -14px 10px;padding:12px 14px 8px;
   background:var(--bg,#0e0e10);display:flex;flex-direction:column;gap:8px}
@@ -265,8 +265,13 @@ const DASHBOARD_CSS = `
 .admrow:last-child{border-bottom:0}
 .admrow .n{font-weight:700;overflow-wrap:anywhere}
 .admclip{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.admicon{flex:none;width:36px;height:36px;border:0;border-radius:10px;background:rgba(127,127,127,.14);
-  color:inherit;font-size:16px;cursor:pointer}
+.admicon{flex:none;display:inline-flex;align-items:center;justify-content:center;width:36px;height:36px;padding:0;
+  border:0;border-radius:11px;background:rgba(127,127,127,.14);color:inherit;font:inherit;font-size:16px;line-height:1;
+  cursor:pointer;transition:transform .12s,background .15s}
+.admicon:active{transform:scale(.92)}
+.admicon>*{pointer-events:none}
+.admicon.ok{background:rgba(70,167,88,.18)}
+.admicon.danger{background:rgba(229,72,77,.14)}
 .admicon.gold{background:var(--gold,#c9a45c);color:#111;font-weight:800}
 .admicon.danger{color:#e5484d}
 .admbar{position:sticky;bottom:-14px;z-index:2;display:flex;align-items:center;gap:8px;margin:12px -14px -14px;
@@ -275,6 +280,40 @@ const DASHBOARD_CSS = `
 .admbar.dirty .grow{color:var(--gold,#c9a45c);opacity:1}
 .admbar button[disabled]{opacity:.4}
 .admempty{text-align:center;opacity:.6;padding:24px 0}
+.admov .btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;text-align:center}
+.admline{display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid rgba(127,127,127,.12)}
+.admline:last-child{border-bottom:0}
+.admline .admtext{flex:1;min-width:0}
+.admline .admtitle{font-weight:700;overflow-wrap:anywhere}
+.admacts{display:flex;align-items:center;gap:6px;flex:none}
+.admcardtitle{display:flex;align-items:center;gap:8px;font-weight:800;margin-bottom:6px}
+.admcount{margin-left:auto;font-size:12px;font-weight:700;padding:2px 9px;border-radius:99px;background:rgba(127,127,127,.16)}
+.admfield{display:block;width:100%;box-sizing:border-box;border:1px solid rgba(127,127,127,.25);border-radius:12px;
+  background:rgba(127,127,127,.08);color:inherit;font:inherit;padding:10px 12px;outline:none;resize:vertical}
+.admfield:focus{border-color:var(--gold,#c9a45c);box-shadow:0 0 0 3px rgba(201,164,92,.18)}
+.admlabel{font-size:12.5px;font-weight:600;opacity:.7;margin:12px 0 5px}
+.admlabel .admkey{opacity:.55;font-weight:400}
+.admswitch{display:flex;align-items:center;gap:12px;cursor:pointer;padding:10px 0}
+.admswitch input{position:absolute;opacity:0;pointer-events:none}
+.admswitch .admknob{flex:none;position:relative;width:46px;height:28px;border-radius:14px;background:rgba(127,127,127,.35);
+  transition:background .2s}
+.admswitch .admknob::after{content:'';position:absolute;top:3px;left:3px;width:22px;height:22px;border-radius:50%;
+  background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.3);transition:transform .2s}
+.admswitch input:checked+.admknob{background:var(--gold,#c9a45c)}
+.admswitch input:checked+.admknob::after{transform:translateX(18px)}
+.admwide{width:100%;margin-top:8px}
+.admdashed{width:100%;padding:12px;border:1.5px dashed rgba(127,127,127,.4);border-radius:14px;background:none;color:inherit;
+  font:inherit;font-weight:600;display:flex;align-items:center;justify-content:center;gap:8px;cursor:pointer;margin:6px 0}
+.admpreview{display:flex;align-items:flex-start;gap:10px;padding:12px 14px;border-radius:14px;
+  background:linear-gradient(135deg,var(--gold,#c9a45c),#a8843f);color:#111;font-weight:600;white-space:pre-wrap;
+  overflow-wrap:anywhere;transition:opacity .2s}
+.admpreview.off{opacity:.4;filter:grayscale(1)}
+.admmeta{display:flex;justify-content:space-between;font-size:12px;opacity:.6;margin-top:6px}
+.admcredit{display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid rgba(127,127,127,.12)}
+.admcredit:last-child{border-bottom:0}
+.admcredit .admtext{flex:1;min-width:0;display:flex;flex-direction:column;gap:4px}
+.admcredit .admfield{padding:7px 10px}
+.admcredit .crName{font-weight:700}
 .admcols{display:grid;gap:12px;align-items:start}
 .admcols>.card{margin:0!important}
 .admkpis{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-bottom:12px}
