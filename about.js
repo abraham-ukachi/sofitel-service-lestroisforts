@@ -74,6 +74,13 @@ const X_PATH =
 const TIMELINE = [
   [
     '2026-11-03',
+    '0.65',
+    false,
+    'Tableau de bord : dialogues de l’app, crédits à glisser, fromages corrigés',
+    'Dashboard: app dialogs, drag-to-reorder credits, cheese fix',
+  ],
+  [
+    '2026-11-03',
     '0.64',
     false,
     'Touchez votre carte de rang : vos stats glissent depuis le bas',

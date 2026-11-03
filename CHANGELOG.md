@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file. Versions follow the service-worker cache (`ltf-vNN` → `0.NN.0`), see [CONTRIBUTING.md](./CONTRIBUTING.md#git-commit-messages) for the commit guidelines.
 
+### 0.65.0 (2026-11-03)
+
+* :lipstick: Dashboard confirmations use the app's own dialog (icon, title, Annuler / red action, Escape & Enter) instead of the system `confirm()`
+* :bug: Carte editor: FR/EN descriptions (cheeses) no longer show "[object Object]" as row subtitles
+* :sparkles: Credits: minimal rows (grip, avatar, inline name & role, ✕), drag by ⠿ to reorder with the rows sliding out of the way; ↑ button removed; Publish glows when there are unpublished changes
+
 ### 0.64.0 (2026-11-03)
 
 * :sparkles: Tap the rank card (Accueil or Profil) to slide up your own stats drawer, the same one as a teammate's in the leaderboard (14-day chart, month XP, streak, mastery, answers, exam, XP sources). Works signed out too, from this phone's progress
