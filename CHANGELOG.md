@@ -2,6 +2,10 @@
 
 All notable changes to this project will be documented in this file. Versions follow the service-worker cache (`ltf-vNN` → `0.NN.0`), see [CONTRIBUTING.md](./CONTRIBUTING.md#git-commit-messages) for the commit guidelines.
 
+### 0.63.1 (2026-11-03)
+
+* :bug: Dashboard: long chat messages no longer widen the Équipe columns past the screen (icon buttons visible again)
+
 ### 0.63.0 (2026-11-03)
 
 * :lipstick: Dashboard Équipe: every action (accept, refuse, admin, remove, reset XP, delete…) is a round icon button on the right of its row, vertically centred, with a tooltip; each card shows its count

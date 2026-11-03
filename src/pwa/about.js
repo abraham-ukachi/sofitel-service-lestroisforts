@@ -74,6 +74,13 @@ const X_PATH =
 const TIMELINE = [
   [
     '2026-11-03',
+    '0.63.1',
+    false,
+    'Correctif : le chat du tableau de bord tient dans l’écran',
+    'Fix: the dashboard chat fits the screen',
+  ],
+  [
+    '2026-11-03',
     '0.63',
     false,
     'Tableau de bord : boutons-icônes, Annonce avec aperçu, Crédits revus',
