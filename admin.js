@@ -314,7 +314,8 @@ const DASHBOARD_CSS = `
 .admcredit .admtext{flex:1;min-width:0;display:flex;flex-direction:column;gap:4px}
 .admcredit .admfield{padding:7px 10px}
 .admcredit .crName{font-weight:700}
-.admcols{display:grid;gap:12px;align-items:start}
+.admcols{display:grid;grid-template-columns:minmax(0,1fr);gap:12px;align-items:start}
+.admcols>*{min-width:0}
 .admcols>.card{margin:0!important}
 .admkpis{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-bottom:12px}
 .admkpi{position:relative;text-align:left;padding:14px;border:0;border-radius:18px;color:inherit;font:inherit;
@@ -342,7 +343,7 @@ const DASHBOARD_CSS = `
   .admov .admtabs{width:100%;max-width:720px;align-self:center;box-sizing:border-box}
   .admov .cbody{padding-left:max(14px,calc((100% - 1180px)/2))!important;
     padding-right:max(14px,calc((100% - 1180px)/2))!important}
-  .admcols{grid-template-columns:1fr 1fr}
+  .admcols{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}
   .admkpis{grid-template-columns:repeat(4,1fr)}
 }
 `;
