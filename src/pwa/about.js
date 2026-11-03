@@ -73,6 +73,13 @@ const X_PATH =
 // the journey so far: [date, version, major?, FR, EN] (newest first) 🧭
 const TIMELINE = [
   [
+    '2026-11-03',
+    '0.62',
+    false,
+    'Tableau de bord plus clair : chiffres clés, graphique XP, avatars',
+    'Clearer dashboard: key stats, XP chart, avatars',
+  ],
+  [
     '2026-11-02',
     '0.61',
     false,

@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file. Versions follow the service-worker cache (`ltf-vNN` → `0.NN.0`), see [CONTRIBUTING.md](./CONTRIBUTING.md#git-commit-messages) for the commit guidelines.
 
+### 0.62.0 (2026-11-03)
+
+* :lipstick: Dashboard overview: four big stat cards (a gold « Demandes à valider » card opens the Équipe tab), a 14-day team XP bar chart with the week-on-week trend, and the top 3 with their photos
+* :lipstick: Dashboard: round avatars (Google photo or coloured initials) on every person row, and a two-column layout on laptop & desktop
+
 ### 0.61.1 (2026-11-02)
 
 * :bug: About drawer: the Infos / Parcours / Crédits chips stay pinned at the top while the timeline scrolls
