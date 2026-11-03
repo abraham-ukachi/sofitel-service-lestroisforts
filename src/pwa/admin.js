@@ -309,11 +309,28 @@ const DASHBOARD_CSS = `
   overflow-wrap:anywhere;transition:opacity .2s}
 .admpreview.off{opacity:.4;filter:grayscale(1)}
 .admmeta{display:flex;justify-content:space-between;font-size:12px;opacity:.6;margin-top:6px}
-.admcredit{display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid rgba(127,127,127,.12)}
-.admcredit:last-child{border-bottom:0}
-.admcredit .admtext{flex:1;min-width:0;display:flex;flex-direction:column;gap:4px}
-.admcredit .admfield{padding:7px 10px}
-.admcredit .crName{font-weight:700}
+.crHint{font-size:12px;opacity:.55;margin:0 2px 6px}
+.crList{position:relative}
+.admcredit{position:relative;display:flex;align-items:center;gap:12px;padding:10px 6px;border-radius:14px;
+  transition:transform .18s ease,box-shadow .18s ease,background .18s ease}
+.admcredit+.admcredit{box-shadow:inset 0 1px 0 rgba(127,127,127,.12)}
+.admcredit .admtext{flex:1;min-width:0;display:flex;flex-direction:column;gap:1px}
+.crGrip{flex:none;cursor:grab;touch-action:none;user-select:none;-webkit-user-select:none;font-size:18px;line-height:1;
+  opacity:.35;padding:8px 2px;margin:-8px 0}
+.crGrip:hover{opacity:.8}
+.crInput{display:block;width:100%;box-sizing:border-box;border:0;border-radius:8px;background:none;color:inherit;font:inherit;
+  padding:3px 6px;margin-left:-6px;outline:none;transition:background .15s}
+.crInput:hover{background:rgba(127,127,127,.08)}
+.crInput:focus{background:rgba(127,127,127,.12);box-shadow:0 0 0 2px rgba(201,164,92,.45)}
+.crName{font-weight:700;font-size:15px}
+.crRole{font-size:13px;opacity:.65}
+.crDel{flex:none;width:30px;height:30px;border-radius:50%;border:0;background:none;color:inherit;font-size:14px;opacity:.35;
+  cursor:pointer;transition:opacity .15s,background .15s,color .15s}
+.crDel:hover,.crDel:focus-visible{opacity:1;color:#e5484d;background:rgba(229,72,77,.12)}
+.admcredit.crDrag{transition:box-shadow .18s ease,background .18s ease;z-index:3;background:var(--sf2,#2a2a2a);
+  box-shadow:0 12px 30px rgba(0,0,0,.35)}
+.admcredit.crDrag .crGrip{cursor:grabbing;opacity:.9}
+.crDirty{box-shadow:0 0 0 3px rgba(201,164,92,.35)}
 .admcols{display:grid;grid-template-columns:minmax(0,1fr);gap:12px;align-items:start}
 .admcols>*{min-width:0}
 .admcols>.card{margin:0!important}

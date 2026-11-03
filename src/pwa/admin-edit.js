@@ -165,10 +165,62 @@ function toast(text) {
 /**
  * `confirmAction` - Function ❓
  *
+ * Asks with the app's own dialog (`.cdlg`, the same as the chat's delete dialog), never the system one.
+ *
  * @param { string } question - what's about to happen
- * @returns { boolean } - true when the owner confirms
+ * @param { object } [options] - `{ text, ok, icon, danger }`: a detail line, the OK label, the emoji, red OK
+ * @returns { Promise<boolean> } - true when the owner confirms
  */
-const confirmAction = (question) => window.confirm(question);
+function confirmAction(question, options = {}) {
+  const { text = '', ok = translate('Confirmer', 'Confirm'), icon = '⚠️', danger = true } = options;
+  return new Promise((resolve) => {
+    // one dialog at a time
+    const previous = document.querySelector('.cdlg.admdlg');
+    if (previous) previous.remove();
+    const dialog = document.createElement('div');
+    dialog.className = 'cdlg admdlg';
+    // above the dashboard and its entry sheets 🔝
+    dialog.style.zIndex = '90';
+    dialog.innerHTML =
+      '<div class="cdlgbox" role="dialog" aria-modal="true"><div class="cdlgic">' +
+      icon +
+      '</div><h3>' +
+      escapeHtml(question) +
+      '</h3>' +
+      (text ? '<p class="cdlgtx">' + escapeHtml(text) + '</p>' : '') +
+      '<div class="cdlgbt"><button class="btn sec" data-dlg="no">' +
+      translate('Annuler', 'Cancel') +
+      '</button><button class="btn' +
+      (danger ? ' danger' : '') +
+      '" data-dlg="yes">' +
+      escapeHtml(ok) +
+      '</button></div></div>';
+    // close (with a short fade) and answer 👋
+    const close = (answer) => {
+      dialog.classList.add('out');
+      document.removeEventListener('keydown', onKey, true);
+      setTimeout(() => dialog.remove(), 160);
+      resolve(answer);
+    };
+    // ⌨️ Escape = cancel, Enter = confirm (desktop)
+    const onKey = (event) => {
+      if (event.key === 'Escape' || event.key === 'Enter') {
+        event.preventDefault();
+        event.stopPropagation();
+        close(event.key === 'Enter');
+      }
+    };
+    dialog.addEventListener('click', (event) => {
+      const choice = event.target.closest('[data-dlg]');
+      // a tap on the dark backdrop or "Annuler" cancels
+      if (event.target === dialog) close(false);
+      else if (choice) close(choice.dataset.dlg === 'yes');
+    });
+    document.addEventListener('keydown', onKey, true);
+    document.body.appendChild(dialog);
+    dialog.querySelector('[data-dlg="yes"]').focus();
+  });
+}
 
 /**
  * `runAction` - Async Function ⚙️
@@ -448,7 +500,7 @@ export function renderManage(body, data, user, reload) {
     });
 
   // 👆 one listener for every button
-  body.onclick = (event) => {
+  body.onclick = async (event) => {
     const button = event.target.closest('[data-act]');
     if (!button) return;
     const action = button.dataset.act,
@@ -505,7 +557,13 @@ export function renderManage(body, data, user, reload) {
         );
         break;
       case 'removeMember':
-        if (!member || !confirmAction(translate('Retirer ', 'Remove ') + (member.data.name || '') + ' ?'))
+        if (
+          !member ||
+          !(await confirmAction(translate('Retirer ', 'Remove ') + (member.data.name || '') + ' ?', {
+            icon: '👋',
+            ok: translate('Retirer', 'Remove'),
+          }))
+        )
           return;
         runAction(
           () => deleteDoc(doc(firestore, 'team', targetId)),
@@ -515,11 +573,12 @@ export function renderManage(body, data, user, reload) {
         break;
       case 'resetXp':
         if (
-          !confirmAction(
+          !(await confirmAction(
             translate('Remettre l’XP et la progression de ', 'Reset the XP and progress of ') +
               nameOf(targetId) +
               ' ?',
-          )
+            { icon: '🔄', ok: translate('Remettre à zéro', 'Reset') },
+          ))
         )
           return;
         runAction(
@@ -533,7 +592,13 @@ export function renderManage(body, data, user, reload) {
         );
         break;
       case 'deleteMessage':
-        if (!confirmAction(translate('Supprimer ce message ?', 'Delete this message?'))) return;
+        if (
+          !(await confirmAction(translate('Supprimer ce message ?', 'Delete this message?'), {
+            icon: '🗑️',
+            ok: translate('Supprimer', 'Delete'),
+          }))
+        )
+          return;
         runAction(
           () => deleteDoc(doc(firestore, 'chat', targetId)),
           translate('Message supprimé', 'Message deleted'),
@@ -547,7 +612,13 @@ export function renderManage(body, data, user, reload) {
           );
         if (!old.length)
           return toast(translate('Aucune photo de plus de 30 jours', 'No photo older than 30 days'));
-        if (!confirmAction(translate('Supprimer ', 'Delete ') + old.length + ' photo(s) ?')) return;
+        if (
+          !(await confirmAction(translate('Supprimer ', 'Delete ') + old.length + ' photo(s) ?', {
+            icon: '🖼️',
+            ok: translate('Supprimer', 'Delete'),
+          }))
+        )
+          return;
         runAction(
           () => Promise.all(old.map((message) => deleteDoc(doc(firestore, 'chat', message.id)))),
           old.length + ' photo(s) ' + translate('supprimée(s)', 'deleted'),
@@ -556,7 +627,13 @@ export function renderManage(body, data, user, reload) {
         break;
       }
       case 'deleteBoard':
-        if (!confirmAction(translate('Retirer du classement ?', 'Remove from the leaderboard?'))) return;
+        if (
+          !(await confirmAction(translate('Retirer du classement ?', 'Remove from the leaderboard?'), {
+            icon: '🏆',
+            ok: translate('Retirer', 'Remove'),
+          }))
+        )
+          return;
         runAction(
           () => deleteDoc(doc(firestore, 'board', targetId)),
           translate('Retiré du classement', 'Removed'),
@@ -654,7 +731,7 @@ export async function renderAnnounce(body) {
 /**
  * `renderCredits` - Async Function 🎬
  *
- * Draws the credits editor (one row per person: name & role, move up, delete, add) and saves the list to
+ * Draws the credits editor (one row per person: drag to reorder, name & role, delete, add) and saves the list to
  * `content/credits` (a JSON text, read by the About drawer of every phone, see about.js).
  *
  * @param { HTMLElement } body - where to draw
@@ -675,44 +752,118 @@ export async function renderCredits(body) {
       role: row.querySelector('.crRole').value.trim().slice(0, 80),
     }));
 
-  // 🖼️ draws the rows
+  // 🖼️ draws the rows (grip · avatar · name & role · delete)
   const draw = () => {
     const rows = people
       .map(
         (person, index) =>
-          `<div class="crRow admcredit">${avatarHtml(person.name || '?')}<div class="admtext">` +
-          `<input class="crName admfield" maxlength="80" placeholder="${translate('Nom', 'Name')}" value="${escapeHtml(person.name)}">` +
-          `<input class="crRole admfield" maxlength="80" placeholder="${translate('Rôle (ex. Chef de rang)', 'Role (e.g. Head waiter)')}" value="${escapeHtml(person.role)}">` +
-          `</div><div class="admacts">` +
-          `<button class="admicon" data-cr="up" data-index="${index}" title="${translate('Monter', 'Move up')}" aria-label="up"${index ? '' : ' disabled style="opacity:.35"'}><span>↑</span></button>` +
-          `<button class="admicon danger" data-cr="del" data-index="${index}" title="${translate('Supprimer', 'Delete')}" aria-label="delete"><span>🗑️</span></button>` +
-          `</div></div>`,
+          `<div class="crRow admcredit" data-index="${index}">` +
+          `<span class="crGrip" title="${translate('Glisser pour déplacer', 'Drag to move')}" aria-label="drag">⠿</span>` +
+          `${avatarHtml(person.name || '?')}<div class="admtext">` +
+          `<input class="crName crInput" maxlength="80" placeholder="${translate('Nom', 'Name')}" value="${escapeHtml(person.name)}">` +
+          `<input class="crRole crInput" maxlength="80" placeholder="${translate('Rôle (ex. Chef de rang)', 'Role (e.g. Head waiter)')}" value="${escapeHtml(person.role)}">` +
+          `</div><button class="crDel" data-cr="del" data-index="${index}" title="${translate('Supprimer', 'Delete')}" aria-label="delete">✕</button></div>`,
       )
       .join('');
     body.innerHTML =
       cardHtml(
         '🎬 ' + translate('Crédits de l’app', 'App credits'),
-        (rows || `<p class="admempty">${translate('Personne pour l’instant.', 'Nobody yet.')}</p>`) +
+        (rows
+          ? `<p class="crHint">${translate('Maintenez ⠿ et glissez pour changer l’ordre.', 'Hold ⠿ and drag to reorder.')}</p><div class="crList">${rows}</div>`
+          : `<p class="admempty">${translate('Personne pour l’instant.', 'Nobody yet.')}</p>`) +
           `<button class="admdashed" data-cr="add">＋ ${translate('Ajouter une personne', 'Add a person')}</button>`,
         people.length,
       ) +
-      `<button class="btn admwide" data-cr="save">🚀 ${translate('Publier', 'Publish')}</button>` +
+      `<button class="btn admwide${isDirty ? ' crDirty' : ''}" data-cr="save">🚀 ${translate('Publier', 'Publish')}</button>` +
       `<p class="muted sm" style="text-align:center">${translate(
         'Ils défilent dans Profil › À propos › Crédits, sur toutes les apps (visible par tous).',
         'They roll in Profil › About › Credits on every phone (visible to everyone).',
       )}</p>`;
   };
 
-  body.onclick = (event) => {
+  // ✏️ something changed and isn't published yet: the Publish button glows
+  let isDirty = false;
+  const markDirty = () => {
+    isDirty = true;
+    const saveButton = body.querySelector('[data-cr="save"]');
+    if (saveButton) saveButton.classList.add('crDirty');
+  };
+  body.oninput = (event) => event.target.closest('.crInput') && markDirty();
+
+  // ✋ drag a row by its grip: the others slide out of the way, drop = new position
+  body.onpointerdown = (event) => {
+    const grip = event.target.closest('.crGrip');
+    if (!grip) return;
+    event.preventDefault();
+    const row = grip.closest('.crRow'),
+      rows = Array.from(body.querySelectorAll('.crRow')),
+      from = rows.indexOf(row),
+      step = (rows.length > 1 ? rows[1].offsetTop - rows[0].offsetTop : 0) || row.offsetHeight || 56,
+      startY = event.clientY,
+      minimum = -from * step,
+      maximum = (rows.length - 1 - from) * step;
+    let target = from;
+    row.classList.add('crDrag');
+    grip.setPointerCapture(event.pointerId);
+    if (navigator.vibrate) navigator.vibrate(8);
+
+    // 👉 follow the finger, shift the rows it passes over
+    const onMove = (moveEvent) => {
+      const offset = Math.max(minimum, Math.min(maximum, moveEvent.clientY - startY));
+      row.style.transform = `translateY(${offset}px) scale(1.02)`;
+      target = Math.max(0, Math.min(rows.length - 1, from + Math.round(offset / step)));
+      rows.forEach((other, position) => {
+        if (other === row) return;
+        let shift = 0;
+        if (from < target && position > from && position <= target) shift = -step;
+        if (from > target && position < from && position >= target) shift = step;
+        other.style.transform = shift ? `translateY(${shift}px)` : '';
+      });
+    };
+
+    // 🫳 drop: move the person in the list and redraw
+    const onUp = () => {
+      grip.removeEventListener('pointermove', onMove);
+      grip.removeEventListener('pointerup', onUp);
+      grip.removeEventListener('pointercancel', onUp);
+      people = readRows();
+      if (target !== from) {
+        const moved = people.splice(from, 1)[0];
+        people.splice(target, 0, moved);
+        isDirty = true;
+      }
+      draw();
+    };
+    grip.addEventListener('pointermove', onMove);
+    grip.addEventListener('pointerup', onUp);
+    grip.addEventListener('pointercancel', onUp);
+  };
+
+  body.onclick = async (event) => {
     const button = event.target.closest('[data-cr]');
     if (!button) return;
     people = readRows();
     const index = Number(button.dataset.index);
-    if (button.dataset.cr === 'add') people.push({ name: '', role: '' });
-    else if (button.dataset.cr === 'del') people.splice(index, 1);
-    else if (button.dataset.cr === 'up' && index > 0)
-      people.splice(index - 1, 2, people[index], people[index - 1]);
-    else if (button.dataset.cr === 'save') {
+    if (button.dataset.cr === 'add') {
+      people.push({ name: '', role: '' });
+      isDirty = true;
+    } else if (button.dataset.cr === 'del') {
+      const person = people[index];
+      // an empty row goes without asking
+      if (
+        person.name &&
+        !(await confirmAction(
+          translate('Retirer ', 'Remove ') + person.name + translate(' des crédits ?', ' from the credits?'),
+          {
+            icon: '🎬',
+            ok: translate('Retirer', 'Remove'),
+          },
+        ))
+      )
+        return;
+      people.splice(index, 1);
+      isDirty = true;
+    } else if (button.dataset.cr === 'save') {
       const clean = people.filter((person) => person.name).slice(0, 200);
       return runAction(
         () =>
@@ -721,7 +872,10 @@ export async function renderCredits(body) {
             ts: serverTimestamp(),
           }),
         translate('Crédits publiés', 'Credits published'),
-      );
+      ).then(() => {
+        isDirty = false;
+        button.classList.remove('crDirty');
+      });
     }
     draw();
     if (button.dataset.cr === 'add') {
@@ -771,6 +925,20 @@ function loadBuiltInData() {
  * @returns { any } - a deep copy
  */
 const copyOf = (value) => JSON.parse(JSON.stringify(value === undefined ? null : value));
+
+/**
+ * `entrySubtitle` - Function 📝
+ *
+ * @param { any } entry - one entry of a list section
+ * @returns { string } - its short description (plain text), in the app's language when it's FR/EN 🌍
+ */
+function entrySubtitle(entry) {
+  if (!entry || typeof entry !== 'object') return '';
+  const value = entry.d || entry.desc || entry.s || entry.a || entry.h || '';
+  if (value && typeof value === 'object' && !Array.isArray(value))
+    return String(translate(value.fr || value.en || '', value.en || value.fr || ''));
+  return Array.isArray(value) ? value.join(', ') : String(value);
+}
 
 /**
  * `entryLabel` - Function 🏷️
@@ -989,7 +1157,16 @@ async function publishSection(redraw) {
  * @returns { Promise<void> }
  */
 async function restoreSection(redraw) {
-  if (!confirmAction(translate('Revenir à la version d’origine ?', 'Go back to the built-in version?')))
+  if (
+    !(await confirmAction(translate('Revenir à la version d’origine ?', 'Go back to the built-in version?'), {
+      text: translate(
+        'Toutes les apps reprendront le contenu d’origine.',
+        'Every phone goes back to the built-in content.',
+      ),
+      icon: '↩️',
+      ok: translate('Rétablir', 'Restore'),
+    }))
+  )
     return;
   await runAction(
     async () => {
@@ -1231,9 +1408,7 @@ function globalResultsHtml() {
           (SECTION_ICONS[result.section] || '📄') +
             ' ' +
             translate(result.names[0], result.names[1]) +
-            (result.entry
-              ? ' · ' + (result.entry.d || result.entry.desc || result.entry.s || result.entry.a || '')
-              : ''),
+            (result.entry ? ' · ' + entrySubtitle(result.entry) : ''),
           'data-section="' + result.section + '" data-open="' + result.index + '"',
           false,
           result.index,
@@ -1260,7 +1435,7 @@ function sectionRowsHtml(entries, nameField) {
     .map((row) =>
       entryRowHtml(
         entryLabel(row.entry, nameField, row.index),
-        String(row.entry.d || row.entry.desc || row.entry.s || row.entry.a || ''),
+        entrySubtitle(row.entry),
         'data-do="edit" data-index="' + row.index + '"',
         true,
         row.index,
@@ -1380,13 +1555,20 @@ function drawContent(body) {
       footer;
   }
 
-  body.onclick = (event) => {
+  body.onclick = async (event) => {
     const button = event.target.closest('[data-do]');
     if (!button) return;
     const index = Number(button.dataset.index);
     switch (button.dataset.do) {
       case 'back':
-        if (isDirty && !confirmAction(translate('Quitter sans publier ?', 'Leave without publishing?')))
+        if (
+          isDirty &&
+          !(await confirmAction(translate('Quitter sans publier ?', 'Leave without publishing?'), {
+            text: translate('Vos modifications seront perdues.', 'Your changes will be lost.'),
+            icon: '📝',
+            ok: translate('Quitter', 'Leave'),
+          }))
+        )
           return;
         workingSection = '';
         workingValue = null;
@@ -1429,10 +1611,11 @@ function drawContent(body) {
         break;
       case 'remove':
         if (
-          confirmAction(
+          await confirmAction(
             translate('Supprimer « ', 'Delete "') +
               entryLabel(workingValue[index], names[2], index) +
               translate(' » ?', '"?'),
+            { icon: '🗑️', ok: translate('Supprimer', 'Delete') },
           )
         ) {
           workingValue.splice(index, 1);
