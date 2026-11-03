@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. Versions follow the service-worker cache (`ltf-vNN` → `0.NN.0`), see [CONTRIBUTING.md](./CONTRIBUTING.md#git-commit-messages) for the commit guidelines.
 
+### 0.63.0 (2026-11-03)
+
+* :lipstick: Dashboard Équipe: every action (accept, refuse, admin, remove, reset XP, delete…) is a round icon button on the right of its row, vertically centred, with a tooltip; each card shows its count
+* :lipstick: Dashboard Annonce: live preview of the banner, a 500-character counter and an on / off switch
+* :lipstick: Dashboard Crédits: avatar rows with stacked name & role fields, ↑ / 🗑️ icon buttons and a dashed « Ajouter » button
+* :lipstick: Dashboard Carte: styled fields, switches for yes / no fields; every dashboard icon is centred
+
 ### 0.62.0 (2026-11-03)
 
 * :lipstick: Dashboard overview: four big stat cards (a gold « Demandes à valider » card opens the Équipe tab), a 14-day team XP bar chart with the week-on-week trend, and the top 3 with their photos

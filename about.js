@@ -74,6 +74,13 @@ const X_PATH =
 const TIMELINE = [
   [
     '2026-11-03',
+    '0.63',
+    false,
+    'Tableau de bord : boutons-icônes, Annonce avec aperçu, Crédits revus',
+    'Dashboard: icon buttons, Notice preview, new Credits editor',
+  ],
+  [
+    '2026-11-03',
     '0.62',
     false,
     'Tableau de bord plus clair : chiffres clés, graphique XP, avatars',
