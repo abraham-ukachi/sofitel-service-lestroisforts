@@ -740,14 +740,15 @@ function openBoard() {
 addEventListener(
   'popstate',
   (event) => {
-    if (!overlay) return;
+    // nothing of ours is open? the app's router handles it
+    if (!overlay && !drawer && !ignoreNextPop) return;
     event.stopImmediatePropagation();
     // we went back ourselves (the drawer was swiped away)? nothing else to close
     if (ignoreNextPop) {
       ignoreNextPop = false;
       return;
     }
-    // the teammate drawer is open? close it first, the leaderboard stays
+    // the teammate drawer is open? close it first, the leaderboard (if open) stays
     if (drawer) {
       closeDrawer();
       return;
@@ -934,9 +935,11 @@ function personHtml(entry) {
     escapeHtml(entry.name || 'Staff') +
     (isMe ? ' · ' + translate('vous', 'you') : '') +
     '</div><div class="muted">' +
-    (MEDALS[allTimePosition - 1] || '#' + allTimePosition) +
-    ' ' +
-    translate('au classement général', 'all-time') +
+    (allTimePosition
+      ? (MEDALS[allTimePosition - 1] || '#' + allTimePosition) +
+        ' ' +
+        translate('au classement général', 'all-time')
+      : escapeHtml(rankName()) + ' · ' + translate('pas encore au classement', 'not on the board yet')) +
     '</div></div><div style="font-weight:800;font-size:20px;color:var(--gold)">' +
     wholeNumber(entry.xp) +
     ' XP</div></div>' +
@@ -983,11 +986,11 @@ function personHtml(entry) {
  *
  * Slides up the drawer of one teammate (swipe down, tap outside or Back closes it).
  *
- * @param { string } uid - the teammate's uid
+ * @param { string } uid - the teammate's uid (or `MY_ID` for my own, freshest stats)
  * @returns { void }
  */
 function openPerson(uid) {
-  const entry = boardEntries.find((candidate) => candidate.uid === uid);
+  const entry = uid === MY_ID ? myEntry() : boardEntries.find((candidate) => candidate.uid === uid);
   if (!entry || drawer) return;
   // the app's bottom-sheet look (`.ov.scrim` + `.sheet` = swipe down to close for free 👇), above the leaderboard
   drawer = document.createElement('div');
@@ -1026,6 +1029,85 @@ new MutationObserver(() => {
     history.back();
   }
 }).observe(document.body, { childList: true });
+
+// ===== MY OWN DRAWER 🙋 ===== //
+
+// the id of my own drawer, opened from the rank card (works signed out too) 🔑
+const MY_ID = '__me__';
+
+// the ranks, one every 300 XP (same list as the app's `RANKS`) 🏅
+const RANK_NAMES = [
+  ['Commis', 'Commis'],
+  ['Demi-chef de rang', 'Junior waiter'],
+  ['Chef de rang', 'Head waiter'],
+  ["Maître d'hôtel", "Maître d'hôtel"],
+  ['Directeur de salle', 'Restaurant manager'],
+];
+
+/**
+ * `rankName` - Function 🏅
+ *
+ * @returns { string } - my current rank, from my local XP
+ */
+function rankName() {
+  const names = RANK_NAMES[Math.min(RANK_NAMES.length - 1, Math.floor(wholeNumber(readProgress().xp) / 300))];
+  return translate(names[0], names[1]);
+}
+
+/**
+ * `myEntry` - Function 🙋
+ *
+ * My stats as a board entry, straight from this phone (so they're always up to date), with my
+ * online entry's month start (`base`) when I'm on the board.
+ *
+ * @returns { object } - a board entry (uid = my uid when signed in)
+ */
+function myEntry() {
+  const progress = readProgress(),
+    totals = answerTotals(progress),
+    online = user ? boardEntries.find((candidate) => candidate.uid === user.uid) : null,
+    activity = readActivity(),
+    month = currentMonth();
+  return {
+    uid: user ? user.uid : MY_ID,
+    name: user ? user.displayName || 'Staff' : translate('Vous', 'You'),
+    pic: user && SAFE_PICTURE_PATTERN.test(user.photoURL || '') ? user.photoURL : '',
+    xp: wholeNumber(progress.xp),
+    base: online && online.month === month ? wholeNumber(online.base) : 0,
+    month: month,
+    streak: wholeNumber(progress.streak),
+    mastered: masteredCount(progress),
+    right: totals.right,
+    wrong: totals.wrong,
+    exam: Math.min(100, wholeNumber(progress.exam && progress.exam.score)),
+    days: mergeCounts(activity.days, online ? cleanCounts(online.days, DAY_PATTERN) : {}),
+    modes: mergeCounts(activity.modes, online ? cleanCounts(online.modes, ACTIVITIES) : {}),
+  };
+}
+
+/**
+ * `isRankCard` - Function 🔎
+ *
+ * @param { Element } card - a card
+ * @returns { boolean } - true for the rank card of Accueil (`.rankc`) or Profil (avatar + rank + bar)
+ */
+const isRankCard = (card) =>
+  card.classList.contains('rankc') ||
+  Boolean(card.querySelector(':scope > .av.big') && card.querySelector('.rk'));
+
+// 👆 a tap on my rank card (Accueil or Profil): slide up my own drawer, like a teammate's in the leaderboard
+document.addEventListener('click', (event) => {
+  const card = event.target.closest('.rankc, .card.row');
+  if (!card || !isRankCard(card) || event.target.closest('button, a, input')) return;
+  openPerson(MY_ID);
+});
+
+// 👉 make it look tappable
+const rankCardStyle = document.createElement('style');
+rankCardStyle.textContent =
+  '.rankc,.card.row:has(> .av.big){cursor:pointer;transition:transform .12s}' +
+  '.rankc:active,.card.row:has(> .av.big):active{transform:scale(.985)}';
+document.head.appendChild(rankCardStyle);
 
 // ===== BOOT 🚀 ===== //
 
