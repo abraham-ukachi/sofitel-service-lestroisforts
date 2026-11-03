@@ -275,6 +275,37 @@ const DASHBOARD_CSS = `
 .admbar.dirty .grow{color:var(--gold,#c9a45c);opacity:1}
 .admbar button[disabled]{opacity:.4}
 .admempty{text-align:center;opacity:.6;padding:24px 0}
+.admcols{display:grid;gap:12px;align-items:start}
+.admcols>.card{margin:0!important}
+.admkpis{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-bottom:12px}
+.admkpi{position:relative;text-align:left;padding:14px;border:0;border-radius:18px;color:inherit;font:inherit;
+  background:linear-gradient(145deg,rgba(127,127,127,.16),rgba(127,127,127,.06));overflow:hidden;min-width:0}
+.admkpi .admkpiicon{position:absolute;right:10px;top:8px;font-size:26px;opacity:.85}
+.admkpi .admkpivalue{font-size:28px;font-weight:800;line-height:1.1;margin-top:14px}
+.admkpi .admkpilabel{font-size:12.5px;opacity:.7;margin-top:2px}
+.admkpi.alert{background:linear-gradient(145deg,var(--gold,#c9a45c),#a8843f);color:#111;cursor:pointer}
+.admkpi.alert .admkpilabel{opacity:.85}
+.admstat{background:rgba(127,127,127,.08);border-radius:12px;padding:10px 12px;min-width:0}
+.admstat .admstatvalue{font-weight:800;font-size:18px}
+.admchart{display:flex;align-items:flex-end;gap:4px;height:120px;margin:10px 0 4px}
+.admchart .admcol{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;height:100%;min-width:0}
+.admchart .admcolbar{width:100%;max-width:26px;border-radius:6px 6px 2px 2px;background:var(--gold,#c9a45c);min-height:3px}
+.admchart .admcol.today .admcolbar{box-shadow:0 0 0 2px rgba(255,255,255,.35)}
+.admchart .admcolday{font-size:10px;opacity:.6;margin-top:4px}
+.admpodium{display:flex;flex-direction:column;gap:2px}
+.admperson{display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid rgba(127,127,127,.12)}
+.admperson:last-child{border-bottom:0}
+.admperson .grow{min-width:0}
+.admperson .admmedal{font-size:20px;width:26px;text-align:center}
+.admavatar{flex:none;width:36px;height:36px;border-radius:50%;object-fit:cover;display:inline-flex;align-items:center;
+  justify-content:center;font-weight:800;font-size:14px;color:#fff}
+@media (min-width:960px){
+  .admov .admtabs{width:100%;max-width:720px;align-self:center;box-sizing:border-box}
+  .admov .cbody{padding-left:max(14px,calc((100% - 1180px)/2))!important;
+    padding-right:max(14px,calc((100% - 1180px)/2))!important}
+  .admcols{grid-template-columns:1fr 1fr}
+  .admkpis{grid-template-columns:repeat(4,1fr)}
+}
 `;
 
 // ===== GATHER THE NUMBERS 📥 ===== //
@@ -389,7 +420,7 @@ const cardHtml = (title, body) =>
  * @returns { string } - one tile of a stats grid
  */
 const tileHtml = (label, value) =>
-  '<div style="background:rgba(127,127,127,.08);border-radius:12px;padding:9px 11px"><div style="font-weight:800;font-size:17px">' +
+  '<div class="admstat"><div class="admstatvalue">' +
   value +
   '</div><div class="muted sm">' +
   label +
@@ -712,6 +743,185 @@ function deviceHtml(data) {
   );
 }
 
+// ===== OVERVIEW HERO ✨ ===== //
+
+// the avatar colours (one per person, from their name) 🎨
+const AVATAR_COLORS = [
+  '#7c5cbf',
+  '#2f7d6d',
+  '#b5523b',
+  '#3a6ea5',
+  '#a0577a',
+  '#6b7d2f',
+  '#b07a1f',
+  '#4b5d8a',
+];
+
+/**
+ * `avatarHtml` - Function 🧑
+ *
+ * @param { string } name - the person's name
+ * @param { string } [picture] - their Google photo address (optional)
+ * @returns { string } - a round avatar: the photo, or the initials on a colour of their own
+ */
+export function avatarHtml(name, picture) {
+  const label = String(name || 'Staff');
+  if (picture && /^https:\/\/[a-z0-9.-]+\.googleusercontent\.com\//.test(picture))
+    return (
+      '<img class="admavatar" src="' +
+      escapeHtml(picture) +
+      '" alt="" referrerpolicy="no-referrer" loading="lazy">'
+    );
+  const initials = label
+    .split(/[\s@._-]+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((word) => word[0].toUpperCase())
+    .join('');
+  const hash = Array.from(label).reduce((sum, character) => (sum * 31 + character.charCodeAt(0)) >>> 0, 7);
+  return (
+    '<span class="admavatar" style="background:' +
+    AVATAR_COLORS[hash % AVATAR_COLORS.length] +
+    '">' +
+    escapeHtml(initials || '?') +
+    '</span>'
+  );
+}
+
+/**
+ * `dayKey` - Function 📅
+ *
+ * @param { Date } date - a day
+ * @returns { string } - its key in the leaderboard (`YYYY-MM-DD`, local time)
+ */
+function dayKey(date) {
+  return (
+    date.getFullYear() +
+    '-' +
+    String(date.getMonth() + 1).padStart(2, '0') +
+    '-' +
+    String(date.getDate()).padStart(2, '0')
+  );
+}
+
+/**
+ * `kpiHtml` - Function 🔢
+ *
+ * @param { string } icon - the emoji
+ * @param { string } value - the big number (already escaped)
+ * @param { string } label - what it is
+ * @param { string } [tab] - a tab to open on tap (makes it a gold alert card)
+ * @returns { string } - one big stat card
+ */
+function kpiHtml(icon, value, label, tab) {
+  return (
+    '<button class="admkpi' +
+    (tab ? ' alert" data-go="' + tab : '') +
+    '"' +
+    (tab ? '' : ' tabindex="-1"') +
+    '><span class="admkpiicon">' +
+    icon +
+    '</span><div class="admkpivalue">' +
+    value +
+    '</div><div class="admkpilabel">' +
+    label +
+    '</div></button>'
+  );
+}
+
+/**
+ * `heroHtml` - Function ✨
+ *
+ * @param { object } data - the gathered numbers
+ * @returns { string } - the top of the overview: 4 big stats, the team XP of the last 14 days & the top 3
+ */
+function heroHtml(data) {
+  const entries = data.byId.board.docs.map((entry) => entry.data),
+    team = data.byId.team.docs,
+    pending = data.byId.requests.docs.filter((request) => !request.data.refused).length,
+    weekAgo = Date.now() - 7 * 86400000,
+    active = data.byId.users.docs.filter((account) => (toDate(account.data.ts) || 0) >= weekAgo).length;
+  // 📊 the team XP of each of the last 14 days (oldest first)
+  const days = Array.from({ length: 14 }, (unused, index) => {
+    const day = new Date();
+    day.setDate(day.getDate() - (13 - index));
+    const key = dayKey(day);
+    return {
+      day: day,
+      xp: entries.reduce((sum, entry) => sum + (+(entry.days || {})[key] || 0), 0),
+    };
+  });
+  const weekXp = days.slice(7).reduce((sum, item) => sum + item.xp, 0),
+    lastWeekXp = days.slice(0, 7).reduce((sum, item) => sum + item.xp, 0),
+    highest = Math.max(1, ...days.map((item) => item.xp)),
+    trend = lastWeekXp ? Math.round((100 * (weekXp - lastWeekXp)) / lastWeekXp) : 0;
+  const bars = days
+    .map(
+      (item, index) =>
+        '<div class="admcol' +
+        (index === 13 ? ' today' : '') +
+        '" title="' +
+        item.xp +
+        ' XP"><div class="admcolbar" style="height:' +
+        Math.round((100 * item.xp) / highest) +
+        '%"></div><div class="admcolday">' +
+        escapeHtml(item.day.toLocaleDateString(translate('fr-FR', 'en-GB'), { weekday: 'narrow' })) +
+        '</div></div>',
+    )
+    .join('');
+  // 🥇 the top 3 by XP
+  const medals = ['🥇', '🥈', '🥉'];
+  const podium = entries
+    .slice()
+    .sort((first, second) => (+second.xp || 0) - (+first.xp || 0))
+    .slice(0, 3)
+    .map(
+      (entry, index) =>
+        '<div class="admperson"><span class="admmedal">' +
+        medals[index] +
+        '</span>' +
+        avatarHtml(entry.name, entry.pic) +
+        '<div class="grow"><div class="admclip" style="font-weight:700">' +
+        escapeHtml(entry.name || 'Staff') +
+        '</div><div class="muted sm">🔥 ' +
+        (+entry.streak || 0) +
+        ' · ' +
+        (+entry.mastered || 0) +
+        ' ' +
+        translate('maîtrisées', 'mastered') +
+        '</div></div><b>' +
+        (+entry.xp || 0) +
+        ' XP</b></div>',
+    )
+    .join('');
+  return (
+    '<div class="admkpis">' +
+    (pending
+      ? kpiHtml('🛂', String(pending), translate('Demandes à valider', 'Requests to review'), 'manage')
+      : kpiHtml('👥', String(team.length), translate('Membres', 'Members'))) +
+    kpiHtml('🟢', String(active), translate('Actifs cette semaine', 'Active this week')) +
+    kpiHtml(
+      '⚡',
+      String(weekXp),
+      translate('XP (7 j)', 'XP (7 d)') +
+        (trend ? ' · ' + (trend > 0 ? '▲ ' : '▼ ') + Math.abs(trend) + ' %' : ''),
+    ) +
+    kpiHtml('🚀', 'v' + escapeHtml(window.LTF_APP_VERSION || '?'), translate('En ligne', 'Live')) +
+    '</div><div class="admcols" style="margin-bottom:12px">' +
+    cardHtml(
+      '📈 ' + translate('XP de l’équipe · 14 jours', 'Team XP · 14 days'),
+      '<div class="admchart">' + bars + '</div>',
+    ) +
+    cardHtml(
+      '🏅 Top 3',
+      podium
+        ? '<div class="admpodium">' + podium + '</div>'
+        : '<p class="muted sm">' + translate('Personne pour l’instant.', 'Nobody yet.') + '</p>',
+    ) +
+    '</div>'
+  );
+}
+
 /**
  * `dashboardHtml` - Function 🛠️
  *
@@ -720,12 +930,15 @@ function deviceHtml(data) {
  */
 function dashboardHtml(data) {
   return (
-    storageHtml(data) +
+    heroHtml(data) +
+    '<div class="admcols">' +
+    boardHtml(data) +
     teamHtml(data) +
     chatHtml(data) +
-    boardHtml(data) +
+    storageHtml(data) +
     serverHtml(data) +
     deviceHtml(data) +
+    '</div>' +
     '<p class="muted sm" style="text-align:center;margin:4px 0 20px">' +
     translate('Mis à jour ', 'Updated ') +
     escapeHtml(data.at.toLocaleTimeString(translate('fr-FR', 'en-GB'))) +
@@ -769,7 +982,11 @@ async function refresh() {
       if (!overlay) return;
       if (currentTab === 'manage') renderManage(body, data, user, reloadSoon);
       else {
-        body.onclick = null;
+        // 👆 a gold alert card opens its tab
+        body.onclick = (event) => {
+          const target = event.target.closest('[data-go]');
+          if (target) showTab(target.dataset.go);
+        };
         body.innerHTML = dashboardHtml(data);
       }
     }
@@ -830,7 +1047,7 @@ function openDashboard() {
     document.head.appendChild(style);
   }
   overlay = document.createElement('div');
-  overlay.className = 'chatov';
+  overlay.className = 'chatov admov';
   overlay.innerHTML =
     '<div class="sch"><button class="cx" aria-label="close">←</button><div class="grow"><div style="font-weight:700">' +
     translate('Tableau de bord', 'Dashboard') +

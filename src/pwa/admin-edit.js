@@ -54,6 +54,8 @@ import {
 } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
 // import the live content helpers 📝
 import { CONTENT_SECTIONS, readLiveContent, storeLiveContent } from './content.js';
+// import the round avatars of the dashboard 🧑
+import { avatarHtml } from './admin.js';
 
 // ===== FIREBASE 🔥 ===== //
 
@@ -214,16 +216,19 @@ const buttonHtml = (action, id, label, danger) =>
  * @param { string } title - the row title (already escaped)
  * @param { string } subtitle - the row subtitle (already escaped)
  * @param { string } buttons - the row buttons
+ * @param { object } [person] - who the row is about ({ name, email, pic }), drawn as a round avatar
  * @returns { string } - one managed row
  */
-const rowHtml = (title, subtitle, buttons) =>
-  '<div class="admline" style="padding:9px 0;border-bottom:1px solid rgba(127,127,127,.12)"><div style="font-weight:700;overflow-wrap:anywhere">' +
+const rowHtml = (title, subtitle, buttons, person) =>
+  '<div class="admline" style="display:flex;gap:10px;padding:10px 0;border-bottom:1px solid rgba(127,127,127,.12)">' +
+  (person ? avatarHtml(person.name || person.email, person.pic) : '') +
+  '<div style="flex:1;min-width:0"><div style="font-weight:700;overflow-wrap:anywhere">' +
   title +
   '</div>' +
   (subtitle ? '<div class="muted sm" style="overflow-wrap:anywhere">' + subtitle + '</div>' : '') +
   '<div class="row" style="gap:6px;flex-wrap:wrap;margin-top:6px">' +
   buttons +
-  '</div></div>';
+  '</div></div></div>';
 
 /**
  * `cardHtml` - Function 🗂️
@@ -300,6 +305,7 @@ export function renderManage(body, data, user, reload) {
             ? ''
             : buttonHtml('refuse', request.id, '⛔ ' + translate('Refuser', 'Refuse'))) +
           buttonHtml('deleteRequest', request.id, '🗑️ ' + translate('Supprimer', 'Delete'), true),
+        request.data,
       ),
     )
     .join('');
@@ -321,6 +327,7 @@ export function renderManage(body, data, user, reload) {
                 ? '⬇️ ' + translate('Rendre membre', 'Make member')
                 : '👑 ' + translate('Rendre admin', 'Make admin'),
             ) + buttonHtml('removeMember', member.id, '🚫 ' + translate('Retirer', 'Remove'), true),
+        member.data,
       );
     })
     .join('');
@@ -335,6 +342,7 @@ export function renderManage(body, data, user, reload) {
         escapeHtml(account.data.name || account.data.email || 'Staff') + ' · ' + accountXp + ' XP',
         escapeHtml(account.data.email || ''),
         buttonHtml('resetXp', account.id, '♻️ ' + translate('Remettre à zéro', 'Reset XP'), true),
+        account.data,
       );
     })
     .join('');
@@ -352,6 +360,7 @@ export function renderManage(body, data, user, reload) {
           (message.data.sticker ? '🏷️ ' : '') +
           escapeHtml(String(message.data.text || '').slice(0, 140)),
         buttonHtml('deleteMessage', message.id, '🗑️ ' + translate('Supprimer', 'Delete'), true),
+        message.data,
       ),
     )
     .join('');
@@ -368,6 +377,7 @@ export function renderManage(body, data, user, reload) {
           '🗑️ ' + translate('Retirer du classement', 'Remove from board'),
           true,
         ),
+        entry.data,
       ),
     )
     .join('');
@@ -395,7 +405,7 @@ export function renderManage(body, data, user, reload) {
       '',
       translate('Chercher une personne, un message…', 'Search a person, a message…'),
     ) +
-    '</div>' +
+    '</div><div class="admcols">' +
     cardHtml('🛂 ' + translate('Demandes d’accès', 'Access requests'), requestRows || none) +
     cardHtml('👥 ' + translate('Équipe', 'Team'), teamRows || none) +
     cardHtml('🎓 ' + translate('Comptes & XP', 'Accounts & XP'), accountRows || none) +
@@ -408,7 +418,8 @@ export function renderManage(body, data, user, reload) {
         : '') + (messageRows || none),
     ) +
     cardHtml('🏆 ' + translate('Classement', 'Leaderboard'), boardRows || none) +
-    cardHtml('🔔 ' + translate('Appareils notifiés', 'Push devices'), deviceRows || none);
+    cardHtml('🔔 ' + translate('Appareils notifiés', 'Push devices'), deviceRows || none) +
+    '</div>';
 
   // 🔍 the filter: hides the rows (and the cards) that don't match
   const peopleInput = body.querySelector('#admPeople');
