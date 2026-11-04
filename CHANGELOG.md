@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file. Versions follow the service-worker cache (`ltf-vNN` → `0.NN.0`), see [CONTRIBUTING.md](./CONTRIBUTING.md#git-commit-messages) for the commit guidelines.
 
+### 0.73.1 (2026-11-04)
+
+* :lipstick: Tabs slide like pages side by side: on a tap or a swipe the old page leaves to one side and the next one comes in from the other; the screen no longer jumps to the top or replays the enter animation
+* :sparkles: The mildest-to-strongest cheese card now also sits on the « Plateau de fromages » chapter page
+
 ### 0.73.0 (2026-11-04)
 
 * :sparkles: Swipe between tabs everywhere (pwa/swipe.js): swipe left for the next tab or chip, right for the previous one (About drawer, Carte courses & categories, Mise en place, leaderboard, dashboard); the new view slides in. Quiz answers, settings toggles, the team chat, the scanner and sideways-scrolling rows are left alone
