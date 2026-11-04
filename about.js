@@ -74,6 +74,13 @@ const X_PATH =
 const TIMELINE = [
   [
     '2026-11-04',
+    '0.72',
+    true,
+    'Scanner IA SigLIP 2 : le nom apparaît en direct dans le viseur',
+    'SigLIP 2 AI scanner: the name shows live in the viewfinder',
+  ],
+  [
+    '2026-11-04',
     '0.71',
     false,
     'Scanner plein écran : coins dorés, lampe, jauge de confiance',

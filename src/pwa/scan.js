@@ -33,7 +33,9 @@
  */
 
 // 📷 Les Trois Forts — Scan: identify a dish, dessert, wine or champagne from the camera, on-device.
-// 🖼️ Image match: MobileNet v2 (float16, ~7 MB) embeddings vs the reference photos (scan/emb.json) + the waiter's own photos.
+// 🖼️ Image match: SigLIP 2 vision encoder (Google, base patch16 224, 4-bit ONNX, ~63 MB) run by ONNX Runtime Web,
+//    embeddings vs the reference photos (scan/emb.json) + the waiter's own photos. Since 0.72.0 (MobileNet v2 before).
+// 🎯 Live mode: while the camera is open, the frame is matched about once a second and the best guess shows on screen.
 // 🏷️ Label match: Tesseract OCR (French) fuzzy-matched against the app's own item names.
 // 📴 Everything lives under scan/ and is cached by the service worker in a persistent cache (works offline after the first use).
 (function () {
@@ -43,10 +45,9 @@
   const BASE = 'scan/';
   // the files to precache for offline use (scripts, model, reference embeddings, OCR engine & French data) 📦
   const ASSETS = [
-    'vendor/tensorflow/tf.js',
-    'vendor/tensorflow/mobilenet.js',
-    'model/model.json',
-    'model/group1-shard1of1.bin',
+    'vendor/onnxruntime/ort.webgpu.js',
+    'vendor/onnxruntime/ort-wasm-simd-threaded.jsep.mjs',
+    'vendor/onnxruntime/ort-wasm-simd-threaded.jsep.wasm',
     'emb.json',
     'vendor/tesseract/tesseract.min.js',
     'vendor/tesseract/worker.min.js',
@@ -149,9 +150,29 @@
   // the label may beat the photo by this much before the result stops being « sure » ⚖️
   const LABEL_OVERRIDE_GAP = 0.08;
 
+  // ===== THE IMAGE MODEL 🧠 ===== //
+
+  // the persistent scan cache (kept across app versions; bump it with sw.js when scan/ changes) 🗄️
+  const SCAN_CACHE = 'ltf-scan-v5';
+  // SigLIP 2 vision encoder, 4-bit, pinned to one Hugging Face revision (downloaded once, then offline) 📥
+  const MODEL_URL =
+    'https://huggingface.co/onnx-community/siglip2-base-patch16-224-ONNX/resolve/' +
+    'ba1f3b0843f24bc5417d38e19c37b287d719b2f4/onnx/vision_model_q4.onnx';
+  // its size in bytes (for the progress bar when the server doesn't say) 📏
+  const MODEL_BYTES = 63267466;
+  // the model's input: a 224 x 224 RGB picture 🖼️
+  const INPUT_SIZE = 224;
+  // the length of an embedding (refs or learned scans of another length come from the old model) 🔢
+  const EMBEDDING_LENGTH = 768;
+  // SigLIP has a few huge « always on » dimensions: clamping them lets the real details count ✂️
+  // (synthetic test 2026-11-04: crop shots 90.6% -> 98.9% top-1)
+  const OUTLIER_CLAMP = 0.25;
+
   // ===== LOADING ⏳ ===== //
 
-  // the MobileNet model, the Tesseract worker, the reference embeddings & the loading promise 🌱
+  // the engine running the model ('webgpu' or 'wasm') ⚙️
+  let engineName = '';
+  // the SigLIP 2 session, the Tesseract worker, the reference embeddings & the loading promise 🌱
   let model = null,
     ocr = null,
     refs = null,
@@ -176,7 +197,7 @@
   /**
    * `precache` - Async Function 📦
    *
-   * Puts every scan asset in the persistent `ltf-scan-v4` cache (skips the ones already there).
+   * Puts every scan asset in the persistent `SCAN_CACHE` cache (skips the ones already there).
    *
    * @param { (progress: number) => void } [onProgress] - called with 0..1 after each file
    * @returns { Promise<void> }
@@ -184,7 +205,7 @@
   async function precache(onProgress) {
     // the files done & the cache (when the browser has one)
     let doneCount = 0;
-    const cache = window.caches ? await caches.open('ltf-scan-v4') : null;
+    const cache = window.caches ? await caches.open(SCAN_CACHE) : null;
     for (const asset of ASSETS) {
       const url = BASE + asset;
       // not cached yet? fetch & store it (errors are ignored: we'll try again next time) 🔁
@@ -197,6 +218,51 @@
       doneCount++;
       onProgress && onProgress(doneCount / ASSETS.length);
     }
+  }
+
+  /**
+   * `readModel` - Async Function 📥
+   *
+   * The SigLIP 2 model bytes: from the scan cache, else downloaded (with progress) and cached.
+   *
+   * @param { (progress: number) => void } [onProgress] - called with 0..1 while downloading
+   * @returns { Promise<Uint8Array> } - the ONNX file
+   */
+  async function readModel(onProgress) {
+    const cache = window.caches ? await caches.open(SCAN_CACHE) : null;
+    // ✅ already here (works offline)
+    const cached = cache && (await cache.match(MODEL_URL));
+    if (cached) return new Uint8Array(await cached.arrayBuffer());
+    // 🌐 download it, chunk by chunk, to show the progress
+    const response = await fetch(MODEL_URL);
+    if (!response.ok || !response.body) throw Error('model ' + response.status);
+    const total = +response.headers.get('content-length') || MODEL_BYTES;
+    const reader = response.body.getReader();
+    const chunks = [];
+    let received = 0;
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      chunks.push(value);
+      received += value.length;
+      onProgress && onProgress(Math.min(1, received / total));
+    }
+    // glue the chunks together
+    const bytes = new Uint8Array(received);
+    let offset = 0;
+    for (const chunk of chunks) {
+      bytes.set(chunk, offset);
+      offset += chunk.length;
+    }
+    // 🗄️ keep it for next time (a full phone just downloads it again next time)
+    try {
+      if (cache)
+        await cache.put(
+          MODEL_URL,
+          new Response(bytes, { headers: { 'content-type': 'application/octet-stream' } }),
+        );
+    } catch (error) {}
+    return bytes;
   }
 
   /**
@@ -225,7 +291,7 @@
   /**
    * `loadEngines` - Async Function 🚀
    *
-   * Loads everything once (precache, reference embeddings, TensorFlow.js + MobileNet, Tesseract).
+   * Loads everything once (precache, reference embeddings, ONNX Runtime + SigLIP 2, Tesseract).
    * A failed load can be retried.
    *
    * @param { (progress: number) => void } [onProgress] - called with 0..1
@@ -235,25 +301,40 @@
     // already loading (or loaded)? share the same promise
     if (loading) return loading;
     loading = (async () => {
-      // 📦 precache = the first 60% of the bar
-      await precache((fraction) => onProgress && onProgress(fraction * 0.6));
+      // 📦 precache (engine, reference embeddings, OCR) = the first 15% of the bar
+      await precache((fraction) => onProgress && onProgress(fraction * 0.15));
       // the reference embeddings [{ k: ikey, i: photo, e: base64 int8 }]
       const embeddingsJson = await (await fetch(BASE + 'emb.json')).json();
-      refs = embeddingsJson.map((ref) => ({ k: ref.k, img: ref.i, v: decodeEmbedding(ref.e) }));
-      // 🧠 TensorFlow.js + MobileNet (WebGL when possible, else CPU)
-      if (!window.tf) await loadScript(BASE + 'vendor/tensorflow/tf.js');
-      if (!window.mobilenet) await loadScript(BASE + 'vendor/tensorflow/mobilenet.js');
-      try {
-        await tf.setBackend('webgl');
-      } catch (error) {
-        await tf.setBackend('cpu');
+      refs = embeddingsJson
+        .map((ref) => ({ k: ref.k, img: ref.i, v: decodeEmbedding(ref.e) }))
+        .filter((ref) => ref.v.length === EMBEDDING_LENGTH);
+      // 📥 the SigLIP 2 model = up to 85% of the bar
+      const modelBytes = await readModel((fraction) => onProgress && onProgress(0.15 + fraction * 0.7));
+      // 🧠 ONNX Runtime Web: the phone's GPU (WebGPU, fast enough for live) when it has one,
+      // else WebAssembly on one thread (the app isn't cross-origin isolated): a few seconds per frame
+      if (!window.ort) await loadScript(BASE + 'vendor/onnxruntime/ort.webgpu.js');
+      ort.env.wasm.wasmPaths = new URL(BASE + 'vendor/onnxruntime/', location.href).href;
+      ort.env.wasm.numThreads = 1;
+      model = null;
+      if (navigator.gpu) {
+        try {
+          model = await ort.InferenceSession.create(modelBytes, {
+            executionProviders: ['webgpu'],
+            graphOptimizationLevel: 'all',
+          });
+          engineName = 'webgpu';
+        } catch (error) {
+          model = null;
+        }
       }
-      model = await mobilenet.load({
-        version: 2,
-        alpha: 1,
-        modelUrl: new URL(BASE + 'model/model.json', location.href).href,
-      });
-      onProgress && onProgress(0.85);
+      if (!model) {
+        model = await ort.InferenceSession.create(modelBytes, {
+          executionProviders: ['wasm'],
+          graphOptimizationLevel: 'all',
+        });
+        engineName = 'wasm';
+      }
+      onProgress && onProgress(0.9);
       // 🏷️ Tesseract (French); optional: the scan still works without OCR
       if (!window.Tesseract) await loadScript(BASE + 'vendor/tesseract/tesseract.min.js');
       try {
@@ -422,7 +503,8 @@
   // ===== USER PHOTOS & LEARNED SCANS 🧠 ===== //
 
   // the localStorage key of the learned scans { ikey: [base64 int8 embedding, ...max 3] } 🏷️
-  const LEARN_KEY = 'ltf_scan_learn';
+  // (a new key since SigLIP 2: the MobileNet scans of `ltf_scan_learn` don't fit the new model)
+  const LEARN_KEY = 'ltf_scan_learn_sg2';
 
   /**
    * `readLearned` - Function 🧠
@@ -526,26 +608,85 @@
     });
   }
 
+  // the 224 x 224 canvas the pictures are squeezed into (reused) 🖼️
+  let inputCanvas = null;
+
   /**
    * `embed` - Async Function 🧠
    *
-   * @param { HTMLCanvasElement | HTMLImageElement } src - the picture
-   * @returns { Promise<Float32Array> } - its unit-length MobileNet embedding
+   * Squeezes the picture to 224 x 224 (SigLIP resizes, it doesn't crop), turns it into
+   * channel-first floats in -1..1 and runs the SigLIP 2 vision encoder.
+   *
+   * @param { HTMLCanvasElement | HTMLImageElement | HTMLVideoElement } src - the picture
+   * @param { Array<number> } [area] - the part to use [x, y, width, height] (default: all of it)
+   * @returns { Promise<Float32Array> } - its unit-length SigLIP 2 embedding (768 numbers)
    */
-  async function embed(src) {
-    const tensor = tf.tidy(() => {
-      const features = model.infer(src, true);
-      return features.div(features.norm());
+  function embed(src, area) {
+    // 🚦 one picture at a time (the live mode & the shutter share the model & the canvas)
+    const run = embedQueue.then(() => embedNow(src, area));
+    embedQueue = run.catch(() => {});
+    return run;
+  }
+
+  // the last embedding in progress (the queue) 🚦
+  let embedQueue = Promise.resolve();
+
+  /**
+   * `embedNow` - Async Function 🧠
+   *
+   * The work of `embed`, without the queue.
+   *
+   * @param { HTMLCanvasElement | HTMLImageElement | HTMLVideoElement } src - the picture
+   * @param { Array<number> } [area] - the part to use [x, y, width, height]
+   * @returns { Promise<Float32Array> } - the unit-length embedding
+   */
+  async function embedNow(src, area) {
+    if (!inputCanvas) {
+      inputCanvas = document.createElement('canvas');
+      inputCanvas.width = inputCanvas.height = INPUT_SIZE;
+    }
+    const context = inputCanvas.getContext('2d', { willReadFrequently: true });
+    const sourceWidth = src.videoWidth || src.naturalWidth || src.width,
+      sourceHeight = src.videoHeight || src.naturalHeight || src.height;
+    const [areaX, areaY, areaWidth, areaHeight] = area || [0, 0, sourceWidth, sourceHeight];
+    context.imageSmoothingQuality = 'high';
+    context.drawImage(src, areaX, areaY, areaWidth, areaHeight, 0, 0, INPUT_SIZE, INPUT_SIZE);
+    const rgba = context.getImageData(0, 0, INPUT_SIZE, INPUT_SIZE).data;
+    // RGBA (0..255, pixel after pixel) -> RGB planes (-1..1) 🔁
+    const planeSize = INPUT_SIZE * INPUT_SIZE;
+    const pixels = new Float32Array(3 * planeSize);
+    for (let pixel = 0; pixel < planeSize; pixel++)
+      for (let channel = 0; channel < 3; channel++)
+        pixels[channel * planeSize + pixel] = rgba[pixel * 4 + channel] / 127.5 - 1;
+    const outputs = await model.run({
+      pixel_values: new ort.Tensor('float32', pixels, [1, 3, INPUT_SIZE, INPUT_SIZE]),
     });
-    const values = await tensor.data();
-    tensor.dispose();
-    return Float32Array.from(values);
+    // the pooled image embedding: unit length, outliers clamped, unit length again
+    return toUnit(
+      toUnit(Float32Array.from(outputs.pooler_output.data)).map((component) =>
+        Math.max(-OUTLIER_CLAMP, Math.min(OUTLIER_CLAMP, component)),
+      ),
+    );
+  }
+
+  /**
+   * `toUnit` - Function 📐
+   *
+   * @param { Float32Array } vector - any vector (changed in place)
+   * @returns { Float32Array } - the same vector, length 1
+   */
+  function toUnit(vector) {
+    let norm = 0;
+    for (const component of vector) norm += component * component;
+    norm = Math.sqrt(norm) || 1;
+    for (let index = 0; index < vector.length; index++) vector[index] /= norm;
+    return vector;
   }
 
   /**
    * `embedViews` - Async Function 🔭
    *
-   * Embeds the photo 3 times: whole, and two centred zooms (75% & 55%). A real photo has table,
+   * Embeds the photo twice: whole, and a centred zoom (60%). A real photo has table,
    * hands & background around the plate or bottle; the zooms see mostly the subject itself.
    *
    * @param { HTMLCanvasElement } canvas - the photo
@@ -602,7 +743,10 @@
     }
     // ✅ every learned scan
     Object.entries(readLearned()).forEach(([key, list]) =>
-      list.forEach((encoded) => out.push({ k: key, v: decodeEmbedding(encoded), own: true })),
+      list.forEach((encoded) => {
+        const vector = decodeEmbedding(encoded);
+        if (vector.length === EMBEDDING_LENGTH) out.push({ k: key, v: vector, own: true });
+      }),
     );
     return out;
   }
@@ -623,9 +767,23 @@
   // ===== ANALYSIS 🔬 ===== //
 
   // the centred zooms embedded next to the whole photo 🔭
-  const VIEW_ZOOMS = [0.75, 0.55];
+  const VIEW_ZOOMS = [0.6];
   // a small head start for the waiter's own photos & confirmed scans (same light, same plates) 🧠
   const OWN_BONUS = 0.04;
+  // SigLIP 2 similarities: a score of SCORE_LOW means « no idea », SCORE_HIGH means « sure » 📏
+  // (calibrated on synthetic shots of the reference photos, 2026-11-04)
+  const SCORE_LOW = 0.6;
+  const SCORE_HIGH = 0.85;
+  // the lead over the runner-up below which a result is a close call ⚖️
+  const CLOSE_GAP = 0.03;
+
+  /**
+   * `scoreConfidence` - Function 📶
+   *
+   * @param { number } score - the best score
+   * @returns { number } - 0..1 (SCORE_LOW -> 0, SCORE_HIGH -> 1)
+   */
+  const scoreConfidence = (score) => Math.max(0, Math.min(1, (score - SCORE_LOW) / (SCORE_HIGH - SCORE_LOW)));
 
   /**
    * `analyse` - Async Function 🔬
@@ -694,13 +852,13 @@
         };
       })
       .sort((firstRanked, secondRanked) => secondRanked.score - firstRanked.score);
-    // the confidence of the top result (0.25 -> 0, 0.75 -> 1)
+    // the confidence of the top result (SCORE_LOW -> 0, SCORE_HIGH -> 1)
     const top = ranked[0];
-    let confidence = top ? Math.max(0, Math.min(1, (top.score - 0.25) / 0.5)) : 0;
+    let confidence = top ? scoreConfidence(top.score) : 0;
     // 🛡️ the label beat a clearly better-looking photo without a strong read: never « sure » then
     if (top && top.i < imageMax - LABEL_OVERRIDE_GAP && !(top.t >= 3)) confidence = Math.min(confidence, 0.5);
     // 🛡️ the top two are neck and neck: at most « Probable »
-    if (ranked[1] && top.score - ranked[1].score < 0.03) confidence = Math.min(confidence, 0.65);
+    if (ranked[1] && top.score - ranked[1].score < CLOSE_GAP) confidence = Math.min(confidence, 0.65);
     return { v: vector, text, res: ranked.slice(0, 4), conf: confidence, imax: imageMax };
   }
 
@@ -717,6 +875,7 @@
    * @returns { void }
    */
   function stopCamera() {
+    stopLive();
     if (stream) {
       stream.getTracks().forEach((track) => track.stop());
       stream = null;
@@ -806,10 +965,172 @@
 .scalt span:last-child{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
 .scsticky{position:sticky;bottom:0;margin:12px -14px 0;padding:12px 14px;
   padding-bottom:max(12px,env(safe-area-inset-bottom));background:linear-gradient(transparent,var(--bg) 30%)}
+.sclivetag{position:absolute;left:50%;bottom:7%;transform:translate(-50%,16px);opacity:0;pointer-events:none;
+  display:flex;align-items:center;gap:10px;max-width:86%;padding:7px 14px 7px 7px;border-radius:18px;border:0;
+  background:rgba(0,0,0,.62);-webkit-backdrop-filter:blur(12px);backdrop-filter:blur(12px);color:#fff;
+  font:inherit;text-align:left;transition:opacity .25s,transform .25s;box-shadow:0 6px 24px rgba(0,0,0,.4)}
+.sclivetag.on{opacity:1;transform:translate(-50%,0);pointer-events:auto}
+.sclivetag img,.sclivetag .scaltph{width:44px;height:44px;border-radius:12px;object-fit:cover;flex:none;font-size:20px}
+.sclt{display:flex;flex-direction:column;gap:4px;min-width:0}
+.sclt b{font-size:14.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sclivetag .scmeter{color:rgba(255,255,255,.75)}
+.sclivetag .gold{font-size:20px;flex:none}
+.schint{transition:opacity .25s}
 @media (prefers-reduced-motion:reduce){.scline,.scsweep,.scspin{animation:none}}
 @media (min-width:960px){.scanov.sclive .scb{max-width:720px;margin:0 auto;width:100%}.scanov.sclive .scv{border-radius:0 0 26px 26px}}
 `;
     document.head.appendChild(style);
+  }
+
+  // ===== LIVE MODE 🎯 ===== //
+
+  // at most one frame every LIVE_EVERY ms (a phone needs about a second per frame anyway) ⏱️
+  const LIVE_EVERY = 700;
+  // the share of the shorter side used in the middle of the frame (where the gold corners are) 🔲
+  const LIVE_AREA = 0.8;
+  // the live state: the timer, the references, the smoothed scores, the leader & its streak 🎯
+  let liveTimer = null,
+    liveRun = 0,
+    liveScores = {},
+    liveLeader = null,
+    liveStreak = 0,
+    liveVector = null;
+
+  /**
+   * `stopLive` - Function 🛑
+   *
+   * @returns { void }
+   */
+  function stopLive() {
+    clearTimeout(liveTimer);
+    liveTimer = null;
+    liveRun++;
+    liveScores = {};
+    liveLeader = null;
+    liveStreak = 0;
+  }
+
+  /**
+   * `startLive` - Async Function 🎯
+   *
+   * Matches the middle of the camera frame again and again (image only, no label reading) and
+   * shows the best guess on the viewfinder. Scores are smoothed over the frames so the guess
+   * doesn't flicker. Tapping the guess opens the item, like a confirmed scan.
+   *
+   * @param { HTMLVideoElement } video - the live camera
+   * @returns { Promise<void> }
+   */
+  async function startLive(video) {
+    stopLive();
+    const runId = liveRun;
+    // the catalog & the references (shipped + own photos + learned scans)
+    const groups = buildCatalog();
+    const groupByKey = Object.fromEntries(groups.map((group) => [group.k, group]));
+    const liveRefs = refs.concat(await userRefs()).filter((ref) => groupByKey[ref.k]);
+    // still the same camera session?
+    const stillLive = () => runId === liveRun && stream && overlay && overlay.classList.contains('sclive');
+    const tick = async () => {
+      if (!stillLive()) return;
+      // 💤 app in the background or the video not ready yet: wait
+      if (document.hidden || !video.videoWidth) {
+        liveTimer = setTimeout(tick, 600);
+        return;
+      }
+      const startedAt = Date.now();
+      // the middle square of the frame 🔲
+      const side = Math.min(video.videoWidth, video.videoHeight) * LIVE_AREA;
+      let vector;
+      try {
+        vector = await embed(video, [
+          (video.videoWidth - side) / 2,
+          (video.videoHeight - side) / 2,
+          side,
+          side,
+        ]);
+      } catch (error) {
+        liveTimer = setTimeout(tick, 1500);
+        return;
+      }
+      if (!stillLive()) return;
+      // the best similarity per item for this frame
+      const frameScores = {};
+      liveRefs.forEach((ref) => {
+        const similarity = dot(vector, ref.v) + (ref.own ? OWN_BONUS : 0);
+        if (!(frameScores[ref.k] >= similarity)) frameScores[ref.k] = similarity;
+      });
+      // 🌊 smoothed: half this frame, half the frames before
+      Object.entries(frameScores).forEach(([key, score]) => {
+        liveScores[key] = liveScores[key] == null ? score : (liveScores[key] + score) / 2;
+      });
+      const ranked = Object.entries(liveScores).sort((first, second) => second[1] - first[1]);
+      if (ranked.length) {
+        const [leaderKey, leaderScore] = ranked[0];
+        const gap = ranked[1] ? leaderScore - ranked[1][1] : 1;
+        liveStreak = leaderKey === liveLeader ? liveStreak + 1 : 1;
+        liveLeader = leaderKey;
+        liveVector = vector;
+        let confidence = scoreConfidence(leaderScore);
+        if (gap < CLOSE_GAP) confidence = Math.min(confidence, 0.65);
+        paintLive(groupByKey[leaderKey], confidence);
+      }
+      liveTimer = setTimeout(tick, Math.max(60, LIVE_EVERY - (Date.now() - startedAt)));
+    };
+    tick();
+  }
+
+  /**
+   * `paintLive` - Function 🎨
+   *
+   * Shows (or hides) the live guess: a pill with the photo, the name & the confidence meter.
+   * It only shows once the same item has led for 2 frames and is at least « Probable ».
+   *
+   * @param { object } group - the leading catalog group
+   * @param { number } confidence - 0..1
+   * @returns { void }
+   */
+  function paintLive(group, confidence) {
+    const viewport = overlay && overlay.querySelector('.scv');
+    if (!viewport) return;
+    let pill = viewport.querySelector('#scLive');
+    const hint = viewport.querySelector('.schint');
+    const visible = group && liveStreak >= 2 && confidence >= 0.55;
+    if (!visible) {
+      if (pill) pill.classList.remove('on');
+      if (hint) hint.style.opacity = '';
+      return;
+    }
+    if (!pill) {
+      pill = document.createElement('button');
+      pill.id = 'scLive';
+      pill.className = 'sclivetag';
+      viewport.appendChild(pill);
+      // ✅ tapped: remember this frame, close & open the item's ⓘ sheet
+      pill.onclick = () => {
+        const key = pill.dataset.k,
+          id = pill.dataset.id;
+        if (!key) return;
+        if (liveVector) remember(key, liveVector);
+        closeScanner();
+        if (window.LTFinfo) LTFinfo(id);
+      };
+    }
+    const level = confidence >= 0.7 ? 3 : 2;
+    const photo = (refs.find((ref) => ref.k === group.k) || {}).img;
+    // only repaint when the guess or its level changed (no flicker) 🎨
+    const signature = group.k + '|' + level;
+    if (pill.dataset.sig !== signature) {
+      pill.dataset.sig = signature;
+      pill.dataset.k = group.k;
+      pill.dataset.id = group.item.id;
+      pill.innerHTML =
+        `${photo ? `<img src="${escapeHtml(photo)}" alt="">` : `<span class="scaltph">🍽</span>`}` +
+        `<span class="sclt"><b>${escapeHtml(group.name)}</b>` +
+        `<span class="scmeter l${level}"><i></i><i></i><i></i><span>` +
+        `${level === 3 ? translate('Très probable', 'Very likely') : translate('Probable', 'Likely')}` +
+        `</span></span></span><span class="gold">›</span>`;
+    }
+    pill.classList.add('on');
+    if (hint) hint.style.opacity = '0';
   }
 
   /**
@@ -939,6 +1260,12 @@
         audio: false,
       });
       video.srcObject = stream;
+      // 🎯 live guesses as soon as the model is ready
+      loadEngines()
+        .then(() => {
+          if (stream && video.isConnected) startLive(video);
+        })
+        .catch(() => {});
       // 🔦 the flashlight, when the back camera has one (dim tables at night)
       const track = stream.getVideoTracks()[0],
         capabilities = track && track.getCapabilities ? track.getCapabilities() : {},
@@ -1038,6 +1365,7 @@
     }
     // 🔬 analyse & show
     const result = await analyse(canvas, setStatus);
+    if (!overlay) return;
     lastVector = result.v;
     showResults(shot, result);
   }
