@@ -243,6 +243,50 @@
     }
   }
 
+  /**
+   * `escapeText` - Function 🧼
+   *
+   * @param { string } text - any text
+   * @returns { string } - the text, safe inside HTML
+   */
+  function escapeText(text) {
+    return String(text).replace(/[&<>"']/g, (character) => '&#' + character.charCodeAt(0) + ';');
+  }
+
+  /**
+   * `describeError` - Function 🩺
+   *
+   * Says which step failed, in plain words, with the browser's own message (short) to help fix it.
+   *
+   * @param { any } error - the error thrown while loading
+   * @returns { string } - « Étape : raison »
+   */
+  function describeError(error) {
+    const message = String((error && (error.message || error)) || '').slice(0, 140);
+    const step = (error && error.step) || 'load';
+    const steps = {
+      download: translate('Téléchargement du modèle', 'Model download'),
+      storage: translate('Mémoire du téléphone', 'Phone storage'),
+      engine: translate('Démarrage du moteur', 'Engine start'),
+      load: translate('Chargement', 'Loading'),
+    };
+    return (steps[step] || steps.load) + ' : ' + message;
+  }
+
+  /**
+   * `tagStep` - Function 🏷️
+   *
+   * @param { string } step - the loading step (download, engine…)
+   * @returns { function(any): never } - rethrows the error, tagged with its step
+   */
+  function tagStep(step) {
+    return (error) => {
+      const tagged = error instanceof Error ? error : Error(String(error));
+      if (!tagged.step) tagged.step = step;
+      throw tagged;
+    };
+  }
+
   // the last download progress (0..1), so a reopened scanner shows where the download is ⏳
   let lastProgress = 0;
 
@@ -253,19 +297,23 @@
    * the progress while it downloads (or loads from the phone), « Prêt ✓ » for a moment, then nothing.
    *
    * @param { 'offer' | 'loading' | 'ready' | 'error' } state - what to show
-   * @param { number } [fraction] - the progress (0..1) while loading
+   * @param { number | string } [detail] - the progress (0..1) while loading, the reason after an error
    * @returns { void }
    */
-  function paintPrep(state, fraction) {
+  function paintPrep(state, detail) {
+    const fraction = typeof detail === 'number' ? detail : 0;
     const box = queryOne('#scPrepBox');
     if (!box) return;
     box.classList.remove('gone');
     if (state === 'offer' || state === 'error') {
       // ⬇️ the button (again after an error)
       box.innerHTML =
-        (state === 'error' ? `<span>${translate('Pas de connexion. ', 'No connection. ')}</span>` : '') +
-        `<button class="scdl" id="scDl">⬇️ ${translate('Télécharger le scanner IA', 'Download the AI scanner')}` +
-        ` · ${DOWNLOAD_LABEL}</button>`;
+        `<button class="scdl" id="scDl">⬇️ ` +
+        (state === 'error'
+          ? translate('Réessayer le téléchargement', 'Retry the download')
+          : `${translate('Télécharger le scanner IA', 'Download the AI scanner')} · ${DOWNLOAD_LABEL}`) +
+        `</button>` +
+        (state === 'error' ? `<div class="scerr">${escapeText(describeError(detail))}</div>` : '');
       box.classList.add('offer');
       queryOne('#scDl').onclick = () => startDownload();
       return;
@@ -307,9 +355,10 @@
         const video = queryOne('#scVid');
         if (stream && video && overlay && overlay.classList.contains('sclive')) startLive(video);
       })
-      .catch(() => {
+      .catch((error) => {
         downloading = false;
-        paintPrep('error');
+        console.error('[scan]', error);
+        paintPrep('error', error);
       });
   }
 
@@ -348,8 +397,8 @@
     const cached = cache && (await cache.match(MODEL_URL));
     if (cached) return new Uint8Array(await cached.arrayBuffer());
     // 🌐 download it, chunk by chunk, to show the progress
-    const response = await fetch(MODEL_URL);
-    if (!response.ok || !response.body) throw Error('model ' + response.status);
+    const response = await fetch(MODEL_URL, { mode: 'cors', credentials: 'omit' });
+    if (!response.ok || !response.body) throw Error('HTTP ' + response.status);
     const total = +response.headers.get('content-length') || MODEL_BYTES;
     const reader = response.body.getReader();
     const chunks = [];
@@ -429,10 +478,12 @@
         .map((ref) => ({ k: ref.k, img: ref.i, v: decodeEmbedding(ref.e) }))
         .filter((ref) => ref.v.length === EMBEDDING_LENGTH);
       // 📥 the SigLIP 2 model = up to 85% of the bar
-      const modelBytes = await readModel((fraction) => onProgress && onProgress(0.15 + fraction * 0.7));
+      const modelBytes = await readModel((fraction) => onProgress && onProgress(0.15 + fraction * 0.7)).catch(
+        tagStep('download'),
+      );
       // 🧠 ONNX Runtime Web: the phone's GPU (WebGPU, fast enough for live) when it has one,
       // else WebAssembly on one thread (the app isn't cross-origin isolated): a few seconds per frame
-      if (!window.ort) await loadScript(BASE + 'vendor/onnxruntime/ort.webgpu.js');
+      if (!window.ort) await loadScript(BASE + 'vendor/onnxruntime/ort.webgpu.js').catch(tagStep('engine'));
       ort.env.wasm.wasmPaths = new URL(BASE + 'vendor/onnxruntime/', location.href).href;
       ort.env.wasm.numThreads = 1;
       model = null;
@@ -451,7 +502,7 @@
         model = await ort.InferenceSession.create(modelBytes, {
           executionProviders: ['wasm'],
           graphOptimizationLevel: 'all',
-        });
+        }).catch(tagStep('engine'));
         engineName = 'wasm';
       }
       onProgress && onProgress(0.9);
@@ -1089,6 +1140,8 @@
 .scv .scprep{transition:opacity .4s}
 .scv .scprep.gone{opacity:0;pointer-events:none}
 .scv .scprep.offer{padding:4px;background:transparent;-webkit-backdrop-filter:none;backdrop-filter:none}
+.scerr{margin-top:6px;max-width:78vw;font-size:11px;line-height:1.3;color:#fff;background:rgba(0,0,0,.6);
+  border-radius:10px;padding:6px 10px;text-align:center}
 .scdl{border:0;border-radius:999px;padding:10px 16px;background:var(--gold,#c9a961);color:#111;font:inherit;
   font-size:13px;font-weight:600;cursor:pointer;box-shadow:0 4px 18px rgba(0,0,0,.4);white-space:nowrap}
 .sclivetag{position:absolute;left:50%;bottom:7%;transform:translate(-50%,16px);opacity:0;pointer-events:none;
@@ -1379,7 +1432,7 @@
         viewport.innerHTML =
           `<div class="scnocam">` +
           `${translate("Caméra indisponible : utilisez la galerie ou l'appareil photo.", 'Camera unavailable: use the gallery or the camera app.')}` +
-          `</div>`;
+          `</div><div class="scprep gone" id="scPrepBox"></div>`;
       const fileInput = queryOne('#scFile');
       if (fileInput) fileInput.setAttribute('capture', 'environment');
     }
