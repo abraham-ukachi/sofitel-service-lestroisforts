@@ -719,10 +719,16 @@ export function renderManage(body, data, user, reload) {
  * @returns { Promise<void> }
  */
 export async function renderAnnounce(body) {
-  let current = { text: '', on: false };
+  let current = { text: '', on: false },
+    quickList = null;
   try {
     const snapshot = await getDoc(doc(firestore, 'config', 'announce'));
     if (snapshot.exists()) current = snapshot.data();
+  } catch (error) {}
+  // ⚡ the chat's quick messages (`content/quick`, a JSON list of texts; none = the built-in list of chat.js)
+  try {
+    const snapshot = await getDoc(doc(firestore, 'content', 'quick'));
+    if (snapshot.exists()) quickList = JSON.parse(snapshot.data().data);
   } catch (error) {}
   body.innerHTML =
     '<div class="admcols">' +
@@ -758,7 +764,36 @@ export async function renderAnnounce(body) {
         ) +
         '</p>',
     ) +
+    cardHtml(
+      '⚡ ' + translate('Messages rapides du chat', 'Chat quick messages'),
+      '<textarea id="quickText" class="admfield" rows="8" placeholder="Table # prête ✅">' +
+        escapeHtml(Array.isArray(quickList) ? quickList.join('\n') : '') +
+        '</textarea><p class="muted sm">' +
+        translate(
+          'Un message par ligne (20 max). Avec # (numéro de table) ou terminé par « : », il s’ouvre dans la zone de texte pour le compléter ; sinon il part d’un seul geste. Vide = la liste intégrée.',
+          'One message per line (20 max). With # (table number) or ending with “:”, it opens in the text box to finish it; otherwise it is sent in one tap. Empty = the built-in list.',
+        ) +
+        '</p><button class="btn admwide" id="quickSave">🚀 ' +
+        translate('Publier', 'Publish') +
+        '</button>',
+    ) +
     '</div>';
+  // ⚡ publish the quick messages (empty = back to the built-in list)
+  body.querySelector('#quickSave').onclick = () => {
+    const lines = body
+      .querySelector('#quickText')
+      .value.split('\n')
+      .map((line) => line.trim().slice(0, 80))
+      .filter(Boolean)
+      .slice(0, 20);
+    runAction(
+      () =>
+        lines.length
+          ? setDoc(doc(firestore, 'content', 'quick'), { data: JSON.stringify(lines), ts: serverTimestamp() })
+          : deleteDoc(doc(firestore, 'content', 'quick')),
+      translate('Messages rapides publiés', 'Quick messages published'),
+    );
+  };
   const textInput = body.querySelector('#annText'),
     switchInput = body.querySelector('#annOn');
   // 👀 keeps the preview & the counter in step with what's typed
