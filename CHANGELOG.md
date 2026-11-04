@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file. Versions follow the service-worker cache (`ltf-vNN` → `0.NN.0`), see [CONTRIBUTING.md](./CONTRIBUTING.md#git-commit-messages) for the commit guidelines.
 
+### 0.72.4 (2026-11-04)
+
+* :lipstick: Scanner: the gallery and torch buttons are plain white outline icons with no circle behind them (the torch turns gold when on)
+
+### 0.72.3 (2026-11-04)
+
+* :bug: Scanner: the model now downloads from the app's own domain in 8 parts of 8 MB, each retried up to 4 times, with Hugging Face only as a fallback (a phone on mobile data got « Failed to fetch »)
+
 ### 0.72.2 (2026-11-04)
 
 * :lipstick: Chat: the composer is a soft filled pill with no outline, a plain one-colour outline microphone, an SVG plus and send arrow, and a frosted footer
