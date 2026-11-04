@@ -3747,6 +3747,19 @@ body:has(.ov.scrim) {
       scaleCard.innerHTML = card();
       heading.parentNode.insertBefore(scaleCard.firstChild, next);
     }
+    // 🧀 the cheese chapter page: the same card, under the mastery card
+    var titles = document.querySelectorAll('h1.ptitle');
+    for (var place = 0; place < titles.length; place++) {
+      var pageTitle = titles[place].textContent.trim();
+      if (pageTitle !== 'Plateau de fromages' && pageTitle !== 'Cheese board') continue;
+      var page = titles[place].parentNode;
+      if (page.querySelector('#qScale')) continue;
+      var modesHeading = page.querySelector(':scope > .sh');
+      var chapterCard = document.createElement('div');
+      chapterCard.innerHTML = card();
+      chapterCard.firstChild.style.marginTop = '14px';
+      page.insertBefore(chapterCard.firstChild, modesHeading);
+    }
   }
   // 👂 watch every screen change
   new MutationObserver(run).observe(document.documentElement, { childList: true, subtree: true });
