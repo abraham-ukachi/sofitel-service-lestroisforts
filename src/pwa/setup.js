@@ -22,7 +22,7 @@
  *
  * Example usage:
  *   1+|> (index.html) script type="module" src="setup.js"
- *    -|> Accueil › Chapitres › « Mise en place » opens the setup drawer (Seaux · Rouges · Accueil · Check)
+ *    -|> Accueil › Chapitres › « Mise en place » opens the chapter page (tabs: Seau 1-3 · Rouges · Accueil)
  *   2+|> import { SETUP_DEFAULT, cleanSetup } from './setup.js' (the dashboard editor, admin-edit.js)
  *
  */
@@ -33,11 +33,12 @@
  * !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
  */
 
-// 🧊 Mise en place: a chapter row on the home screen that slides up a drawer with four chips:
-// - 🧊 Seaux: the three ice buckets of the bar, bottle by bottle (photo, type, how many, a note)
-// - 🍷 Rouges: the red wines that stay at room temperature on the counter
-// - 🤵 Accueil: the steps of service, from the coat at the door to the order
-// - ✅ Check: tick every bottle while setting up (resets every day)
+// 🧊 Mise en place: a chapter row on the home screen that opens a chapter page, like the others, with
+// scrollable tabs (Seau 1 · Seau 2 · Seau 3 · Rouges · Accueil). Each tab has its modes:
+// - 👁️ Aperçu: the bucket bottle by bottle (photo, type, how many, a note) or the steps of service
+// - 🃏 Apprendre: flashcards · ❓ Quiz: 10 questions · ⏱️ Chrono: 60 seconds with combos
+// - 🧊 Range les seaux (each bottle in the right bucket) or 🔢 Dans l'ordre (the steps of service)
+// - ✅ Checklist du jour (resets every day)
 // The owner edits all of it in the dashboard (tab « Service »), saved in Firestore `content/setup`
 // as a JSON text and cached for offline use. Shared by the JS & the Rust builds 🤝.
 
@@ -306,11 +307,29 @@ export const SETUP_DEFAULT = {
 
 // the drawer look 🎨
 const SETUP_CSS = `
-.setsheet .sbody{padding-top:4px}
-.setchips{display:flex;gap:6px;justify-content:center;flex-wrap:wrap;margin:0 0 12px;padding:6px 0;position:sticky;
-  top:0;z-index:2;background:var(--bar)}
 .setintro{color:var(--mu);font-size:13.5px;margin:0 2px 12px;line-height:1.4}
-.setcover{border-radius:20px;margin:0 0 14px}
+#setPage .settabs{position:sticky;top:56px;z-index:5;background:var(--bg);padding-top:10px;margin-top:6px}
+#setPage .settabs .chip.on{background:var(--gold);color:#111}
+.setinfo{padding:0;overflow:hidden}
+.setinfotx{padding:12px 14px 14px}
+.setinfotx b{font-family:Georgia,'Times New Roman',serif;font-size:18px;color:var(--gold)}
+.setpills{margin-top:8px}
+.setav{font-size:21px}
+.setchev{font-size:22px;margin-left:6px}
+.opt.wrong{animation:setshake .3s}
+@keyframes setshake{25%{transform:translateX(-6px)}75%{transform:translateX(6px)}}
+.setgamebottle{display:flex;gap:14px;align-items:center;padding:18px 16px;border-radius:20px;background:var(--sf);margin-top:8px}
+.setgamebottle .setdot{height:64px;width:12px}
+.setgamebottle b{display:block;font-family:Georgia,'Times New Roman',serif;font-size:22px;margin:2px 0}
+.setbins{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.setbin{position:relative;border:2px solid transparent;border-radius:18px;background:var(--sf);color:inherit;font:inherit;
+  padding:0;overflow:hidden;cursor:pointer;text-align:center;font-weight:700}
+.setbin img{display:block;width:100%;aspect-ratio:4/3;object-fit:cover}
+.setbin span{display:block;padding:9px 6px}
+.setbin.right{border-color:var(--okb)}
+.setbin.wrong{border-color:var(--kob);animation:setshake .3s}
+.setresult{text-align:center;padding-top:60px}
+.setbig{font-size:64px}
 .setbucket{border-radius:20px;background:var(--sf2);overflow:hidden;margin:0 0 14px}
 .setphoto{display:block;width:100%;aspect-ratio:16/10;object-fit:cover;background:var(--bg)}
 .sethead{display:flex;align-items:center;gap:10px;padding:12px 14px 4px}
@@ -593,26 +612,6 @@ function groupHtml(group, badge) {
 }
 
 /**
- * `bucketsView` - Function 🧊
- *
- * @param { object } setup - the setup
- * @returns { string } - the three buckets
- */
-function bucketsView(setup) {
-  const total = setup.buckets.reduce(
-    (sum, bucket) => sum + bucket.items.reduce((count, item) => count + item.qty, 0),
-    0,
-  );
-  return (
-    `<p class="setintro">${translate(
-      `${setup.buckets.length} seaux remplis de glace, ${total} bouteilles. Mettez chaque bouteille dans son seau, étiquette vers l'extérieur.`,
-      `${setup.buckets.length} buckets filled with ice, ${total} bottles. Put each bottle in its bucket, label facing out.`,
-    )}</p><img class="setphoto setcover" src="img/setup-table.jpg" alt="" loading="lazy">` +
-    setup.buckets.map((bucket, index) => groupHtml(bucket, String(index + 1))).join('')
-  );
-}
-
-/**
  * `stepsView` - Function 🤵
  *
  * @param { object } setup - the setup
@@ -638,123 +637,857 @@ function stepsView(setup) {
   );
 }
 
+// ===== THE CHAPTER PAGE 📚 ===== //
+
+// the page state: open?, the setup, the tab ('b0'… | 'reds' | 'steps'), the view, the chrono timer & the run 🌱
+const page = { isOpen: false, setup: null, tab: 'b0', view: 'page', timer: 0, run: 0 };
+// the best chrono scores, per tab ⏱️
+const BEST_KEY = 'ltf_setup_best_v1';
+
 /**
- * `checkView` - Function ✅
+ * `shuffle` - Function 🔀
  *
- * @param { object } setup - the setup
- * @returns { string } - every bottle as a tick box, bucket by bucket, with a progress bar
+ * @param { Array<any> } list - any list
+ * @returns { Array<any> } - a shuffled copy
  */
-function checkView(setup) {
-  const ticks = readTicks();
-  const groups = setup.buckets
-    .map((bucket, index) => ['b' + index, translate('Seau ', 'Bucket ') + (index + 1), bucket])
-    .concat([['r', translate('Rouges', 'Reds'), setup.reds]]);
-  let done = 0,
-    total = 0;
-  const rows = groups
-    .map(([prefix, label, group]) => {
-      const lines = group.items
-        .map((item, index) => {
-          const id = prefix + '-' + index;
-          total++;
-          if (ticks[id]) done++;
-          return (
-            `<button class="setcheck${ticks[id] ? ' done' : ''}" data-tick="${id}"><span class="setbox">` +
-            `${ticks[id] ? '✓' : ''}</span><span class="grow">${escapeHtml(item.n)}</span>` +
-            `<span class="setqty">×${item.qty}</span></button>`
-          );
-        })
-        .join('');
-      return `<div class="setgroup">${escapeHtml(label)} · ${escapeHtml(pick(group.name).split('·').pop().trim())}</div>${lines}`;
-    })
-    .join('');
-  const percent = total ? Math.round((100 * done) / total) : 0;
+function shuffle(list) {
+  const copy = list.slice();
+  for (let index = copy.length - 1; index > 0; index--) {
+    const other = Math.floor(Math.random() * (index + 1));
+    [copy[index], copy[other]] = [copy[other], copy[index]];
+  }
+  return copy;
+}
+
+/**
+ * `groups` - Function 🧊
+ *
+ * @returns { Array<{id: string, short: string, group: object}> } - the buckets + the reds, with a short name
+ */
+function groups() {
+  return page.setup.buckets
+    .map((bucket, index) => ({
+      id: 'b' + index,
+      short: translate('Seau ', 'Bucket ') + (index + 1),
+      group: bucket,
+    }))
+    .concat([
+      { id: 'reds', short: translate('Rouges (comptoir)', 'Reds (counter)'), group: page.setup.reds },
+    ]);
+}
+
+/**
+ * `currentGroup` - Function 🧊
+ *
+ * @returns { object | null } - the bucket (or the reds) of the open tab, null on the steps tab
+ */
+function currentGroup() {
+  return groups().find((entry) => entry.id === page.tab) || null;
+}
+
+/**
+ * `readBest` - Function 🏆
+ *
+ * @param { string } key - a chrono key (the tab)
+ * @returns { number } - the best score
+ */
+function readBest(key) {
+  try {
+    return Number(JSON.parse(localStorage.getItem(BEST_KEY) || '{}')[key]) || 0;
+  } catch (error) {
+    return 0;
+  }
+}
+
+/**
+ * `saveBest` - Function 🏆
+ *
+ * @param { string } key - a chrono key (the tab)
+ * @param { number } score - a new score (kept when it beats the old one)
+ * @returns { boolean } - true when it's a new record
+ */
+function saveBest(key, score) {
+  if (score <= readBest(key)) return false;
+  let best = {};
+  try {
+    best = JSON.parse(localStorage.getItem(BEST_KEY) || '{}');
+  } catch (error) {}
+  best[key] = score;
+  localStorage.setItem(BEST_KEY, JSON.stringify(best));
+  return true;
+}
+
+/**
+ * `stillRunning` - Function ⏹️
+ *
+ * @param { number } run - the run a delayed step belongs to
+ * @returns { boolean } - true when that game is still on screen
+ */
+function stillRunning(run) {
+  return page.isOpen && run === page.run;
+}
+
+/**
+ * `appRoot` - Function 🖼️
+ *
+ * @returns { HTMLElement } - the app's main view (#app)
+ */
+function appRoot() {
+  return document.getElementById('app');
+}
+
+/**
+ * `showTabBar` - Function 🧭
+ *
+ * @param { boolean } visible - show (chapter page) or hide (games) the bottom tab bar
+ * @returns { void }
+ */
+function showTabBar(visible) {
+  const tabBar = document.getElementById('tabbar');
+  if (tabBar) tabBar.style.display = visible ? '' : 'none';
+  document.body.classList.toggle('notabs', !visible);
+}
+
+/**
+ * `closeExtras` - Function 🧹
+ *
+ * @returns { void } - removes the answer sheet & stops the chrono
+ */
+function closeExtras() {
+  clearInterval(page.timer);
+  const feedback = document.getElementById('setFb');
+  if (feedback) feedback.remove();
+}
+
+/**
+ * `flowBar` - Function 🔝
+ *
+ * @param { number } percent - the progress (0 → 100)
+ * @param { string } label - the label on the right (3/10, 42 s…)
+ * @returns { string } - the in-game bar (✕ + progress), like the other chapters
+ */
+function flowBar(percent, label) {
   return (
-    `<p class="setintro">${translate(
-      `${done} / ${total} prêtes. Cochez chaque bouteille quand elle est en place (remis à zéro chaque jour).`,
-      `${done} / ${total} ready. Tick each bottle once it's in place (resets every day).`,
-    )}</p><div class="setprog"><i style="width:${percent}%"></i></div>` +
-    (total && done === total
-      ? `<div class="setdone">🎉 ${translate('Mise en place terminée !', 'Setup done!')}</div>`
-      : '') +
-    rows
+    `<header class="appbar flow"><button class="ibtn" data-go="back" aria-label="close">✕</button>` +
+    `<div class="pbar"><i style="width:${percent}%"></i></div><div class="pl">${escapeHtml(label)}</div></header>`
+  );
+}
+
+// ===== QUESTIONS ❓ ===== //
+
+/**
+ * `optionsWith` - Function 🎲
+ *
+ * @param { string } answer - the right answer
+ * @param { Array<string> } pool - the other possible answers
+ * @returns { Array<string> } - up to 4 shuffled options, the answer included
+ */
+function optionsWith(answer, pool) {
+  const others = shuffle(Array.from(new Set(pool.filter((option) => option && option !== answer)))).slice(
+    0,
+    3,
+  );
+  return shuffle([answer].concat(others));
+}
+
+/**
+ * `questionsFor` - Function ❓
+ *
+ * Builds every question of the open tab: where each bottle goes, how many, what it is, which bottle a note
+ * describes; on the steps tab: the order of service, what to do and what to say.
+ *
+ * @returns { Array<{q: string, options: Array<string>, answer: string, expl: string}> } - the questions
+ */
+function questionsFor() {
+  const questions = [];
+  if (page.tab === 'steps') {
+    const steps = page.setup.steps.filter((step) => pick(step.title));
+    const titles = steps.map((step) => pick(step.title));
+    steps.forEach((step, index) => {
+      const title = pick(step.title);
+      questions.push({
+        q: translate(`Quelle est l'étape n° ${index + 1} ?`, `What is step ${index + 1}?`),
+        options: optionsWith(title, titles),
+        answer: title,
+        expl: pick(step.text),
+      });
+      if (index < steps.length - 1)
+        questions.push({
+          q: translate(`Après « ${title} », on fait quoi ?`, `After “${title}”, what comes next?`),
+          options: optionsWith(pick(steps[index + 1].title), titles),
+          answer: pick(steps[index + 1].title),
+          expl: pick(steps[index + 1].text),
+        });
+      if (pick(step.say))
+        questions.push({
+          q: translate(
+            `À quelle étape dit-on : « ${pick(step.say)} » ?`,
+            `At which step do you say: “${pick(step.say)}”?`,
+          ),
+          options: optionsWith(title, titles),
+          answer: title,
+          expl: pick(step.text),
+        });
+      if (pick(step.text))
+        questions.push({
+          q: translate(
+            `Étape « ${title} » : que fait le serveur ?`,
+            `Step “${title}”: what does the waiter do?`,
+          ),
+          options: optionsWith(
+            pick(step.text),
+            steps.map((other) => pick(other.text)),
+          ),
+          answer: pick(step.text),
+          expl: pick(step.say),
+        });
+    });
+    return questions;
+  }
+  const all = groups();
+  const current = currentGroup();
+  if (!current) return questions;
+  const names = current.group.items.map((item) => item.n);
+  current.group.items
+    .filter((item) => item.n)
+    .forEach((item) => {
+      const kind = kindOf(item.kind);
+      questions.push({
+        q: translate(`Où va « ${item.n} » ?`, `Where does “${item.n}” go?`),
+        options: optionsWith(
+          current.short,
+          all.map((entry) => entry.short),
+        ),
+        answer: current.short,
+        expl: pick(current.group.name) + (pick(current.group.hint) ? '. ' + pick(current.group.hint) : ''),
+      });
+      questions.push({
+        q: translate(`Combien de « ${item.n} » ?`, `How many “${item.n}”?`),
+        options: optionsWith(
+          String(item.qty),
+          [item.qty - 1, item.qty + 1, item.qty + 2, item.qty + 3].filter((count) => count > 0).map(String),
+        ),
+        answer: String(item.qty),
+        expl: translate(`×${item.qty} dans le seau.`, `×${item.qty} in the bucket.`),
+      });
+      questions.push({
+        q: translate(`« ${item.n} », c'est…`, `“${item.n}” is…`),
+        options: optionsWith(
+          translate(kind[2], kind[3]),
+          BOTTLE_KINDS.map((other) => translate(other[2], other[3])),
+        ),
+        answer: translate(kind[2], kind[3]),
+        expl: pick(item.note),
+      });
+      if (pick(item.note) && names.length > 1)
+        questions.push({
+          q: translate(`Quelle bouteille : « ${pick(item.note)} » ?`, `Which bottle: “${pick(item.note)}”?`),
+          options: optionsWith(item.n, names),
+          answer: item.n,
+          expl: current.short,
+        });
+    });
+  return questions.filter((question) => question.options.length > 1);
+}
+
+// ===== VIEWS OF THE PAGE 📄 ===== //
+
+/**
+ * `tabsHtml` - Function 🗂️
+ *
+ * @returns { string } - the horizontal, scrollable tabs (buckets, reds, steps)
+ */
+function tabsHtml() {
+  const tabs = groups()
+    .map((entry) => [
+      entry.id,
+      (entry.id === 'reds' ? '🍷 ' : entry.group.icon + ' ') + entry.short.split(' (')[0],
+    ])
+    .concat([['steps', '🤵 ' + translate('Accueil', 'Service')]]);
+  return (
+    `<div class="chips scroll settabs" role="tablist">` +
+    tabs
+      .map(
+        ([id, label]) =>
+          `<button class="chip${page.tab === id ? ' on' : ''}" role="tab" data-tab="${id}">${escapeHtml(label)}</button>`,
+      )
+      .join('') +
+    `</div>`
   );
 }
 
 /**
- * `openSetup` - Function 🧊
+ * `renderPage` - Function 📚
  *
- * Slides up the Mise en place drawer (Seaux · Rouges · Accueil · Check).
+ * The chapter page: title, the tabs, the open tab's card & its modes (overview, learn, quiz, chrono, game).
  *
- * @param { string } [firstTab] - the chip to open on ('buckets' by default)
  * @returns { void }
  */
-function openSetup(firstTab) {
-  addStyles();
-  const old = document.getElementById('setSheet');
-  if (old) old.remove();
-  const tabs = [
-    ['buckets', '🧊 ' + translate('Seaux', 'Buckets')],
-    ['reds', '🍷 ' + translate('Rouges', 'Reds')],
-    ['steps', '🤵 ' + translate('Accueil', 'Service')],
-    ['check', '✅ Check'],
+function renderPage() {
+  closeExtras();
+  showTabBar(true);
+  const current = currentGroup();
+  const isSteps = page.tab === 'steps';
+  const count = isSteps ? page.setup.steps.length : current.group.items.length;
+  const bottles = isSteps ? 0 : current.group.items.reduce((sum, item) => sum + item.qty, 0);
+  const title = isSteps ? translate('Accueil du client', 'Welcoming guests') : pick(current.group.name);
+  const hint = isSteps
+    ? translate("De l'arrivée à la commande, étape par étape.", 'From arrival to the order, step by step.')
+    : pick(current.group.hint);
+  const modes = [
+    [
+      'overview',
+      '👁️',
+      translate('Aperçu', 'Overview'),
+      translate('Tout voir d’un coup d’œil', 'See it all at a glance'),
+      '',
+    ],
+    [
+      'study',
+      '🃏',
+      translate('Apprendre', 'Learn'),
+      translate('Cartes recto-verso', 'Flashcards'),
+      count + ' ' + translate('cartes', 'cards'),
+    ],
+    ['quiz', '❓', 'Quiz', translate('10 questions, explications', '10 questions with explanations'), ''],
+    [
+      'chrono',
+      '⏱️',
+      'Chrono',
+      translate('60 secondes, combos', '60 seconds, combos'),
+      translate('Record', 'Best') + ' ' + readBest(page.tab),
+    ],
+    isSteps
+      ? [
+          'order',
+          '🔢',
+          translate('Dans l’ordre', 'In order'),
+          translate('Remettez les étapes en ordre', 'Put the steps back in order'),
+          '',
+        ]
+      : [
+          'sort',
+          '🧊',
+          translate('Range les seaux', 'Fill the buckets'),
+          translate('Chaque bouteille dans le bon seau', 'Each bottle in the right bucket'),
+          '',
+        ],
   ];
-  const overlay = document.createElement('div');
-  overlay.id = 'setSheet';
-  overlay.className = 'ov scrim';
-  overlay.innerHTML =
-    `<div class="sheet setsheet" role="dialog" aria-label="${translate('Mise en place', 'Setup')}"><div class="grab"></div>` +
-    `<div class="sbody"><div class="setchips">` +
-    tabs.map(([id, label]) => `<button class="chip" data-set="${id}">${label}</button>`).join('') +
-    `</div><div id="setView"></div></div></div>`;
-  const view = overlay.querySelector('#setView');
-  let setup = readCachedSetup(),
-    currentTab = firstTab || 'buckets';
+  if (!isSteps)
+    modes.push([
+      'check',
+      '✅',
+      translate('Checklist du jour', 'Today’s checklist'),
+      translate('Cochez en remplissant le seau', 'Tick while filling the bucket'),
+      '',
+    ]);
+  appRoot().innerHTML =
+    `<div id="setPage"><header class="appbar"><button class="ibtn" data-go="back" aria-label="back">←</button>` +
+    `<div class="abt"></div></header><div class="pad"><div class="kick2">${translate('Chapitre', 'Chapter')}</div>` +
+    `<h1 class="ptitle">${translate('Mise en place', 'Setup')}</h1><div class="muted">` +
+    `${translate('Les 3 seaux, les rouges & l’accueil du client', 'The 3 buckets, the reds & welcoming guests')}</div></div>` +
+    tabsHtml() +
+    `<div class="pad"><div class="card setinfo">` +
+    (!isSteps && current.group.img ? `<img class="setphoto" src="${current.group.img}" alt="">` : '') +
+    `<div class="setinfotx"><b>${escapeHtml(title)}</b><div class="muted sm">${escapeHtml(hint)}</div>` +
+    `<div class="setpills"><span class="setkind">${isSteps ? count + ' ' + translate('étapes', 'steps') : count + ' ' + translate('références', 'items') + ' · ' + bottles + ' ' + translate('bouteilles', 'bottles')}</span></div></div></div>` +
+    `<div class="sh">${translate('Modes de jeu', 'Game modes')}</div>` +
+    modes
+      .map(
+        ([view, icon, name, subtitle, record]) =>
+          `<button class="li tall" data-go="${view}"><div class="av setav">${icon}</div><div class="tx"><div class="n">${name}</div>` +
+          `<div class="muted">${subtitle}</div></div><div class="rt">${record ? `<span class="muted sm">${escapeHtml(record)}</span>` : ''}` +
+          `<span class="muted setchev">›</span></div></button>`,
+      )
+      .join('') +
+    `<div style="height:90px"></div></div><div class="cta"><button class="btn" data-go="quiz">❓ ` +
+    `${translate('Lancer un quiz', 'Start a quiz')}</button></div></div>`;
+  const activeTab = appRoot().querySelector('.settabs .on');
+  if (activeTab && activeTab.scrollIntoView) activeTab.scrollIntoView({ inline: 'center', block: 'nearest' });
+}
 
-  // 🔀 shows one of the four views
-  const show = (tab) => {
-    currentTab = tab;
-    overlay
-      .querySelectorAll('[data-set]')
-      .forEach((chip) => chip.classList.toggle('on', chip.dataset.set === tab));
-    if (tab === 'buckets') view.innerHTML = bucketsView(setup);
-    else if (tab === 'reds') view.innerHTML = groupHtml(setup.reds, setup.reds.icon);
-    else if (tab === 'steps') view.innerHTML = stepsView(setup);
-    else view.innerHTML = checkView(setup);
+/**
+ * `renderOverview` - Function 👁️
+ *
+ * @returns { void } - the open tab, all at once (the bucket card or the steps timeline)
+ */
+function renderOverview() {
+  showTabBar(true);
+  const current = currentGroup();
+  appRoot().innerHTML =
+    `<div id="setPage"><header class="appbar"><button class="ibtn" data-go="back" aria-label="back">←</button>` +
+    `<div class="abt">${translate('Aperçu', 'Overview')}</div></header><div class="pad">` +
+    (current
+      ? groupHtml(current.group, current.id === 'reds' ? '🍷' : current.id.slice(1) * 1 + 1)
+      : stepsView(page.setup)) +
+    `<div style="height:40px"></div></div></div>`;
+}
+
+/**
+ * `renderCheck` - Function ✅
+ *
+ * @returns { void } - the checklist of the open bucket
+ */
+function renderCheck() {
+  showTabBar(true);
+  const current = currentGroup();
+  const ticks = readTicks();
+  const done = current.group.items.filter((item, index) => ticks[current.id + '-' + index]).length;
+  const total = current.group.items.length;
+  appRoot().innerHTML =
+    `<div id="setPage"><header class="appbar"><button class="ibtn" data-go="back" aria-label="back">←</button>` +
+    `<div class="abt">${escapeHtml(current.short)}</div></header><div class="pad">` +
+    `<p class="setintro">${translate(
+      `${done} / ${total} prêtes. Cochez chaque bouteille quand elle est en place (remis à zéro chaque jour).`,
+      `${done} / ${total} ready. Tick each bottle once it's in place (resets every day).`,
+    )}</p><div class="setprog"><i style="width:${total ? (100 * done) / total : 0}%"></i></div>` +
+    (total && done === total
+      ? `<div class="setdone">🎉 ${translate('Seau prêt !', 'Bucket ready!')}</div>`
+      : '') +
+    current.group.items
+      .map((item, index) => {
+        const id = current.id + '-' + index;
+        return (
+          `<button class="setcheck${ticks[id] ? ' done' : ''}" data-tick="${id}"><span class="setbox">` +
+          `${ticks[id] ? '✓' : ''}</span><span class="grow">${escapeHtml(item.n)}</span>` +
+          `<span class="setqty">×${item.qty}</span></button>`
+        );
+      })
+      .join('') +
+    `</div></div>`;
+}
+
+/**
+ * `renderStudy` - Function 🃏
+ *
+ * Flashcards: a bottle (where does it go?) or a step number (what happens?), tap to flip.
+ *
+ * @returns { void }
+ */
+function renderStudy() {
+  showTabBar(false);
+  const current = currentGroup();
+  const cards = current
+    ? current.group.items.map((item) => ({
+        front: escapeHtml(item.n),
+        ask: translate('Où va-t-elle ? Combien ?', 'Where does it go? How many?'),
+        back:
+          `<b>${escapeHtml(current.short)}</b><br>${escapeHtml(pick(current.group.name))}<br><br>` +
+          `${kindOf(item.kind)[1]} ${translate(kindOf(item.kind)[2], kindOf(item.kind)[3])} · ×${item.qty}` +
+          (pick(item.note) ? `<br><span class="muted">${escapeHtml(pick(item.note))}</span>` : ''),
+      }))
+    : page.setup.steps.map((step, index) => ({
+        front: `${escapeHtml(step.icon)}<br>${translate('Étape', 'Step')} ${index + 1}`,
+        ask: translate('Que fait-on ?', 'What do you do?'),
+        back:
+          `<b>${escapeHtml(pick(step.title))}</b><br>${escapeHtml(pick(step.text))}` +
+          (pick(step.say) ? `<div class="setsay">${escapeHtml(pick(step.say))}</div>` : ''),
+      }));
+  const deck = current ? shuffle(cards) : cards;
+  let cardIndex = 0,
+    known = 0;
+  // 🃏 one card (or the end)
+  const show = () => {
+    if (cardIndex >= deck.length) return renderResult('🃏', known, deck.length, '');
+    const card = deck[cardIndex];
+    appRoot().innerHTML =
+      `<div id="setPage">${flowBar((100 * cardIndex) / deck.length, `${cardIndex + 1}/${deck.length}`)}<div class="pad">` +
+      `<div class="flip" id="setFlip"><div class="face front"><div class="fq">${card.front}</div>` +
+      `<div class="muted" style="margin-top:12px">${escapeHtml(card.ask)}</div>` +
+      `<small class="hint">${translate('Touchez pour retourner', 'Tap to flip')}</small></div>` +
+      `<div class="face back"><div class="btxt">${card.back}</div></div></div></div>` +
+      `<div class="abar fixed"><button class="btn sec grow" data-card="no">${translate('À revoir', 'Review again')}</button>` +
+      `<button class="btn grow ok" data-card="yes">✓ ${translate('Je savais', 'I knew it')}</button></div></div>`;
+    appRoot().querySelector('#setFlip').onclick = function () {
+      this.classList.toggle('on');
+    };
+    appRoot()
+      .querySelectorAll('[data-card]')
+      .forEach(
+        (button) =>
+          (button.onclick = () => {
+            if (button.dataset.card === 'yes') known++;
+            cardIndex++;
+            show();
+          }),
+      );
   };
-  overlay.addEventListener('click', (event) => {
-    const chip = event.target.closest('[data-set]');
-    if (chip) {
-      show(chip.dataset.set);
-      overlay.querySelector('.sbody').scrollTop = 0;
-      return;
+  show();
+}
+
+/**
+ * `askQuestion` - Function ❓
+ *
+ * Draws one question; an answer turns green / red and slides up the explanation sheet.
+ *
+ * @param { object } question - { q, options, answer, expl }
+ * @param { string } barHtml - the top bar
+ * @param { (ok: boolean) => void } onAnswer - called right after the tap
+ * @param { () => void } [onNext] - called by « Continuer » (no sheet when missing: chrono)
+ * @returns { void }
+ */
+function askQuestion(question, barHtml, onAnswer, onNext) {
+  appRoot().innerHTML =
+    `<div id="setPage">${barHtml}<div class="pad"><div class="muted sm">${translate('Mise en place', 'Setup')}</div>` +
+    `<h2 class="qq">${escapeHtml(question.q)}</h2><div class="opts">` +
+    question.options
+      .map(
+        (option, index) =>
+          `<button class="opt" data-option="${index}"><span class="k">${'ABCD'[index]}</span><span>${escapeHtml(option)}</span></button>`,
+      )
+      .join('') +
+    `</div></div></div>`;
+  appRoot()
+    .querySelectorAll('[data-option]')
+    .forEach(
+      (button) =>
+        (button.onclick = () => {
+          const ok = question.options[button.dataset.option] === question.answer;
+          appRoot()
+            .querySelectorAll('[data-option]')
+            .forEach((other) => {
+              other.disabled = true;
+              if (question.options[other.dataset.option] === question.answer) other.classList.add('right');
+            });
+          if (!ok) button.classList.add('wrong');
+          if (navigator.vibrate) navigator.vibrate(ok ? 8 : [20, 40, 20]);
+          onAnswer(ok);
+          if (!onNext) return;
+          const feedback = document.createElement('div');
+          feedback.id = 'setFb';
+          feedback.className = 'fbsheet ' + (ok ? 'okc' : 'koc');
+          feedback.innerHTML =
+            `<div class="fbt">${ok ? '✓ ' + translate('Bonne réponse !', 'Correct!') : '✕ ' + translate('Pas tout à fait', 'Not quite')}</div>` +
+            `<div class="fbx">${ok ? '' : translate('Réponse', 'Answer') + ' : <b>' + escapeHtml(question.answer) + '</b>. '}` +
+            `${escapeHtml(question.expl || '')}</div><div class="fbb"><button class="btn grow">${translate('Continuer', 'Continue')}</button></div>`;
+          document.body.appendChild(feedback);
+          feedback.querySelector('button').onclick = () => {
+            feedback.remove();
+            onNext();
+          };
+        }),
+    );
+}
+
+/**
+ * `renderQuiz` - Function ❓
+ *
+ * @returns { void } - 10 questions of the open tab, with explanations
+ */
+function renderQuiz() {
+  showTabBar(false);
+  const questions = shuffle(questionsFor()).slice(0, 10);
+  let questionIndex = 0,
+    score = 0;
+  // ❓ the next question (or the score)
+  const next = () => {
+    if (questionIndex >= questions.length) return renderResult('❓', score, questions.length, '');
+    askQuestion(
+      questions[questionIndex],
+      flowBar((100 * questionIndex) / questions.length, `${questionIndex + 1}/${questions.length}`),
+      (ok) => ok && score++,
+      () => {
+        questionIndex++;
+        next();
+      },
+    );
+  };
+  next();
+}
+
+/**
+ * `renderChrono` - Function ⏱️
+ *
+ * @returns { void } - 60 seconds of questions, a combo doubles the points after 3 right answers in a row
+ */
+function renderChrono() {
+  showTabBar(false);
+  const pool = questionsFor();
+  const run = page.run;
+  const endTime = Date.now() + 60000;
+  let score = 0,
+    combo = 0,
+    questionIndex = 0,
+    order = shuffle(pool);
+  // ⏱️ the bar with the seconds left
+  const bar = () => {
+    const left = Math.max(0, Math.ceil((endTime - Date.now()) / 1000));
+    return flowBar((100 * left) / 60, `${left} s · ${score}`);
+  };
+  // 🏁 time's up
+  const finish = () => {
+    if (!stillRunning(run)) return;
+    // the game is over: no other step may draw (or finish twice) ⏹️
+    page.run++;
+    clearInterval(page.timer);
+    const isRecord = saveBest(page.tab, score);
+    renderResult('⏱️', score, 0, isRecord ? '🏆 ' + translate('Nouveau record !', 'New record!') : '');
+  };
+  // ❓ the next question, right away
+  const next = () => {
+    if (!stillRunning(run)) return;
+    if (Date.now() >= endTime) return finish();
+    if (questionIndex >= order.length) {
+      order = shuffle(pool);
+      questionIndex = 0;
     }
-    // ✅ a tick in the checklist
-    const tick = event.target.closest('[data-tick]');
-    if (tick) {
-      const ticks = readTicks();
-      ticks[tick.dataset.tick] = !ticks[tick.dataset.tick];
-      saveTicks(ticks);
-      if (navigator.vibrate) navigator.vibrate(6);
-      const scroll = overlay.querySelector('.sbody').scrollTop;
-      show('check');
-      overlay.querySelector('.sbody').scrollTop = scroll;
-      return;
-    }
-    // 👋 a tap on the scrim closes the drawer
-    if (event.target === overlay) {
-      overlay.classList.add('out');
-      setTimeout(() => overlay.remove(), 180);
-    }
-  });
-  document.body.appendChild(overlay);
-  show(currentTab);
-  // 🔄 the owner's latest version (then redraw the open view)
+    askQuestion(order[questionIndex++], bar(), (ok) => {
+      combo = ok ? combo + 1 : 0;
+      if (ok) score += combo >= 3 ? 2 : 1;
+      setTimeout(next, ok ? 350 : 900);
+    });
+  };
+  clearInterval(page.timer);
+  page.timer = setInterval(() => {
+    if (!stillRunning(run)) return clearInterval(page.timer);
+    if (Date.now() >= endTime) return finish();
+    const label = appRoot().querySelector('.flow .pl'),
+      fill = appRoot().querySelector('.flow .pbar i');
+    const left = Math.max(0, Math.ceil((endTime - Date.now()) / 1000));
+    if (label) label.textContent = `${left} s · ${score}`;
+    if (fill) fill.style.width = (100 * left) / 60 + '%';
+  }, 250);
+  if (!pool.length) return finish();
+  next();
+}
+
+/**
+ * `renderSort` - Function 🧊
+ *
+ * The bucket game: every bottle (all buckets & the reds) shows up one by one, tap where it goes.
+ *
+ * @returns { void }
+ */
+function renderSort() {
+  showTabBar(false);
+  const all = groups();
+  const bottles = shuffle(
+    all.flatMap((entry) => entry.group.items.filter((item) => item.n).map((item) => ({ item, entry }))),
+  );
+  const run = page.run;
+  let bottleIndex = 0,
+    score = 0;
+  // 🍾 the next bottle (or the score)
+  const next = () => {
+    if (!stillRunning(run)) return;
+    if (bottleIndex >= bottles.length) return renderResult('🧊', score, bottles.length, '');
+    const { item, entry } = bottles[bottleIndex];
+    const kind = kindOf(item.kind);
+    appRoot().innerHTML =
+      `<div id="setPage">${flowBar((100 * bottleIndex) / bottles.length, `${bottleIndex + 1}/${bottles.length}`)}` +
+      `<div class="pad"><div class="setgamebottle"><span class="setdot" style="background:${kind[4]}"></span><div>` +
+      `<div class="muted sm">${kind[1]} ${translate(kind[2], kind[3])} · ×${item.qty}</div><b>${escapeHtml(item.n)}</b>` +
+      (pick(item.note) ? `<div class="muted sm">${escapeHtml(pick(item.note))}</div>` : '') +
+      `</div></div><div class="sh">${translate('Dans quel seau ?', 'Which bucket?')}</div><div class="setbins">` +
+      all
+        .map(
+          (other) =>
+            `<button class="setbin" data-bin="${other.id}">${other.group.img ? `<img src="${other.group.img}" alt="">` : ''}` +
+            `<span>${escapeHtml(other.short)}</span></button>`,
+        )
+        .join('') +
+      `</div></div></div>`;
+    appRoot()
+      .querySelectorAll('[data-bin]')
+      .forEach(
+        (button) =>
+          (button.onclick = () => {
+            const ok = button.dataset.bin === entry.id;
+            appRoot()
+              .querySelectorAll('[data-bin]')
+              .forEach((other) => {
+                other.disabled = true;
+                if (other.dataset.bin === entry.id) other.classList.add('right');
+              });
+            if (!ok) button.classList.add('wrong');
+            if (ok) score++;
+            if (navigator.vibrate) navigator.vibrate(ok ? 8 : [20, 40, 20]);
+            bottleIndex++;
+            setTimeout(next, ok ? 450 : 1200);
+          }),
+      );
+  };
+  next();
+}
+
+/**
+ * `renderOrder` - Function 🔢
+ *
+ * The steps game: the steps are shuffled, tap them in the order of service.
+ *
+ * @returns { void }
+ */
+function renderOrder() {
+  showTabBar(false);
+  const steps = page.setup.steps.map((step, index) => ({ step, index }));
+  const shuffled = shuffle(steps);
+  let nextIndex = 0,
+    mistakes = 0;
+  appRoot().innerHTML =
+    `<div id="setPage">${flowBar(0, `0/${steps.length}`)}<div class="pad"><h2 class="qq">` +
+    `${translate('Touchez les étapes dans l’ordre du service', 'Tap the steps in the order of service')}</h2><div class="opts">` +
+    shuffled
+      .map(
+        ({ step, index }) =>
+          `<button class="opt" data-step="${index}"><span class="k">${escapeHtml(step.icon)}</span><span>${escapeHtml(pick(step.title))}</span></button>`,
+      )
+      .join('') +
+    `</div></div></div>`;
+  appRoot()
+    .querySelectorAll('[data-step]')
+    .forEach(
+      (button) =>
+        (button.onclick = () => {
+          if (Number(button.dataset.step) === nextIndex) {
+            nextIndex++;
+            button.disabled = true;
+            button.classList.add('right');
+            button.querySelector('.k').textContent = String(nextIndex);
+            const fill = appRoot().querySelector('.flow .pbar i'),
+              label = appRoot().querySelector('.flow .pl');
+            if (fill) fill.style.width = (100 * nextIndex) / steps.length + '%';
+            if (label) label.textContent = `${nextIndex}/${steps.length}`;
+            if (nextIndex >= steps.length)
+              setTimeout(
+                () => renderResult('🔢', Math.max(0, steps.length - mistakes), steps.length, ''),
+                600,
+              );
+          } else {
+            mistakes++;
+            button.classList.add('wrong');
+            if (navigator.vibrate) navigator.vibrate([20, 40, 20]);
+            setTimeout(() => button.classList.remove('wrong'), 500);
+          }
+        }),
+    );
+}
+
+/**
+ * `renderResult` - Function 🏁
+ *
+ * @param { string } icon - the game's emoji
+ * @param { number } score - the score
+ * @param { number } total - out of (0 = points, the chrono)
+ * @param { string } extra - an extra line (new record…)
+ * @returns { void }
+ */
+function renderResult(icon, score, total, extra) {
+  closeExtras();
+  showTabBar(false);
+  const ratio = total ? score / total : 1;
+  appRoot().innerHTML =
+    `<div id="setPage"><div class="pad setresult"><div class="setbig">${icon}</div>` +
+    `<h1 class="ptitle">${total ? `${score} / ${total}` : `${score} pts`}</h1><div class="muted">` +
+    `${ratio >= 0.9 ? translate('Parfait, vous êtes prêt pour le service !', 'Perfect, you’re ready for service!') : ratio >= 0.6 ? translate('Bien joué, encore un tour ?', 'Well done, one more round?') : translate('On recommence, ça va rentrer !', 'Let’s go again, it’ll stick!')}` +
+    `</div>${extra ? `<div class="setdone">${escapeHtml(extra)}</div>` : ''}</div>` +
+    `<div class="abar fixed"><button class="btn sec grow" data-go="back">${translate('Terminer', 'Done')}</button>` +
+    `<button class="btn grow" data-go="${page.view}">↻ ${translate('Rejouer', 'Play again')}</button></div></div>`;
+}
+
+// the views of the page, by name 🗺️
+const VIEWS = {
+  page: renderPage,
+  overview: renderOverview,
+  check: renderCheck,
+  study: renderStudy,
+  quiz: renderQuiz,
+  chrono: renderChrono,
+  sort: renderSort,
+  order: renderOrder,
+};
+
+/**
+ * `render` - Function 🖼️
+ *
+ * @param { string } view - a view of the page
+ * @returns { void }
+ */
+function render(view) {
+  closeExtras();
+  // a new run: delayed steps of the previous game stop here ⏹️
+  page.run++;
+  page.view = VIEWS[view] ? view : 'page';
+  VIEWS[page.view]();
+  window.scrollTo(0, 0);
+}
+
+/**
+ * `openPage` - Function 📚
+ *
+ * Opens the Mise en place chapter page in place of the home screen (Back comes home).
+ *
+ * @returns { void }
+ */
+function openPage() {
+  addStyles();
+  page.setup = readCachedSetup();
+  page.isOpen = true;
+  history.pushState({ ltfSetup: 'page' }, '');
+  render('page');
+  // 🔄 the owner's latest version (redraw only the chapter page or the overview)
   loadSetup().then((latest) => {
-    setup = latest;
-    if (document.body.contains(overlay)) show(currentTab);
+    page.setup = latest;
+    if (page.isOpen && (page.view === 'page' || page.view === 'overview')) render(page.view);
   });
 }
+
+/**
+ * `leavePage` - Function 👋
+ *
+ * @returns { void } - back to the home screen
+ */
+function leavePage() {
+  closeExtras();
+  page.isOpen = false;
+  if (typeof window.LTFgo === 'function') window.LTFgo('hub');
+}
+
+// 👆 the page's taps: tabs, modes, back, ticks
+document.addEventListener('click', (event) => {
+  if (!page.isOpen || !event.target.closest('#setPage')) return;
+  const tab = event.target.closest('[data-tab]');
+  if (tab) {
+    page.tab = tab.dataset.tab;
+    return render('page');
+  }
+  const tick = event.target.closest('[data-tick]');
+  if (tick) {
+    const ticks = readTicks();
+    ticks[tick.dataset.tick] = !ticks[tick.dataset.tick];
+    saveTicks(ticks);
+    if (navigator.vibrate) navigator.vibrate(6);
+    const scroll = window.scrollY;
+    render('check');
+    window.scrollTo(0, scroll);
+    return;
+  }
+  const go = event.target.closest('[data-go]');
+  if (!go) return;
+  if (go.dataset.go === 'back') return history.back();
+  // a game from the chapter page: one history step, so Back returns to the page
+  if (page.view === 'page') history.pushState({ ltfSetup: go.dataset.go }, '');
+  render(go.dataset.go);
+});
+
+// 🔙 Back while the page is open: a game goes back to the chapter page, the page goes home
+addEventListener(
+  'popstate',
+  (event) => {
+    if (!page.isOpen) return;
+    event.stopImmediatePropagation();
+    if (page.view !== 'page') render('page');
+    else leavePage();
+  },
+  true,
+);
+
+// 👀 another tab of the app took over #app: the page is closed
+new MutationObserver(() => {
+  if (page.isOpen && !document.getElementById('setPage')) {
+    closeExtras();
+    page.isOpen = false;
+  }
+}).observe(document.body, { childList: true, subtree: true });
 
 // ===== HOME 🏠 ===== //
 
@@ -780,7 +1513,7 @@ function addChapterRow() {
     `<div class="av" style="font-size:21px">🧊</div><div class="tx"><div class="n">${translate('Mise en place', 'Setup')}</div>` +
     `<div class="muted">${translate('Les 3 seaux, les rouges & l’accueil du client', 'The 3 buckets, the reds & welcoming guests')}</div></div>` +
     `<div class="muted" style="font-size:22px;padding:0 6px">›</div>`;
-  row.addEventListener('click', () => openSetup());
+  row.addEventListener('click', () => openPage());
   firstChapter.parentNode.insertBefore(row, firstChapter);
 }
 
@@ -789,4 +1522,4 @@ new MutationObserver(addChapterRow).observe(document.body, { childList: true, su
 addChapterRow();
 
 // 🌍 open it from anywhere (e.g. a link or the console)
-window.LTFopenSetup = openSetup;
+window.LTFopenSetup = openPage;
