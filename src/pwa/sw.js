@@ -36,7 +36,7 @@
 // network first, cache as a fallback (📴 offline).
 
 // the cache of this version 🏷️
-const CACHE = 'ltf-v75';
+const CACHE = 'ltf-v77';
 // the scanner cache (big model files, kept across app versions): bump it when pwa/scan/ changes 📷
 const SCAN_CACHE = 'ltf-scan-v5';
 // the app shell, precached on install 📦
@@ -106,6 +106,8 @@ self.addEventListener('fetch', (event) => {
   // the push API & the Google sign-in pages (`/__/auth/`, proxied to Firebase) always go to the network 🔑
   const pathname = new URL(event.request.url).pathname;
   if (pathname.startsWith('/api/') || pathname.startsWith('/__/')) return;
+  // 🧩 the scanner's model parts: straight to the network (scan.js stores the joined model itself)
+  if (pathname.startsWith('/models/')) return;
   // 📷 scan assets: cache first (ignoring the query), then the network (and keep a good copy)
   if (new URL(event.request.url).pathname.includes('/scan/')) {
     event.respondWith(
