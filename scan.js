@@ -160,12 +160,26 @@
     'ba1f3b0843f24bc5417d38e19c37b287d719b2f4/onnx/vision_model_q4.onnx';
   // its size in bytes (for the progress bar when the server doesn't say) 📏
   const MODEL_BYTES = 63267466;
+  // the same model on our own domain, in 8 parts of 8 MB (mobile networks drop long downloads:
+  // a small part is retried on its own, and no third-party host can be blocked) 🧩
+  const MODEL_PARTS = Array.from({ length: 8 }, (unused, index) => 'models/siglip2-q4/part-' + index);
+  // how many times one part is tried before giving up 🔁
+  const PART_TRIES = 4;
   // everything the first download fetches, rounded (model 63 MB + engine 22 MB + label reader & photos 12 MB) 📦
   const DOWNLOAD_LABEL = '≈ 97 Mo';
   // the close button's cross (an SVG, so it sits exactly in the middle of its circle) ✕
   const CLOSE_ICON =
     '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.4" ' +
     'stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>';
+  // the gallery & torch buttons: plain white outline icons (no circle behind them) 🖼️🔦
+  const GALLERY_ICON =
+    '<svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="1.7" ' +
+    'stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3.5" y="4.5" width="17" height="15" rx="3"/>' +
+    '<circle cx="9" cy="10" r="1.6"/><path d="m4 17 4.6-4.6a1.5 1.5 0 0 1 2.1 0L16 17.6M14 15.5l1.8-1.8a1.5 1.5 0 0 1 2.1 0L20 15.8"/></svg>';
+  const TORCH_ICON =
+    '<svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="1.7" ' +
+    'stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 3h10v3.5l-2.5 4V20a1 1 0 0 1-1 1h-3a1 1 0 0 1-1-1v-9.5L7 6.5z"/>' +
+    '<path d="M7 6.5h10M12 13.5v2"/></svg>';
   // the model's input: a 224 x 224 RGB picture 🖼️
   const INPUT_SIZE = 224;
   // the length of an embedding (refs or learned scans of another length come from the old model) 🔢
@@ -396,8 +410,75 @@
     // ✅ already here (works offline)
     const cached = cache && (await cache.match(MODEL_URL));
     if (cached) return new Uint8Array(await cached.arrayBuffer());
-    // 🌐 download it, chunk by chunk, to show the progress
-    const response = await fetch(MODEL_URL, { mode: 'cors', credentials: 'omit' });
+    // 🌐 our own parts first, then Hugging Face if our host fails
+    let bytes;
+    try {
+      bytes = await downloadParts(onProgress);
+    } catch (partsError) {
+      console.warn('[scan] parts failed, trying Hugging Face', partsError);
+      bytes = await downloadWhole(MODEL_URL, onProgress).catch(() => {
+        throw partsError;
+      });
+    }
+    if (bytes.length !== MODEL_BYTES) throw Error('incomplete (' + bytes.length + ' bytes)');
+    // 🗄️ keep it for next time (a full phone just downloads it again next time)
+    try {
+      if (cache)
+        await cache.put(
+          MODEL_URL,
+          new Response(bytes, { headers: { 'content-type': 'application/octet-stream' } }),
+        );
+    } catch (error) {
+      console.warn('[scan] model not stored', error);
+    }
+    return bytes;
+  }
+
+  /**
+   * `downloadParts` - Async Function 🧩
+   *
+   * Downloads the model's parts one by one from our domain, retrying each part on its own.
+   *
+   * @param { function(number): void } [onProgress] - called with 0..1
+   * @returns { Promise<Uint8Array> } - the whole model
+   */
+  async function downloadParts(onProgress) {
+    const bytes = new Uint8Array(MODEL_BYTES);
+    let offset = 0;
+    for (const part of MODEL_PARTS) {
+      let partBytes = null,
+        lastError = null;
+      for (let attempt = 0; attempt < PART_TRIES && !partBytes; attempt++) {
+        try {
+          // a short pause before each retry (1 s, 2 s, 4 s) ⏸️
+          if (attempt) await new Promise((resolve) => setTimeout(resolve, 1000 * 2 ** (attempt - 1)));
+          const response = await fetch(part, { cache: 'no-store' });
+          if (!response.ok) throw Error('HTTP ' + response.status);
+          partBytes = new Uint8Array(await response.arrayBuffer());
+        } catch (error) {
+          lastError = error;
+        }
+      }
+      if (!partBytes) throw lastError || Error('part failed');
+      if (offset + partBytes.length > MODEL_BYTES) throw Error('part too big');
+      bytes.set(partBytes, offset);
+      offset += partBytes.length;
+      onProgress && onProgress(offset / MODEL_BYTES);
+    }
+    return offset === MODEL_BYTES ? bytes : bytes.subarray(0, offset);
+  }
+
+  /**
+   * `downloadWhole` - Async Function 📥
+   *
+   * Downloads one big file chunk by chunk, to show the progress.
+   *
+   * @param { string } url - the file
+   * @param { function(number): void } [onProgress] - called with 0..1
+   * @returns { Promise<Uint8Array> } - the file
+   */
+  async function downloadWhole(url, onProgress) {
+    const response = await fetch(url, { mode: 'cors', credentials: 'omit' });
     if (!response.ok || !response.body) throw Error('HTTP ' + response.status);
     const total = +response.headers.get('content-length') || MODEL_BYTES;
     const reader = response.body.getReader();
@@ -417,14 +498,6 @@
       bytes.set(chunk, offset);
       offset += chunk.length;
     }
-    // 🗄️ keep it for next time (a full phone just downloads it again next time)
-    try {
-      if (cache)
-        await cache.put(
-          MODEL_URL,
-          new Response(bytes, { headers: { 'content-type': 'application/octet-stream' } }),
-        );
-    } catch (error) {}
     return bytes;
   }
 
@@ -1099,6 +1172,10 @@
 .scround{width:50px;height:50px;border-radius:50%;border:0;background:rgba(255,255,255,.14);color:#fff;
   font-size:20px;display:flex;align-items:center;justify-content:center;cursor:pointer}
 .scround.on{background:#f3d58a;color:#111}
+.sclivebar .scround{background:transparent;color:#fff;width:52px;height:52px}
+.sclivebar .scround:active{transform:scale(.88)}
+.sclivebar .scround.on{background:transparent;color:#f3d58a}
+.sclivebar .scround svg{display:block}
 .scshot{width:76px;height:76px;border-radius:50%;border:4px solid #fff;background:transparent;padding:4px;
   position:relative;transition:transform .12s}
 .scshot::after{content:'';position:absolute;inset:5px;border-radius:50%;background:var(--gold,#c9a961)}
@@ -1397,10 +1474,10 @@
         `<div class="scprep gone" id="scPrepBox"></div>` +
         `<div class="schint">${translate("Cadrez l'assiette, l'étiquette ou la bouteille", 'Frame the plate, the label or the bottle')}</div>` +
         `<div class="scflash"></div></div>` +
-        `<div class="scbtns sclivebar"><label class="scround" for="scFile" aria-label="gallery">🖼</label>` +
+        `<div class="scbtns sclivebar"><label class="scround" for="scFile" aria-label="gallery">${GALLERY_ICON}</label>` +
         `<input id="scFile" type="file" accept="image/*" hidden>` +
         `<button class="scshot" id="scShot" aria-label="scan"></button>` +
-        `<button class="scround" id="scTorch" aria-label="torch" style="visibility:hidden">🔦</button></div>`,
+        `<button class="scround" id="scTorch" aria-label="torch" style="visibility:hidden">${TORCH_ICON}</button></div>`,
     );
     overlay.classList.add('sclive');
     const video = queryOne('#scVid');
