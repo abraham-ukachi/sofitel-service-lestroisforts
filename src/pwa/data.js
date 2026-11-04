@@ -2598,6 +2598,17 @@ window.LTF.fromages = [
     },
   },
   {
+    n: 'Crottin de Chavignol',
+    lait: { fr: 'Chèvre', en: 'Goat' },
+    orig: { fr: 'Loire, Sancerrois (AOP)', en: 'Loire Valley, Sancerre area (PDO)' },
+    pate: { fr: 'Pâte molle, croûte naturelle', en: 'Soft cheese, natural rind' },
+    h: { fr: 'petit chèvre de la Loire, goût de noisette', en: 'little Loire goat cheese, nutty taste' },
+    d: {
+      fr: "C'est un petit chèvre de la Loire, juste à côté de Sancerre. Jeune, il est doux et crémeux ; en vieillissant, il devient plus sec, avec un goût de noisette plus marqué. L'accord classique, c'est un Sancerre blanc.",
+      en: "It's a little goat's cheese from the Loire, right next to Sancerre. Young, it's mild and creamy; as it ages it gets drier, with a stronger nutty taste. The classic match is a white Sancerre.",
+    },
+  },
+  {
     n: 'Comté 18 mois',
     lait: { fr: 'Vache', en: 'Cow' },
     orig: { fr: 'Jura (AOP)', en: 'Jura (PDO)' },
