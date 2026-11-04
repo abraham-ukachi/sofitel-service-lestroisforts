@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file. Versions follow the service-worker cache (`ltf-vNN` → `0.NN.0`), see [CONTRIBUTING.md](./CONTRIBUTING.md#git-commit-messages) for the commit guidelines.
 
+### 0.72.2 (2026-11-04)
+
+* :lipstick: Chat: the composer is a soft filled pill with no outline, a plain one-colour outline microphone, an SVG plus and send arrow, and a frosted footer
+* :bug: Scanner: a failed download now says which step failed and why (instead of always « Pas de connexion »), offers « Réessayer », and the download button also shows when the camera is unavailable
+
 ### 0.72.1 (2026-11-04)
 
 * :sparkles: Scanner: the AI no longer downloads by itself. A gold « ⬇️ Télécharger le scanner IA · ≈ 97 Mo » button on the viewfinder starts it, shows the progress, says « Prêt ✓ » and disappears for good once everything is on the phone; the shutter asks first too
