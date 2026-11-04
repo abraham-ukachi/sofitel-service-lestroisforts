@@ -356,9 +356,12 @@ function listen() {
   messages = [];
   listen.loaded = false;
   if (!user || !hasChatAccess()) {
+    stopServiceWatchers();
     paint();
     return;
   }
+  // the team, the pinned message & the quick messages 🍽️
+  startServiceWatchers();
   // the newest 150 messages, live 🔴
   unsubscribe = onSnapshot(
     query(collection(firestore, 'chat'), orderBy('ts', 'desc'), limit(150)),
@@ -682,6 +685,7 @@ function bubbleHtml(message) {
   return (
     '<div class="cm' +
     (isMine ? ' me' : '') +
+    (!isMine && mentionsMe(message.text) ? ' cmine' : '') +
     '" data-id="' +
     message.id +
     '"><span class="cswi">↩︎</span>' +
@@ -724,7 +728,7 @@ function bubbleHtml(message) {
       ? '<div class="ct' +
         (isEmojiOnly(message.text) ? ' cbig' : '') +
         '">' +
-        escapeHtml(message.text).replace(/\n/g, '<br>') +
+        richText(message.text) +
         '</div>'
       : '') +
     // 🕘 the time
@@ -744,6 +748,7 @@ function bubbleHtml(message) {
         '">↩︎ ' +
         translate('Répondre', 'Reply') +
         '</button>' +
+        (isOwner() ? '<button class="crp" data-pin="' + message.id + '">📌</button>' : '') +
         (isMine ? '<button class="crp" data-del="' + message.id + '">🗑</button>' : '') +
         '</div>'
       : '') +
@@ -803,6 +808,7 @@ function paint() {
       translate('Se connecter avec Google', 'Sign in with Google') +
       '</button></div>';
     footer.style.display = 'none';
+    paintServiceTools();
     // popup first, redirect when popups are blocked 🔀
     body.querySelector('#cIn').onclick = async () => {
       try {
@@ -818,6 +824,7 @@ function paint() {
   if (!hasChatAccess()) {
     body.innerHTML = accessScreenHtml();
     footer.style.display = 'none';
+    paintServiceTools();
     return;
   }
   // show the composer
@@ -864,6 +871,8 @@ function paint() {
     pendingPhoto = null;
     paint();
   };
+  // 🍽️ the pinned banner, the quick messages & the suggestions
+  paintServiceTools();
 }
 
 /**
@@ -955,7 +964,8 @@ function openChat() {
     '<div class="sch"><button class="cx" aria-label="close">←</button><div class="grow"><div style="font-weight:700">' +
     translate("Chat de l'équipe", 'Team chat') +
     '</div><div class="muted sm">Les Trois Forts</div></div><button class="cbell" hidden aria-label="notifications"></button></div>' +
-    '<div class="cbody"></div><div class="cfoot"><div class="crep"></div><div class="cmenu" hidden><label><input type="file" accept="image/*" capture="environment" hidden>📷 ' +
+    '<div class="cpin" hidden></div><div class="cbody"></div><div class="cfoot"><div class="crep"></div>' +
+    '<div class="cmsug" hidden></div><div class="cquick" hidden></div><div class="cmenu" hidden><label><input type="file" accept="image/*" capture="environment" hidden>📷 ' +
     translate('Appareil photo', 'Camera') +
     '</label><label><input type="file" accept="image/*" hidden>🖼️ ' +
     translate('Photos', 'Photos') +
@@ -964,6 +974,7 @@ function openChat() {
     '</button><textarea rows="1" maxlength="1000" enterkeyhint="send" placeholder="' +
     translate('Message…', 'Message…') +
     '"></textarea><button class="cplus" aria-label="photo">+</button></div><div class="cpick" hidden></div></div>';
+  addServiceStyles();
   document.body.appendChild(overlay);
   // 🔙 Back (button or gesture) closes the chat
   history.pushState({ chat: 1 }, '');
@@ -991,6 +1002,9 @@ function openChat() {
       send();
     }
   });
+
+  // 🍽️ the pinned banner, the quick messages & the @mention suggestions
+  wireServiceTools(textarea);
 
   // 😀 the emoji / GIF panel: the smiley opens it (keyboard down), the keyboard icon or the text box closes it
   overlay.querySelector('.cemo').onclick = (event) => {
@@ -1047,6 +1061,19 @@ function openChat() {
       selectedId = null;
       react(button.dataset.re, button.dataset.e);
       paint();
+      return;
+    }
+    // 🍽️ a table chip: the floor plan
+    if (target.closest('[data-table]')) {
+      showTable(target.closest('[data-table]').dataset.table);
+      return;
+    }
+    // 📌 pin (owner)
+    if (target.closest('[data-pin]')) {
+      const id = target.closest('[data-pin]').dataset.pin;
+      selectedId = null;
+      paint();
+      pinMessage(id);
       return;
     }
     // ↩️ reply
@@ -1172,6 +1199,12 @@ addEventListener(
       history.pushState({ chat: 1 }, '');
       return;
     }
+    const tableViewer = document.querySelector('.ctplan');
+    if (tableViewer) {
+      tableViewer.remove();
+      history.pushState({ chat: 1 }, '');
+      return;
+    }
     const zoomViewer = document.querySelector('.zoomv');
     if (zoomViewer) {
       zoomViewer.remove();
@@ -1182,6 +1215,515 @@ addEventListener(
   },
   true,
 );
+
+// ===== SERVICE TOOLS 🍽️ (quick messages, #tables, @mentions, the pinned message) ===== //
+
+// the built-in quick messages (the owner replaces them in the dashboard › Annonce, Firestore `content/quick`).
+// A `#` (table number) or a trailing `:` puts the text in the composer to finish it, any other one is sent at once ⚡
+const QUICK_DEFAULT = [
+  'Table # prête ✅',
+  'Table # : pain 🥖',
+  'Table # : eau 💧',
+  'Table # : addition 🧾',
+  'Table # : envoyez la suite 🍽️',
+  "Besoin d'aide en salle 🙋",
+  'Plus de :',
+  'Je prends ma pause ☕',
+];
+
+// the service state: the team (for @mentions), the quick messages, the pinned message & the unsubscribers
+let teamNames = [],
+  quickMessages = QUICK_DEFAULT,
+  pinnedMessage = null,
+  serviceUnsubscribers = [];
+
+// a mention: @ + a first name (letters, accents, ' and -) 📣
+const MENTION_PATTERN = /@([\p{L}][\p{L}\p{M}'-]*)/gu;
+// a table tag in the escaped text: #12, #T12, #B2 or #100 after a space, a bracket or the start 🍽️
+const TABLE_PATTERN = /(^|[\s(>])#((?:T|B)?[0-9]{1,3})(?![0-9A-Za-z])/gi;
+
+/**
+ * `firstNameOf` - Function 🪪
+ *
+ * @param { string } name - a full name
+ * @returns { string } - its first word, lower case (the @mention key)
+ */
+const firstNameOf = (name) =>
+  String(name || '')
+    .trim()
+    .split(/\s+/)[0]
+    .toLowerCase();
+
+/**
+ * `tableIdOf` - Function 🍽️
+ *
+ * @param { string } tag - what follows the # (12, T12, b2…)
+ * @returns { string } - the table id of the floor plan (T12, B2), or '' when there's no such table
+ */
+function tableIdOf(tag) {
+  const upper = String(tag).toUpperCase();
+  const id = /^[0-9]/.test(upper) ? 'T' + upper : upper;
+  const tables = (window.LTF && window.LTF.tables) || [];
+  return tables.some((table) => table.id === id) ? id : '';
+}
+
+/**
+ * `mentionsMe` - Function 📣
+ *
+ * @param { string } text - a message text
+ * @returns { boolean } - true when it names me with @FirstName
+ */
+function mentionsMe(text) {
+  if (!user || !text) return false;
+  const myFirstName = firstNameOf(user.displayName);
+  return (
+    !!myFirstName &&
+    Array.from(String(text).matchAll(MENTION_PATTERN)).some((match) => match[1].toLowerCase() === myFirstName)
+  );
+}
+
+/**
+ * `richText` - Function ✍️
+ *
+ * The safe HTML of a message text: escaped first, then the team's @mentions in bold colour, the #tables as
+ * gold chips (tap = the floor plan) and the new lines kept.
+ *
+ * @param { string } text - a message text
+ * @returns { string } - the HTML
+ */
+function richText(text) {
+  const knownNames = new Set(teamNames.map((member) => member.first));
+  return escapeHtml(text)
+    .replace(MENTION_PATTERN, (whole, name) =>
+      knownNames.has(name.toLowerCase()) ? '<b class="cmen">' + whole + '</b>' : whole,
+    )
+    .replace(TABLE_PATTERN, (whole, before, tag) => {
+      const tableId = tableIdOf(tag);
+      return tableId
+        ? before + '<button class="ctab" data-table="' + tableId + '">🍽️ ' + tableId + '</button>'
+        : whole;
+    })
+    .replace(/\n/g, '<br>');
+}
+
+/**
+ * `planHtml` - Function 🗺️
+ *
+ * @param { string } tableId - the table to show in gold
+ * @returns { string } - the floor plan SVG (same drawing as the app's plan, from `LTF.tables`)
+ */
+function planHtml(tableId) {
+  const data = window.LTF || {},
+    size = 5.2;
+  let svg =
+    '<svg class="plan" viewBox="-3 -6 106 72" xmlns="http://www.w3.org/2000/svg">' +
+    '<rect x="-2" y="-2" width="104" height="66" rx="2" class="room"/>' +
+    '<line x1="0" y1="-1" x2="100" y2="-1" class="win"/><text x="50" y="-3" class="wl">' +
+    translate('Baies vitrées · Vieux-Port', 'Bay windows · Vieux-Port') +
+    '</text>';
+  (data.counters || []).forEach((counter) => {
+    svg +=
+      '<rect x="' +
+      counter.x1 +
+      '" y="' +
+      counter.y +
+      '" width="' +
+      (counter.x2 - counter.x1) +
+      '" height="3" class="ctr"/><text x="' +
+      (counter.x1 + counter.x2) / 2 +
+      '" y="' +
+      (counter.y + 6.5) +
+      '" class="cl">' +
+      escapeHtml(counter.label) +
+      '</text>';
+  });
+  (data.tables || []).forEach((table) => {
+    const shapeClass = 'tb' + (table.id === tableId ? ' res' : '');
+    svg +=
+      (table.sh === 'round'
+        ? '<circle cx="' +
+          table.x +
+          '" cy="' +
+          table.y +
+          '" r="' +
+          size * 0.65 +
+          '" class="' +
+          shapeClass +
+          '"/>'
+        : table.sh === 'long'
+          ? '<rect x="' +
+            (table.x - 2.5) +
+            '" y="' +
+            (table.y - 8) +
+            '" width="5" height="12" rx="1" class="' +
+            shapeClass +
+            '"/>'
+          : '<rect x="' +
+            (table.x - size / 2) +
+            '" y="' +
+            (table.y - size / 2) +
+            '" width="' +
+            size +
+            '" height="' +
+            size +
+            '" rx="1" class="' +
+            shapeClass +
+            '"/>') +
+      '<text x="' +
+      table.x +
+      '" y="' +
+      (table.y + 1.2) +
+      '" class="tl' +
+      (table.id === tableId ? ' rl' : '') +
+      '">' +
+      table.id +
+      '</text>';
+  });
+  return svg + '</svg>';
+}
+
+/**
+ * `showTable` - Function 🗺️
+ *
+ * @param { string } tableId - a table of the floor plan
+ * @returns { void } - opens a card with the plan and that table in gold (tap anywhere to close)
+ */
+function showTable(tableId) {
+  const table = ((window.LTF && window.LTF.tables) || []).find((candidate) => candidate.id === tableId);
+  if (!table) return;
+  const viewer = document.createElement('div');
+  viewer.className = 'ctplan';
+  viewer.innerHTML =
+    '<div class="ctcard"><div class="ctttl">🍽️ ' +
+    translate('Table ', 'Table ') +
+    escapeHtml(tableId) +
+    (table.cap ? ' <span class="muted sm">' + escapeHtml(table.cap) + '</span>' : '') +
+    '</div>' +
+    planHtml(tableId) +
+    '<div class="muted sm">' +
+    translate('Touchez pour fermer', 'Tap to close') +
+    '</div></div>';
+  viewer.onclick = () => viewer.remove();
+  document.body.appendChild(viewer);
+}
+
+/**
+ * `readJson` - Function 📦
+ *
+ * @param { object | undefined } data - a `content/*` doc ({ data: JSON string })
+ * @returns { any } - the parsed value, or null
+ */
+function readJson(data) {
+  try {
+    return data && typeof data.data === 'string' ? JSON.parse(data.data) : null;
+  } catch (error) {
+    return null;
+  }
+}
+
+/**
+ * `stopServiceWatchers` - Function 🧹
+ *
+ * @returns { void }
+ */
+function stopServiceWatchers() {
+  serviceUnsubscribers.forEach((stop) => stop());
+  serviceUnsubscribers = [];
+  teamNames = [];
+  pinnedMessage = null;
+}
+
+/**
+ * `startServiceWatchers` - Function 👂
+ *
+ * Listens to the team (names for @mentions), the pinned message & the quick messages (team members only).
+ *
+ * @returns { void }
+ */
+function startServiceWatchers() {
+  stopServiceWatchers();
+  if (!user || !hasChatAccess()) return;
+  // 👥 the team: uid, name & first name
+  serviceUnsubscribers.push(
+    onSnapshot(
+      collection(firestore, 'team'),
+      (snapshot) => {
+        teamNames = snapshot.docs
+          .map((docSnapshot) => ({ uid: docSnapshot.id, name: String(docSnapshot.data().name || '') }))
+          .filter((member) => member.name)
+          .map((member) => ({ ...member, first: firstNameOf(member.name) }));
+        paint();
+      },
+      () => {},
+    ),
+  );
+  // 📌 the pinned message
+  serviceUnsubscribers.push(
+    onSnapshot(
+      doc(firestore, 'content', 'pin'),
+      (snapshot) => {
+        const pin = readJson(snapshot.exists() ? snapshot.data() : null);
+        pinnedMessage =
+          pin && isSafeId(pin.id) && typeof pin.text === 'string'
+            ? { id: pin.id, name: String(pin.name || ''), text: pin.text.slice(0, 200) }
+            : null;
+        paint();
+      },
+      () => {},
+    ),
+  );
+  // ⚡ the quick messages
+  serviceUnsubscribers.push(
+    onSnapshot(
+      doc(firestore, 'content', 'quick'),
+      (snapshot) => {
+        const list = readJson(snapshot.exists() ? snapshot.data() : null);
+        quickMessages =
+          Array.isArray(list) && list.length
+            ? list
+                .filter((entry) => typeof entry === 'string' && entry.trim())
+                .map((entry) => entry.trim().slice(0, 80))
+                .slice(0, 20)
+            : QUICK_DEFAULT;
+        paint();
+      },
+      () => {},
+    ),
+  );
+}
+
+/**
+ * `pinMessage` - Async Function 📌
+ *
+ * (Owner only, like every `content/*` doc) pins a message on top of the chat, or unpins it.
+ *
+ * @param { string | null } id - the message to pin (null = unpin)
+ * @returns { Promise<void> }
+ */
+async function pinMessage(id) {
+  try {
+    if (!id) return await deleteDoc(doc(firestore, 'content', 'pin'));
+    const message = messages.find((candidate) => candidate.id === id);
+    if (!message) return;
+    const text = (
+      message.text ||
+      (message.img ? '📷 Photo' : message.gif ? '🎞️ GIF' : message.sticker ? '🏷️ Sticker' : '')
+    ).slice(0, 200);
+    await setDoc(doc(firestore, 'content', 'pin'), {
+      data: JSON.stringify({ id, name: message.name || '', text }),
+      ts: serverTimestamp(),
+    });
+  } catch (error) {
+    showToast(translate('Action impossible', 'Could not do that'));
+  }
+}
+
+/**
+ * `jumpTo` - Function 🎯
+ *
+ * @param { string } id - a message id
+ * @returns { void } - scrolls to that message and makes it flash
+ */
+function jumpTo(id) {
+  const row = overlay && overlay.querySelector('.cm[data-id="' + id + '"]');
+  if (!row) return showToast(translate('Message trop ancien', 'Message too old'));
+  row.scrollIntoView({ block: 'center', behavior: 'smooth' });
+  row.classList.remove('cflash');
+  void row.offsetWidth;
+  row.classList.add('cflash');
+}
+
+/**
+ * `paintServiceTools` - Function 🎨
+ *
+ * Repaints the pinned banner, the quick messages row & the @mention suggestions.
+ *
+ * @returns { void }
+ */
+function paintServiceTools() {
+  if (!overlay) return;
+  const isMember = !!user && hasChatAccess();
+  // 📌 the pinned banner
+  const pinBar = overlay.querySelector('.cpin');
+  pinBar.hidden = !(isMember && pinnedMessage);
+  if (!pinBar.hidden)
+    pinBar.innerHTML =
+      '<span class="cpini">📌</span><div class="grow" style="min-width:0"><b>' +
+      escapeHtml(pinnedMessage.name || translate('Épinglé', 'Pinned')) +
+      '</b><div class="cpint">' +
+      escapeHtml(pinnedMessage.text) +
+      '</div></div>' +
+      (isOwner() ? '<button class="cunpin" aria-label="unpin">✕</button>' : '');
+  // ⚡ the quick messages (only while the text box is empty)
+  const quickRow = overlay.querySelector('.cquick'),
+    textarea = overlay.querySelector('textarea');
+  quickRow.hidden = !isMember || !!(textarea && textarea.value) || !!pendingPhoto;
+  if (!quickRow.hidden && quickRow.dataset.list !== quickMessages.join('\n')) {
+    quickRow.dataset.list = quickMessages.join('\n');
+    quickRow.innerHTML = quickMessages
+      .map((entry, index) => '<button data-quick="' + index + '">' + escapeHtml(entry) + '</button>')
+      .join('');
+  }
+  paintMentionSuggestions();
+}
+
+/**
+ * `mentionQuery` - Function 🔎
+ *
+ * @param { HTMLTextAreaElement } textarea - the composer
+ * @returns { string | null } - the name being typed right after an @ (null when none)
+ */
+function mentionQuery(textarea) {
+  const before = textarea.value.slice(0, textarea.selectionStart || 0);
+  const match = before.match(/(?:^|\s)@([\p{L}\p{M}'-]*)$/u);
+  return match ? match[1].toLowerCase() : null;
+}
+
+/**
+ * `paintMentionSuggestions` - Function 📣
+ *
+ * @returns { void } - shows the teammates matching the @name being typed (up to 6)
+ */
+function paintMentionSuggestions() {
+  const suggestions = overlay.querySelector('.cmsug'),
+    textarea = overlay.querySelector('textarea');
+  const typed = textarea && document.activeElement === textarea ? mentionQuery(textarea) : null;
+  const matches =
+    typed === null
+      ? []
+      : teamNames
+          .filter((member) => (!user || member.uid !== user.uid) && member.first.startsWith(typed))
+          .slice(0, 6);
+  suggestions.hidden = !matches.length;
+  suggestions.innerHTML = matches
+    .map(
+      (member) =>
+        '<button data-mention="' +
+        escapeHtml(member.uid) +
+        '"><span class="cav" style="background:' +
+        colorsOf(member.uid)[0] +
+        '">' +
+        escapeHtml(member.name[0] || '?') +
+        '</span>' +
+        escapeHtml(member.name) +
+        '</button>',
+    )
+    .join('');
+}
+
+/**
+ * `insertMention` - Function 📣
+ *
+ * @param { string } uid - the teammate picked in the suggestions
+ * @returns { void } - replaces the @typed name with @FirstName + a space
+ */
+function insertMention(uid) {
+  const member = teamNames.find((candidate) => candidate.uid === uid),
+    textarea = overlay.querySelector('textarea');
+  if (!member) return;
+  const caret = textarea.selectionStart || 0;
+  const before = textarea.value.slice(0, caret).replace(/@([\p{L}\p{M}'-]*)$/u, '');
+  const firstName = member.name.trim().split(/\s+/)[0];
+  textarea.value = before + '@' + firstName + ' ' + textarea.value.slice(caret);
+  const newCaret = before.length + firstName.length + 2;
+  textarea.focus();
+  textarea.setSelectionRange(newCaret, newCaret);
+  paintServiceTools();
+}
+
+/**
+ * `useQuickMessage` - Function ⚡
+ *
+ * @param { number } index - the quick message tapped
+ * @returns { void } - sends it, or puts it in the composer when it needs a table number (#) or an ending (:)
+ */
+function useQuickMessage(index) {
+  const entry = quickMessages[index],
+    textarea = overlay.querySelector('textarea');
+  if (!entry) return;
+  if (navigator.vibrate) navigator.vibrate(6);
+  const hashAt = entry.indexOf('#');
+  if (hashAt >= 0 || /:\s*$/.test(entry)) {
+    textarea.value = hashAt >= 0 ? entry : entry.replace(/\s*$/, ' ');
+    const caret = hashAt >= 0 ? hashAt + 1 : textarea.value.length;
+    textarea.focus();
+    textarea.setSelectionRange(caret, caret);
+    textarea.dispatchEvent(new Event('input'));
+    return;
+  }
+  textarea.value = entry;
+  send();
+}
+
+/**
+ * `wireServiceTools` - Function 🔌
+ *
+ * @param { HTMLTextAreaElement } textarea - the composer
+ * @returns { void } - the taps of the pinned banner, the quick row & the suggestions; the @ typing
+ */
+function wireServiceTools(textarea) {
+  overlay.querySelector('.cpin').addEventListener('click', (event) => {
+    if (event.target.closest('.cunpin')) return pinMessage(null);
+    if (pinnedMessage) jumpTo(pinnedMessage.id);
+  });
+  overlay.querySelector('.cquick').addEventListener('click', (event) => {
+    const button = event.target.closest('[data-quick]');
+    if (button) useQuickMessage(Number(button.dataset.quick));
+  });
+  const suggestions = overlay.querySelector('.cmsug');
+  // keep the keyboard up while picking a name ⌨️
+  suggestions.addEventListener('pointerdown', (event) => event.preventDefault());
+  suggestions.addEventListener('click', (event) => {
+    const button = event.target.closest('[data-mention]');
+    if (button) insertMention(button.dataset.mention);
+  });
+  ['input', 'click', 'keyup', 'focus'].forEach((type) => textarea.addEventListener(type, paintServiceTools));
+  textarea.addEventListener('blur', () => setTimeout(paintServiceTools, 150));
+}
+
+/**
+ * `addServiceStyles` - Function 🎨
+ *
+ * @returns { void } - the CSS of the service tools (once)
+ */
+function addServiceStyles() {
+  if (document.getElementById('chatServiceCss')) return;
+  const style = document.createElement('style');
+  style.id = 'chatServiceCss';
+  style.textContent = `
+.cpin{display:flex;align-items:center;gap:10px;padding:8px 14px;background:rgba(201,169,97,.12);
+  border-bottom:1px solid rgba(201,169,97,.35);cursor:pointer;font-size:13px}
+.cpin[hidden],.cquick[hidden],.cmsug[hidden]{display:none}
+.cpini{font-size:16px}
+.cpin b{color:var(--gold,#c9a961);font-size:12px}
+.cpint{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;opacity:.9}
+.cunpin{background:none;border:0;color:inherit;font-size:16px;padding:4px 6px;cursor:pointer}
+.cquick{display:flex;gap:6px;overflow-x:auto;padding:6px 10px 2px;scrollbar-width:none}
+.cquick::-webkit-scrollbar{display:none}
+.cquick button{flex:none;border:1px solid rgba(201,169,97,.45);background:rgba(201,169,97,.1);color:inherit;
+  border-radius:999px;padding:6px 12px;font:inherit;font-size:13px;white-space:nowrap;cursor:pointer}
+.cmsug{display:flex;flex-direction:column;margin:0 10px 6px;border-radius:14px;overflow:hidden;
+  background:var(--sf,#222);box-shadow:0 6px 24px rgba(0,0,0,.35)}
+.cmsug button{display:flex;align-items:center;gap:10px;background:none;border:0;color:inherit;font:inherit;
+  padding:9px 12px;text-align:left;cursor:pointer}
+.cmsug button+button{border-top:1px solid rgba(255,255,255,.06)}
+.cmsug .cav{width:26px;height:26px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;
+  font-size:12px;font-weight:700;color:#fff}
+.cmen{color:#ffd98a;font-weight:700}
+.cm.cmine .cb{box-shadow:0 0 0 2px var(--gold,#c9a961)}
+.ctab{display:inline-flex;align-items:center;gap:3px;border:0;border-radius:999px;padding:1px 8px;margin:0 1px;
+  background:var(--gold,#c9a961);color:#111;font:inherit;font-size:.9em;font-weight:700;cursor:pointer;
+  vertical-align:baseline}
+.cm.cflash .cb{animation:cflash 1.4s}
+@keyframes cflash{20%,60%{box-shadow:0 0 0 3px var(--gold,#c9a961)}}
+.ctplan{position:fixed;inset:0;z-index:100;background:rgba(0,0,0,.6);display:flex;align-items:center;
+  justify-content:center;padding:16px}
+.ctcard{background:var(--sf,#1b1b1b);border-radius:20px;padding:14px;width:min(560px,100%);text-align:center}
+.ctttl{font-weight:700;font-size:17px;margin-bottom:8px;text-align:left}
+.ctcard .plan{width:100%;height:auto;margin-bottom:6px}
+`;
+  document.head.appendChild(style);
+}
 
 // ===== EMOJI & GIF PANEL 😀 ===== //
 
