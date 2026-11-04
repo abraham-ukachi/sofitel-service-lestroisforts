@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file. Versions follow the service-worker cache (`ltf-vNN` → `0.NN.0`), see [CONTRIBUTING.md](./CONTRIBUTING.md#git-commit-messages) for the commit guidelines.
 
+### 0.72.1 (2026-11-04)
+
+* :sparkles: Scanner: the AI no longer downloads by itself. A gold « ⬇️ Télécharger le scanner IA · ≈ 97 Mo » button on the viewfinder starts it, shows the progress, says « Prêt ✓ » and disappears for good once everything is on the phone; the shutter asks first too
+* :lipstick: Scanner: the close ✕ is an SVG centred in its circle (it inherited left-aligned text before)
+
 ### 0.72.0 (2026-11-04)
 
 * :sparkles: Scanner engine: Google's SigLIP 2 vision model (base, 4-bit ONNX, ~63 MB, downloaded once from Hugging Face at a pinned revision, then offline) replaces MobileNet v2, run by ONNX Runtime Web 1.22 on the phone's GPU (WebGPU) or WebAssembly. Synthetic test on the reference photos: 98.9 % top-1 on cropped, blurred, darker shots (MobileNet 83.3 %)
