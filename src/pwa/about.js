@@ -74,6 +74,13 @@ const X_PATH =
 const TIMELINE = [
   [
     '2026-11-04',
+    '0.71',
+    false,
+    'Scanner plein écran : coins dorés, lampe, jauge de confiance',
+    'Full-screen scanner: gold corners, flashlight, confidence meter',
+  ],
+  [
+    '2026-11-04',
     '0.70',
     true,
     'Nouveau chat : bulles groupées, jours, vocaux, sondages et passation',

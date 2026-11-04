@@ -705,6 +705,92 @@
   }
 
   /**
+   * `addScanStyles` - Function 🎨
+   *
+   * The scanner's look (0.71.0): full-screen camera, gold corners, scan line, camera-style controls,
+   * analysing sweep, confidence meter & a row of other matches. Injected once, after index.html's styles.
+   *
+   * @returns { void }
+   */
+  function addScanStyles() {
+    if (document.getElementById('scanPolishCss')) return;
+    const style = document.createElement('style');
+    style.id = 'scanPolishCss';
+    style.textContent = `
+.scanov .sch{position:relative;z-index:3;gap:10px;padding:10px 12px;padding-top:max(10px,env(safe-area-inset-top))}
+.scanov .sch b{flex:1;text-align:center;font-size:16px;letter-spacing:.02em}
+.scx,.scgap{width:40px;height:40px;flex:none}
+.scx{border:0;border-radius:50%;background:rgba(255,255,255,.1);color:inherit;font-size:17px;cursor:pointer;
+  -webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px)}
+.scanov.sclive{background:#000;color:#fff}
+.scanov.sclive .sch{position:absolute;top:0;left:0;right:0;background:linear-gradient(rgba(0,0,0,.55),transparent)}
+.scanov.sclive .scb{padding:0;max-width:none;display:flex;flex-direction:column;overflow:hidden}
+.scanov.sclive .scv{flex:1;max-height:none;aspect-ratio:auto;border-radius:0 0 26px 26px}
+.scframe{inset:22% 12% 26%;border:0;border-radius:0;box-shadow:none}
+.scframe i{position:absolute;width:34px;height:34px;border:3.5px solid var(--gold,#c9a961)}
+.scframe i:nth-child(1){top:0;left:0;border-right:0;border-bottom:0;border-top-left-radius:18px}
+.scframe i:nth-child(2){top:0;right:0;border-left:0;border-bottom:0;border-top-right-radius:18px}
+.scframe i:nth-child(3){bottom:0;left:0;border-right:0;border-top:0;border-bottom-left-radius:18px}
+.scframe i:nth-child(4){bottom:0;right:0;border-left:0;border-top:0;border-bottom-right-radius:18px}
+.scline{position:absolute;left:8%;right:8%;height:2px;top:0;border-radius:2px;
+  background:linear-gradient(90deg,transparent,var(--gold,#c9a961),transparent);
+  box-shadow:0 0 12px var(--gold,#c9a961);animation:scline 2.4s ease-in-out infinite alternate}
+@keyframes scline{to{top:100%}}
+.scv .scprep{position:absolute;top:max(62px,calc(env(safe-area-inset-top) + 56px));left:50%;transform:translateX(-50%);
+  margin:0;padding:6px 14px;border-radius:999px;background:rgba(0,0,0,.5);-webkit-backdrop-filter:blur(10px);
+  backdrop-filter:blur(10px);font-size:12px;white-space:nowrap;display:flex;align-items:center;gap:8px;color:#fff}
+.scv .scprep .scbar{width:46px;margin:0;height:3px}
+.schint{position:absolute;bottom:12%;left:0;right:0;text-align:center;font-size:13px;color:#fff;
+  text-shadow:0 1px 6px rgba(0,0,0,.8);padding:0 20px}
+.scflash{position:absolute;inset:0;background:#fff;opacity:0;pointer-events:none}
+.scflash.on{animation:scflash .3s}
+@keyframes scflash{0%{opacity:.9}100%{opacity:0}}
+.sclivebar{justify-content:space-around;margin:0;padding:18px 24px;padding-bottom:max(18px,env(safe-area-inset-bottom))}
+.scround{width:50px;height:50px;border-radius:50%;border:0;background:rgba(255,255,255,.14);color:#fff;
+  font-size:20px;display:flex;align-items:center;justify-content:center;cursor:pointer}
+.scround.on{background:#f3d58a;color:#111}
+.scshot{width:76px;height:76px;border-radius:50%;border:4px solid #fff;background:transparent;padding:4px;
+  position:relative;transition:transform .12s}
+.scshot::after{content:'';position:absolute;inset:5px;border-radius:50%;background:var(--gold,#c9a961)}
+.scshot:active{transform:scale(.9)}
+.scanal{position:relative;overflow:hidden;border-radius:20px;margin-top:4px}
+.scanal .scshotimg{margin:0;max-height:46vh;filter:saturate(.85)}
+.scsweep{position:absolute;inset:0;background:linear-gradient(180deg,transparent 0%,rgba(201,169,97,.35) 48%,
+  rgba(243,213,138,.9) 50%,transparent 52%);background-size:100% 220%;animation:scsweep 1.6s linear infinite}
+@keyframes scsweep{from{background-position:0 120%}to{background-position:0 -20%}}
+.scstat{display:flex;align-items:center;gap:10px;margin:16px 2px 4px}
+.scspin{width:18px;height:18px;border-radius:50%;border:2.5px solid var(--trk);border-top-color:var(--gold,#c9a961);
+  animation:scspin .8s linear infinite;flex:none}
+@keyframes scspin{to{transform:rotate(360deg)}}
+.scverdict{display:flex;align-items:center;gap:12px;margin:6px 0 10px}
+.scverdict .sh{margin:0 0 4px}
+.scmini{width:58px;height:58px;border-radius:14px;object-fit:cover;flex:none;border:2px solid rgba(255,255,255,.12)}
+.scmeter{display:flex;align-items:center;gap:4px;font-size:12px;color:var(--mu)}
+.scmeter i{width:16px;height:6px;border-radius:3px;background:var(--trk)}
+.scmeter span{margin-left:6px}
+.scmeter.l1 i:nth-child(-n+1){background:#e5a04d}
+.scmeter.l2 i:nth-child(-n+2){background:var(--gold,#c9a961)}
+.scmeter.l3 i:nth-child(-n+3){background:#4cc38a}
+.scres.big{padding:12px;border-radius:18px;box-shadow:0 6px 20px rgba(0,0,0,.25);animation:scup .35s ease-out}
+.scres.big .thumb{width:76px;height:76px;border-radius:14px}
+.scres.big .n{font-size:17px}
+@keyframes scup{from{transform:translateY(12px);opacity:0}to{transform:none;opacity:1}}
+.scalts{display:flex;gap:10px;overflow-x:auto;padding:2px 2px 8px;scroll-snap-type:x mandatory}
+.scalt{flex:0 0 116px;scroll-snap-align:start;display:flex;flex-direction:column;gap:6px;text-align:left;
+  background:var(--card,rgba(255,255,255,.05));border:1px solid rgba(255,255,255,.08);border-radius:14px;
+  padding:6px;color:inherit;font:inherit;font-size:12.5px;line-height:1.25}
+.scalt img,.scaltph{width:100%;aspect-ratio:1;border-radius:10px;object-fit:cover;display:flex;
+  align-items:center;justify-content:center;background:var(--trk);font-size:26px}
+.scalt span:last-child{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.scsticky{position:sticky;bottom:0;margin:12px -14px 0;padding:12px 14px;
+  padding-bottom:max(12px,env(safe-area-inset-bottom));background:linear-gradient(transparent,var(--bg) 30%)}
+@media (prefers-reduced-motion:reduce){.scline,.scsweep,.scspin{animation:none}}
+@media (min-width:960px){.scanov.sclive .scb{max-width:720px;margin:0 auto;width:100%}.scanov.sclive .scv{border-radius:0 0 26px 26px}}
+`;
+    document.head.appendChild(style);
+  }
+
+  /**
    * `closeScanner` - Function 👋
    *
    * @returns { void }
@@ -758,7 +844,10 @@
     overlay = document.createElement('div');
     overlay.className = 'ov scanov';
     overlay.id = 'scanOv';
-    overlay.innerHTML = `<div class="sch"><b>📷 ${translate('Scanner', 'Scan')}</b><button class="btn txt" id="scX">✕ ${translate('Fermer', 'Close')}</button></div><div class="scb"></div>`;
+    overlay.innerHTML =
+      `<div class="sch"><button class="scx" id="scX" aria-label="close">✕</button>` +
+      `<b>${translate('Scanner', 'Scan')}</b><span class="scgap"></span></div><div class="scb"></div>`;
+    addScanStyles();
     document.body.appendChild(overlay);
     overlay.querySelector('#scX').onclick = closeScanner;
     // 👂 the overlay was removed by someone else (navigation)? stop the camera 🧹
@@ -801,20 +890,18 @@
    */
   async function showCamera() {
     setBody(
-      `<div class="scv"><video id="scVid" playsinline muted autoplay></video><div class="scframe"></div>` +
-        `</div>
-  <div class="scprep"><div class="scbar"><div id="scPrep"></div></div>` +
-        `<div class="muted sm" id="scPrepT">${loading ? '' : translate('Préparation…', 'Preparing…')}` +
-        `</div></div>
-  <div class="scbtns"><label class="btn sec" for="scFile">🖼 ` +
-        `${translate('Galerie', 'Gallery')}` +
-        `</label><input id="scFile" type="file" accept="image/*" hidden>` +
-        `<button class="scshot" id="scShot" aria-label="scan"></button><span style="width:90px"></span>` +
-        `</div>
-  <p class="muted sm" style="text-align:center">` +
-        `${translate("Cadrez l'assiette, l'étiquette ou la bouteille.", 'Frame the plate, the label or the bottle.')}` +
-        `</p>`,
+      `<div class="scv"><video id="scVid" playsinline muted autoplay></video>` +
+        `<div class="scframe"><i></i><i></i><i></i><i></i><span class="scline"></span></div>` +
+        `<div class="scprep"><div class="scbar"><div id="scPrep"></div></div>` +
+        `<div id="scPrepT">${loading ? '' : translate('Préparation…', 'Preparing…')}</div></div>` +
+        `<div class="schint">${translate("Cadrez l'assiette, l'étiquette ou la bouteille", 'Frame the plate, the label or the bottle')}</div>` +
+        `<div class="scflash"></div></div>` +
+        `<div class="scbtns sclivebar"><label class="scround" for="scFile" aria-label="gallery">🖼</label>` +
+        `<input id="scFile" type="file" accept="image/*" hidden>` +
+        `<button class="scshot" id="scShot" aria-label="scan"></button>` +
+        `<button class="scround" id="scTorch" aria-label="torch" style="visibility:hidden">🔦</button></div>`,
     );
+    overlay.classList.add('sclive');
     // already loaded? say so ✅
     if (model) {
       const label = queryOne('#scPrepT');
@@ -830,6 +917,20 @@
         audio: false,
       });
       video.srcObject = stream;
+      // 🔦 the flashlight, when the back camera has one (dim tables at night)
+      const track = stream.getVideoTracks()[0],
+        capabilities = track && track.getCapabilities ? track.getCapabilities() : {},
+        torchButton = queryOne('#scTorch');
+      if (capabilities.torch && torchButton) {
+        torchButton.style.visibility = 'visible';
+        torchButton.onclick = () => {
+          const isOn = !torchButton.classList.contains('on');
+          track
+            .applyConstraints({ advanced: [{ torch: isOn }] })
+            .then(() => torchButton.classList.toggle('on', isOn))
+            .catch(() => {});
+        };
+      }
     } catch (error) {
       // no camera (permission, desktop...): the file input opens the camera app instead 📱
       const viewport = overlay && overlay.querySelector('.scv');
@@ -848,8 +949,12 @@
         return;
       }
       const canvas = grabFrame(video, video.videoWidth, video.videoHeight);
+      // ⚡ a flash & a little buzz, like a camera
+      const flash = queryOne('.scflash');
+      if (flash) flash.classList.add('on');
+      if (navigator.vibrate) navigator.vibrate(12);
       stopCamera();
-      runScan(canvas);
+      setTimeout(() => runScan(canvas), 140);
     };
     // 🖼 a photo from the gallery
     queryOne('#scFile').onchange = async (event) => {
@@ -875,12 +980,13 @@
    * @returns { Promise<void> }
    */
   async function runScan(canvas) {
+    if (overlay) overlay.classList.remove('sclive');
     // the photo as a JPEG (shown on top of the results)
     const shot = canvas.toDataURL('image/jpeg', 0.7);
     setBody(
-      `<img class="scshotimg" src="${shot}" alt=""><div class="card sm"><div class="b" id="scSt">` +
-        `${translate('Préparation…', 'Preparing…')}` +
-        `</div><div class="scbar"><div id="scPrep" style="width:5%"></div></div></div>`,
+      `<div class="scanal"><img class="scshotimg" src="${shot}" alt=""><span class="scsweep"></span></div>` +
+        `<div class="scstat"><span class="scspin"></span><b id="scSt">${translate('Préparation…', 'Preparing…')}</b></div>` +
+        `<div class="scbar"><div id="scPrep" style="width:5%"></div></div>`,
     );
     // the status line
     const setStatus = (message) => {
@@ -928,8 +1034,16 @@
     // the top result & whether we're sure (confidence >= 0.55)
     const top = result.res[0];
     const sure = result.conf >= 0.55;
+    // the meter: 3 bars (very sure), 2 (likely), 1 (unsure) 📶
+    const level = result.conf >= 0.7 ? 3 : sure ? 2 : 1;
+    const levelName = [
+      translate('Incertain', 'Unsure'),
+      translate('Probable', 'Likely'),
+      translate('Très probable', 'Very likely'),
+    ][level - 1];
     // one result card (photo, name, chapter, formats, subtitle)
     const resultCard = (match, big) => {
+      if (!big) return altCard(match);
       const group = match.g,
         item = group.item,
         photo = (refs.find((ref) => ref.k === group.k) || {}).img;
@@ -945,6 +1059,16 @@
         `</div></div><div class="rt gold">›</div></div>`
       );
     };
+    // another match: a small tile in the row (photo + name) 🧩
+    const altCard = (match) => {
+      const group = match.g,
+        photo = (refs.find((ref) => ref.k === group.k) || {}).img;
+      return (
+        `<button class="scres scalt" data-k="${escapeHtml(group.k)}" data-id="${escapeHtml(group.item.id)}">` +
+        `${photo ? `<img src="${escapeHtml(photo)}" alt="">` : `<span class="scaltph">🍽</span>`}` +
+        `<span>${escapeHtml(group.name)}</span></button>`
+      );
+    };
     // online? offer a Google search 🌐
     const online = navigator.onLine;
     // the search query: the label words, else the top name
@@ -956,25 +1080,30 @@
           .slice(0, 8)
           .join(' ')) ||
       (top ? top.g.name : '');
-    setBody(`<img class="scshotimg" src="${shot}" alt="">
-  <div class="sh">${sure ? translate("C'est sûrement", 'Most likely') : translate('Peut-être', 'Maybe')}</div>${top ? resultCard(top, true) : ''}
+    setBody(
+      `<div class="scverdict"><img class="scmini" src="${shot}" alt=""><div class="grow">` +
+        `<div class="sh">${sure ? translate("C'est sûrement", 'Most likely') : translate('Peut-être', 'Maybe')}</div>` +
+        `<div class="scmeter l${level}"><i></i><i></i><i></i><span>${levelName}</span></div></div></div>` +
+        `${top ? resultCard(top, true) : `<div class="card sm muted">${translate('Rien de reconnu', 'Nothing recognised')}</div>`}
   ${
     result.res.length > 1
-      ? `<div class="sh">${translate('Autres possibilités', 'Other matches')}</div>` +
+      ? `<div class="sh">${translate('Autres possibilités', 'Other matches')}</div><div class="scalts">` +
         result.res
           .slice(1)
           .map((match) => resultCard(match))
-          .join('')
+          .join('') +
+        '</div>'
       : ''
   }
   ${result.text && result.text.trim() ? `<details class="muted sm scocr"><summary>${translate('Texte lu', 'Text read')}</summary>${escapeHtml(result.text.trim().slice(0, 300))}</details>` : ''}
-  <div class="scbtns"><button class="btn sec" id="scAgain">↺ ${translate('Rescanner', 'Scan again')}</button>${
+  <p class="muted sm" style="text-align:center">${translate("Touchez le bon résultat : le scanner s'en souviendra.", 'Tap the right match: the scanner will remember it.')}</p>
+  <div class="scbtns scsticky"><button class="btn grow" id="scAgain">📷 ${translate('Rescanner', 'Scan again')}</button>${
     online
       ? `<a class="btn sec" target="_blank" rel="noopener" href="https://www.google.com/search?q=` +
-        `${encodeURIComponent(searchQuery)}">🌐 ${translate('Chercher en ligne', 'Search online')}</a>`
+        `${encodeURIComponent(searchQuery)}">🌐 ${translate('En ligne', 'Online')}</a>`
       : ''
-  }</div>
-  <p class="muted sm" style="text-align:center">${translate("Touchez le bon résultat : le scanner s'en souviendra.", 'Tap the right match: the scanner will remember it.')}</p>`);
+  }</div>`,
+    );
     // ↺ scan again
     queryOne('#scAgain').onclick = showCamera;
     // ✅ a result: remember it, close & open its ⓘ sheet

@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file. Versions follow the service-worker cache (`ltf-vNN` → `0.NN.0`), see [CONTRIBUTING.md](./CONTRIBUTING.md#git-commit-messages) for the commit guidelines.
 
+### 0.71.0 (2026-11-04)
+
+* :lipstick: Scanner redesign: full-screen camera, gold corner brackets with a moving scan line, glass header, readiness pill on the video, camera-style shutter with gallery & 🔦 flashlight (when the phone has one), flash + buzz on capture
+* :lipstick: Analysing screen: golden sweep over the photo + spinner; results: photo thumbnail, « Très probable / Probable / Incertain » meter, bigger top match, other matches as a swipeable row of photos, sticky « Rescanner » bar
+
 ### 0.70.0 (2026-11-04)
 
 * :lipstick: Team chat polish: bubbles grouped by sender (5 min), sticky day separators (« Aujourd'hui », « Hier »…), glass header with the faces of who read lately, bubble shapes per group, pop-in for new messages, softer background, gold focus ring on the composer
