@@ -3669,6 +3669,7 @@ body:has(.ov.scrim) {
     'Casanu': [7.5, '🐐', 'Croûte lavée, puissant', 'Washed rind, punchy'],
     'Chèvre cendré': [3, '🐐', 'Acidulé, fondant', 'Tangy, melting'],
     'Montbriac': [4, '🐄', 'Bleu doux, crémeux', 'Gentle blue, creamy'],
+    'Crottin de Chavignol': [5.5, '🐐', 'Noisette, acidulé, plus sec', 'Nutty, tangy, firmer'],
     'Gorgonzola': [9, '🐄', 'Bleu puissant, piquant', 'Powerful, sharp blue']
   };
 
@@ -3727,6 +3728,41 @@ body:has(.ov.scrim) {
   }
 
   /**
+   * `boardRows` - Function 📋
+   *
+   * Every cheese as a row (photo, name, milk · origin · type, hint), like on La Carte, for the chapter page.
+   *
+   * @returns { string } - the rows
+   */
+  function boardRows() {
+    var english = isEnglish(),
+      cheeses = (window.LTF && LTF.fromages) || [],
+      photos = window.LTF_IMG || {};
+    var pick = function (value) {
+      return value ? (english ? value.en : value.fr) : '';
+    };
+    return cheeses
+      .map(function (cheese, index) {
+        var photo = photos['q:' + cheese.n];
+        var open = window.LTFinfo ? ' onclick="LTFinfo(\'from:' + index + '\')"' : '';
+        return (
+          '<div class="li menu"' +
+          open +
+          '>' +
+          (photo ? '<img class="thumb" src="' + photo + '" loading="lazy" alt="">' : '<div class="av">🧀</div>') +
+          '<div class="tx"><div class="n">' +
+          cheese.n +
+          '</div><div class="muted sm">' +
+          [pick(cheese.lait), pick(cheese.orig), pick(cheese.pate)].join(' · ') +
+          '</div><div class="muted sm clamp">' +
+          pick(cheese.h) +
+          '</div></div></div>'
+        );
+      })
+      .join('');
+  }
+
+  /**
    * `run` - Function 👂
    *
    * Adds the card under every cheese board heading (not while searching).
@@ -3755,10 +3791,10 @@ body:has(.ov.scrim) {
       var page = titles[place].parentNode;
       if (page.querySelector('#qScale')) continue;
       var modesHeading = page.querySelector(':scope > .sh');
-      var chapterCard = document.createElement('div');
-      chapterCard.innerHTML = card();
-      chapterCard.firstChild.style.marginTop = '14px';
-      page.insertBefore(chapterCard.firstChild, modesHeading);
+      var chapterBoard = document.createElement('div');
+      chapterBoard.innerHTML =
+        '<div class="sh">' + (isEnglish() ? 'The board' : 'Le plateau') + '</div>' + card() + boardRows();
+      while (chapterBoard.firstChild) page.insertBefore(chapterBoard.firstChild, modesHeading);
     }
   }
   // 👂 watch every screen change
