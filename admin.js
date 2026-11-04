@@ -52,7 +52,7 @@ import {
   getDocs,
 } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
 // import the hands-on tabs (manage, content, announcement) 🎛️
-import { renderManage, renderContent, renderAnnounce, renderCredits } from './admin-edit.js';
+import { renderManage, renderContent, renderAnnounce, renderCredits, renderSetup } from './admin-edit.js';
 
 // ===== FIREBASE 🔥 ===== //
 
@@ -230,7 +230,7 @@ let user = null;
 let overlay = null;
 // true while the dashboard loads 🔄
 let loading = false;
-// the open tab ('overview' | 'manage' | 'content' | 'announce' | 'credits') 🗂️
+// the open tab ('overview' | 'manage' | 'content' | 'announce' | 'setup' | 'credits') 🗂️
 let currentTab = 'overview';
 // the tabs of the dashboard (id, FR, EN) 📑
 const TABS = [
@@ -238,12 +238,13 @@ const TABS = [
   ['manage', '👥', 'Équipe', 'Team'],
   ['content', '📝', 'Carte', 'Menu'],
   ['announce', '📣', 'Annonce', 'Notice'],
+  ['setup', '🧊', 'Service', 'Service'],
   ['credits', '🎬', 'Crédits', 'Credits'],
 ];
 
 // the dashboard look: compact segmented tabs, search bars, tiles, rows & the publish bar 🎨
 const DASHBOARD_CSS = `
-.admtabs{display:grid;grid-template-columns:repeat(5,1fr);gap:4px;margin:8px 14px 0;padding:4px;
+.admtabs{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:4px;margin:8px 14px 0;padding:4px;
   border-radius:14px;background:rgba(127,127,127,.12);flex:none}
 .admtab{display:flex;flex-direction:column;align-items:center;gap:1px;padding:6px 2px;border:0;border-radius:10px;
   background:none;color:inherit;font:inherit;font-size:11.5px;font-weight:600;opacity:.65;cursor:pointer;min-width:0}
@@ -330,6 +331,35 @@ const DASHBOARD_CSS = `
 .admcredit.crDrag{transition:box-shadow .18s ease,background .18s ease;z-index:3;background:var(--sf2,#2a2a2a);
   box-shadow:0 12px 30px rgba(0,0,0,.35)}
 .admcredit.crDrag .crGrip{cursor:grabbing;opacity:.9}
+.setbar{display:flex;gap:8px;align-items:center;margin:0 0 6px;flex-wrap:wrap}
+.setseg{display:flex;gap:3px;padding:3px;border-radius:12px;background:rgba(127,127,127,.12);flex:1;min-width:0}
+.setseg.setlang{flex:none}
+.setseg button{flex:1;min-width:0;border:0;border-radius:9px;background:none;color:inherit;font:inherit;font-size:13px;
+  font-weight:600;padding:7px 8px;opacity:.7;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.setseg button.on{background:var(--gold,#c9a45c);color:#111;opacity:1}
+.setgrouphead{display:flex;gap:8px;margin-bottom:8px}
+.setgrouphead .setname{flex:1;min-width:0;font-weight:700}
+.seticon{width:46px!important;flex:none;text-align:center;padding:8px 4px!important}
+.setrows{margin:8px 0 4px}
+.setrow{position:relative;display:flex;align-items:center;gap:8px;padding:8px 4px;border-radius:14px;
+  transition:transform .18s ease,box-shadow .18s ease,background .18s ease}
+.setrow+.setrow{box-shadow:inset 0 1px 0 rgba(127,127,127,.12)}
+.setrow .admtext{flex:1;min-width:0;display:flex;flex-direction:column;gap:4px}
+.setrow .admfield{padding:7px 9px}
+.setrow .setname{font-weight:700}
+.setrow .setsmall{font-size:13px}
+.setmeta{display:flex;gap:8px;align-items:center}
+.setkindsel{flex:1;min-width:0;font-size:13px}
+.setqtylabel{display:flex;align-items:center;gap:4px;font-weight:700;opacity:.8;flex:none}
+.setqtyin{width:58px!important;text-align:center}
+.setrow .crGrip,.setrow .crDel{align-self:flex-start;margin-top:6px}
+.setsteprow{align-items:flex-start}
+.setstepnum{flex:none;width:22px;height:22px;border-radius:11px;background:var(--gold,#c9a45c);color:#111;font-size:12px;
+  font-weight:800;display:flex;align-items:center;justify-content:center;margin-top:9px}
+.setrow.crDrag{transition:box-shadow .18s ease,background .18s ease;z-index:3;background:var(--sf2,#2a2a2a);
+  box-shadow:0 12px 30px rgba(0,0,0,.35)}
+.setremove{display:block;margin:8px auto 0;border:0;background:none;color:#e5484d;font:inherit;font-size:13px;
+  font-weight:600;cursor:pointer;opacity:.8}
 .crDirty{box-shadow:0 0 0 3px rgba(201,164,92,.35)}
 .admcols{display:grid;grid-template-columns:minmax(0,1fr);gap:12px;align-items:start}
 .admcols>*{min-width:0}
@@ -1028,11 +1058,14 @@ async function refresh() {
       '<p class="muted" style="text-align:center;margin-top:40px">' +
       translate('Chargement…', 'Loading…') +
       '</p>';
+  // 🧹 forget the previous tab's typing & drag listeners
+  body.oninput = body.onchange = body.onpointerdown = null;
   try {
     // 📝📣 the content & announcement tabs read their own data
     if (currentTab === 'content') await renderContent(body);
     else if (currentTab === 'announce') await renderAnnounce(body);
     else if (currentTab === 'credits') await renderCredits(body);
+    else if (currentTab === 'setup') await renderSetup(body);
     else {
       const data = await gather();
       // closed meanwhile? nothing to draw

@@ -56,6 +56,8 @@ import {
 import { CONTENT_SECTIONS, readLiveContent, storeLiveContent } from './content.js';
 // import the round avatars of the dashboard 🧑
 import { avatarHtml } from './admin.js';
+// import the built-in Mise en place & its cleaner 🧊
+import { SETUP_DEFAULT, cleanSetup, BOTTLE_KINDS } from './setup.js';
 
 // ===== FIREBASE 🔥 ===== //
 
@@ -220,6 +222,61 @@ function confirmAction(question, options = {}) {
     document.body.appendChild(dialog);
     dialog.querySelector('[data-dlg="yes"]').focus();
   });
+}
+
+/**
+ * `startDragSort` - Function ✋
+ *
+ * Drags a row by its grip (`.crGrip`): the row follows the finger, the rows it passes slide out of the
+ * way (the swap effect), and the drop calls back with the old & new positions.
+ *
+ * @param { PointerEvent } event - the pointerdown
+ * @param { string } rowSelector - what a row is (its siblings in the same list are the other rows)
+ * @param { (from: number, target: number) => void } onDrop - called on release (from === target: no move)
+ * @returns { void }
+ */
+function startDragSort(event, rowSelector, onDrop) {
+  const grip = event.target.closest('.crGrip');
+  const row = grip && grip.closest(rowSelector);
+  if (!row) return;
+  event.preventDefault();
+  const rows = Array.from(row.parentElement.children).filter((element) => element.matches(rowSelector)),
+    from = rows.indexOf(row),
+    step = (rows.length > 1 ? rows[1].offsetTop - rows[0].offsetTop : 0) || row.offsetHeight || 56,
+    startY = event.clientY,
+    minimum = -from * step,
+    maximum = (rows.length - 1 - from) * step;
+  let target = from;
+  row.classList.add('crDrag');
+  if (grip.setPointerCapture) grip.setPointerCapture(event.pointerId);
+  if (navigator.vibrate) navigator.vibrate(8);
+
+  // 👉 follow the finger, shift the rows it passes over
+  const onMove = (moveEvent) => {
+    const offset = Math.max(minimum, Math.min(maximum, moveEvent.clientY - startY));
+    row.style.transform = `translateY(${offset}px) scale(1.02)`;
+    target = Math.max(0, Math.min(rows.length - 1, from + Math.round(offset / step)));
+    rows.forEach((other, position) => {
+      if (other === row) return;
+      let shift = 0;
+      if (from < target && position > from && position <= target) shift = -step;
+      if (from > target && position < from && position >= target) shift = step;
+      other.style.transform = shift ? `translateY(${shift}px)` : '';
+    });
+  };
+
+  // 🫳 drop: clean up and tell the caller
+  const onUp = () => {
+    grip.removeEventListener('pointermove', onMove);
+    grip.removeEventListener('pointerup', onUp);
+    grip.removeEventListener('pointercancel', onUp);
+    rows.forEach((other) => (other.style.transform = ''));
+    row.classList.remove('crDrag');
+    onDrop(from, target);
+  };
+  grip.addEventListener('pointermove', onMove);
+  grip.addEventListener('pointerup', onUp);
+  grip.addEventListener('pointercancel', onUp);
 }
 
 /**
@@ -790,54 +847,16 @@ export async function renderCredits(body) {
   };
   body.oninput = (event) => event.target.closest('.crInput') && markDirty();
 
-  // ✋ drag a row by its grip: the others slide out of the way, drop = new position
-  body.onpointerdown = (event) => {
-    const grip = event.target.closest('.crGrip');
-    if (!grip) return;
-    event.preventDefault();
-    const row = grip.closest('.crRow'),
-      rows = Array.from(body.querySelectorAll('.crRow')),
-      from = rows.indexOf(row),
-      step = (rows.length > 1 ? rows[1].offsetTop - rows[0].offsetTop : 0) || row.offsetHeight || 56,
-      startY = event.clientY,
-      minimum = -from * step,
-      maximum = (rows.length - 1 - from) * step;
-    let target = from;
-    row.classList.add('crDrag');
-    grip.setPointerCapture(event.pointerId);
-    if (navigator.vibrate) navigator.vibrate(8);
-
-    // 👉 follow the finger, shift the rows it passes over
-    const onMove = (moveEvent) => {
-      const offset = Math.max(minimum, Math.min(maximum, moveEvent.clientY - startY));
-      row.style.transform = `translateY(${offset}px) scale(1.02)`;
-      target = Math.max(0, Math.min(rows.length - 1, from + Math.round(offset / step)));
-      rows.forEach((other, position) => {
-        if (other === row) return;
-        let shift = 0;
-        if (from < target && position > from && position <= target) shift = -step;
-        if (from > target && position < from && position >= target) shift = step;
-        other.style.transform = shift ? `translateY(${shift}px)` : '';
-      });
-    };
-
-    // 🫳 drop: move the person in the list and redraw
-    const onUp = () => {
-      grip.removeEventListener('pointermove', onMove);
-      grip.removeEventListener('pointerup', onUp);
-      grip.removeEventListener('pointercancel', onUp);
+  // ✋ drag a row by its grip ⠿: the others slide out of the way, drop = new position
+  body.onpointerdown = (event) =>
+    startDragSort(event, '.crRow', (from, target) => {
       people = readRows();
       if (target !== from) {
-        const moved = people.splice(from, 1)[0];
-        people.splice(target, 0, moved);
+        people.splice(target, 0, people.splice(from, 1)[0]);
         isDirty = true;
       }
       draw();
-    };
-    grip.addEventListener('pointermove', onMove);
-    grip.addEventListener('pointerup', onUp);
-    grip.addEventListener('pointercancel', onUp);
-  };
+    });
 
   body.onclick = async (event) => {
     const button = event.target.closest('[data-cr]');
@@ -882,6 +901,335 @@ export async function renderCredits(body) {
       const names = body.querySelectorAll('.crName');
       if (names.length) names[names.length - 1].focus();
     }
+  };
+  draw();
+}
+
+// ===== 🧊 MISE EN PLACE ===== //
+
+/**
+ * `setupPathGet` - Function 🧭
+ *
+ * @param { object } root - the working setup
+ * @param { string } path - a dotted path like `buckets.0.items.2.n`
+ * @returns { any } - the value at that path
+ */
+const setupPathGet = (root, path) =>
+  path.split('.').reduce((value, key) => (value == null ? value : value[key]), root);
+
+/**
+ * `setupPathSet` - Function ✍️
+ *
+ * @param { object } root - the working setup
+ * @param { string } path - a dotted path like `steps.3.title.fr`
+ * @param { any } value - the new value
+ * @returns { void }
+ */
+function setupPathSet(root, path, value) {
+  const keys = path.split('.'),
+    last = keys.pop();
+  const parent = keys.reduce((node, key) => node[key], root);
+  if (parent) parent[last] = value;
+}
+
+/**
+ * `renderSetup` - Async Function 🧊
+ *
+ * Draws the Mise en place editor: the buckets & the reds (bottles: name, type, how many, note), the steps of
+ * service, a FR / EN switch for the texts, drag ⠿ to reorder, and Publish to `content/setup` (read by the
+ * « Mise en place » chapter of every phone, see setup.js).
+ *
+ * @param { HTMLElement } body - where to draw
+ * @returns { Promise<void> }
+ */
+export async function renderSetup(body) {
+  let working = cleanSetup(SETUP_DEFAULT),
+    isLive = false;
+  try {
+    const snapshot = await getDoc(doc(firestore, 'content', 'setup'));
+    if (snapshot.exists()) {
+      working = cleanSetup(JSON.parse(snapshot.data().data || 'null'));
+      isLive = true;
+    }
+  } catch (error) {}
+  let part = 'buckets',
+    language = 'fr',
+    isDirty = false;
+
+  // 🧩 a text input bound to a path of the working setup
+  const inputHtml = (path, placeholder, className, multiline) => {
+    const value = escapeHtml(setupPathGet(working, path) || '');
+    return multiline
+      ? `<textarea class="admfield setin ${className || ''}" rows="2" data-path="${path}" placeholder="${escapeHtml(placeholder)}">${value}</textarea>`
+      : `<input class="admfield setin ${className || ''}" data-path="${path}" placeholder="${escapeHtml(placeholder)}" value="${value}">`;
+  };
+
+  // 🍾 one bottle row: grip · name / note / type & quantity · delete
+  const bottleRowHtml = (groupPath, item, index) =>
+    `<div class="setrow" data-group="${groupPath}"><span class="crGrip" title="${translate('Glisser pour déplacer', 'Drag to move')}">⠿</span>` +
+    `<div class="admtext">${inputHtml(groupPath + '.items.' + index + '.n', translate('Nom de la bouteille', 'Bottle name'), 'setname')}` +
+    `${inputHtml(groupPath + '.items.' + index + '.note.' + language, translate('Note (ex. bouteille Orezza n° 1)', 'Note (e.g. Orezza bottle no. 1)'), 'setsmall')}` +
+    `<div class="setmeta"><select class="admfield setin setkindsel" data-path="${groupPath}.items.${index}.kind">` +
+    BOTTLE_KINDS.map(
+      ([id, emoji, french, english]) =>
+        `<option value="${id}"${item.kind === id ? ' selected' : ''}>${emoji} ${translate(french, english)}</option>`,
+    ).join('') +
+    `</select><label class="setqtylabel">×<input class="admfield setin setqtyin" type="number" min="0" max="24" inputmode="numeric" data-path="${groupPath}.items.${index}.qty" value="${item.qty}"></label></div></div>` +
+    `<button class="crDel" data-st="delItem" data-group="${groupPath}" data-index="${index}" title="${translate('Supprimer', 'Delete')}">✕</button></div>`;
+
+  // 🧊 one group card (a bucket or the reds)
+  const groupCardHtml = (group, groupPath, title, removable) =>
+    cardHtml(
+      title,
+      `<div class="setgrouphead">${inputHtml(groupPath + '.icon', '🧊', 'seticon')}` +
+        `${inputHtml(groupPath + '.name.' + language, translate('Nom du seau', 'Bucket name'), 'setname')}</div>` +
+        inputHtml(
+          groupPath + '.hint.' + language,
+          translate('Comment le reconnaître, ce qu’il contient', 'How to spot it, what goes in'),
+          '',
+          true,
+        ) +
+        `<div class="setrows">${group.items.map((item, index) => bottleRowHtml(groupPath, item, index)).join('')}</div>` +
+        `<button class="admdashed" data-st="addItem" data-group="${groupPath}">＋ ${translate('Ajouter une bouteille', 'Add a bottle')}</button>` +
+        (removable
+          ? `<button class="setremove" data-st="delBucket" data-index="${groupPath.split('.')[1]}">🗑️ ${translate('Supprimer ce seau', 'Delete this bucket')}</button>`
+          : ''),
+      group.items.reduce((sum, item) => sum + item.qty, 0),
+    );
+
+  // 🤵 one step row: grip · icon · title / text / phrase · delete
+  const stepRowHtml = (step, index) =>
+    `<div class="setrow setsteprow" data-group="steps"><span class="crGrip" title="${translate('Glisser pour déplacer', 'Drag to move')}">⠿</span>` +
+    `<span class="setstepnum">${index + 1}</span>${inputHtml('steps.' + index + '.icon', '•', 'seticon')}` +
+    `<div class="admtext">${inputHtml('steps.' + index + '.title.' + language, translate('Titre', 'Title'), 'setname')}` +
+    inputHtml(
+      'steps.' + index + '.text.' + language,
+      translate('Ce que fait le serveur', 'What the waiter does'),
+      '',
+      true,
+    ) +
+    inputHtml(
+      'steps.' + index + '.say.' + language,
+      translate('💬 Phrase à dire (facultatif)', '💬 What to say (optional)'),
+      'setsmall',
+    ) +
+    `</div><button class="crDel" data-st="delStep" data-index="${index}" title="${translate('Supprimer', 'Delete')}">✕</button></div>`;
+
+  // 🖼️ draws the editor
+  const draw = () => {
+    const parts = [
+      ['buckets', '🧊 ' + translate('Seaux', 'Buckets')],
+      ['reds', '🍷 ' + translate('Rouges', 'Reds')],
+      ['steps', '🤵 ' + translate('Accueil', 'Service')],
+    ];
+    let content = '';
+    if (part === 'buckets')
+      content =
+        working.buckets
+          .map((bucket, index) =>
+            groupCardHtml(bucket, 'buckets.' + index, translate('Seau ', 'Bucket ') + (index + 1), true),
+          )
+          .join('') +
+        `<button class="admdashed" data-st="addBucket">＋ ${translate('Ajouter un seau', 'Add a bucket')}</button>`;
+    else if (part === 'reds')
+      content = groupCardHtml(working.reds, 'reds', '🍷 ' + translate('Rouges', 'Reds'), false);
+    else
+      content = cardHtml(
+        '🤵 ' + translate('Étapes du service', 'Steps of service'),
+        `<p class="crHint">${translate('Maintenez ⠿ et glissez pour changer l’ordre.', 'Hold ⠿ and drag to reorder.')}</p>` +
+          `<div class="setrows">${working.steps.map(stepRowHtml).join('')}</div>` +
+          `<button class="admdashed" data-st="addStep">＋ ${translate('Ajouter une étape', 'Add a step')}</button>`,
+        working.steps.length,
+      );
+    body.innerHTML =
+      `<div class="setbar"><div class="setseg">` +
+      parts
+        .map(
+          ([id, label]) =>
+            `<button class="${part === id ? 'on' : ''}" data-st="part" data-part="${id}">${label}</button>`,
+        )
+        .join('') +
+      `</div><div class="setseg setlang">` +
+      ['fr', 'en']
+        .map(
+          (code) =>
+            `<button class="${language === code ? 'on' : ''}" data-st="lang" data-lang="${code}">${code.toUpperCase()}</button>`,
+        )
+        .join('') +
+      `</div></div><p class="muted sm" style="margin:0 4px 10px">${translate(
+        `Textes en ${language === 'fr' ? 'français' : 'anglais'}. ${isLive ? 'Version en ligne.' : 'Version d’origine (vidéos du 1er nov.).'}`,
+        `${language === 'fr' ? 'French' : 'English'} texts. ${isLive ? 'Live version.' : 'Built-in version (videos of 1 Nov).'}`,
+      )}</p>` +
+      content +
+      `<button class="btn admwide${isDirty ? ' crDirty' : ''}" data-st="save">🚀 ${translate('Publier', 'Publish')}</button>` +
+      (isLive
+        ? `<button class="setremove" data-st="restore">↩️ ${translate('Revenir à la version d’origine', 'Back to the built-in version')}</button>`
+        : '') +
+      `<p class="muted sm" style="text-align:center">${translate(
+        'Visible dans Accueil › Chapitres › Mise en place, sur toutes les apps.',
+        'Shown in Home › Chapters › Setup on every phone.',
+      )}</p>`;
+  };
+
+  // ✏️ remember a change, the Publish button glows
+  const markDirty = () => {
+    isDirty = true;
+    const saveButton = body.querySelector('[data-st="save"]');
+    if (saveButton) saveButton.classList.add('crDirty');
+  };
+
+  // ⌨️ typing writes straight into the working setup
+  body.oninput = body.onchange = (event) => {
+    const field = event.target.closest('[data-path]');
+    if (!field) return;
+    const value =
+      field.type === 'number' ? Math.max(0, Math.min(24, Math.round(Number(field.value) || 0))) : field.value;
+    setupPathSet(working, field.dataset.path, value);
+    markDirty();
+  };
+
+  // ✋ drag bottles & steps by their grip
+  body.onpointerdown = (event) => {
+    const row = event.target.closest('.setrow');
+    if (!row) return;
+    startDragSort(event, '.setrow', (from, target) => {
+      const list = setupPathGet(
+        working,
+        row.dataset.group === 'steps' ? 'steps' : row.dataset.group + '.items',
+      );
+      if (target !== from) {
+        list.splice(target, 0, list.splice(from, 1)[0]);
+        markDirty();
+      }
+      draw();
+    });
+  };
+
+  // 👆 every button
+  body.onclick = async (event) => {
+    const button = event.target.closest('[data-st]');
+    if (!button) return;
+    const index = Number(button.dataset.index);
+    switch (button.dataset.st) {
+      case 'part':
+        part = button.dataset.part;
+        break;
+      case 'lang':
+        language = button.dataset.lang;
+        break;
+      case 'addItem': {
+        const items = setupPathGet(working, button.dataset.group + '.items');
+        items.push({ n: '', kind: part === 'reds' ? 'rouge' : 'blanc', qty: 1, note: { fr: '', en: '' } });
+        markDirty();
+        draw();
+        const names = body.querySelectorAll(`[data-path^="${button.dataset.group}.items."].setname`);
+        if (names.length) names[names.length - 1].focus();
+        return;
+      }
+      case 'delItem': {
+        const items = setupPathGet(working, button.dataset.group + '.items');
+        if (
+          items[index].n &&
+          !(await confirmAction(translate('Retirer ', 'Remove ') + items[index].n + ' ?', {
+            icon: '🍾',
+            ok: translate('Retirer', 'Remove'),
+          }))
+        )
+          return;
+        items.splice(index, 1);
+        markDirty();
+        break;
+      }
+      case 'addBucket':
+        working.buckets.push({
+          icon: '🧊',
+          name: { fr: 'Seau ' + (working.buckets.length + 1), en: 'Bucket ' + (working.buckets.length + 1) },
+          hint: { fr: '', en: '' },
+          img: '',
+          items: [],
+        });
+        markDirty();
+        break;
+      case 'delBucket':
+        if (
+          !(await confirmAction(translate('Supprimer ce seau ?', 'Delete this bucket?'), {
+            text: translate('Ses bouteilles seront retirées aussi.', 'Its bottles go too.'),
+            icon: '🧊',
+            ok: translate('Supprimer', 'Delete'),
+          }))
+        )
+          return;
+        working.buckets.splice(index, 1);
+        markDirty();
+        break;
+      case 'addStep':
+        working.steps.push({
+          icon: '•',
+          title: { fr: '', en: '' },
+          text: { fr: '', en: '' },
+          say: { fr: '', en: '' },
+        });
+        markDirty();
+        draw();
+        {
+          const titles = body.querySelectorAll('.setsteprow .setname');
+          if (titles.length) titles[titles.length - 1].focus();
+        }
+        return;
+      case 'delStep':
+        if (
+          !(await confirmAction(translate('Supprimer cette étape ?', 'Delete this step?'), {
+            icon: '🤵',
+            ok: translate('Supprimer', 'Delete'),
+          }))
+        )
+          return;
+        working.steps.splice(index, 1);
+        markDirty();
+        break;
+      case 'save': {
+        const clean = cleanSetup(working);
+        return runAction(
+          () =>
+            setDoc(doc(firestore, 'content', 'setup'), {
+              data: JSON.stringify(clean),
+              ts: serverTimestamp(),
+            }),
+          translate('Mise en place publiée', 'Setup published'),
+          () => {
+            isDirty = false;
+            isLive = true;
+            draw();
+          },
+        );
+      }
+      case 'restore':
+        if (
+          !(await confirmAction(
+            translate('Revenir à la version d’origine ?', 'Go back to the built-in version?'),
+            {
+              text: translate(
+                'Toutes les apps reprendront la version des vidéos.',
+                'Every phone goes back to the version from the videos.',
+              ),
+              icon: '↩️',
+              ok: translate('Rétablir', 'Restore'),
+            },
+          ))
+        )
+          return;
+        return runAction(
+          () => deleteDoc(doc(firestore, 'content', 'setup')),
+          translate('Version d’origine rétablie', 'Built-in version restored'),
+          () => {
+            working = cleanSetup(SETUP_DEFAULT);
+            isDirty = false;
+            isLive = false;
+            draw();
+          },
+        );
+    }
+    draw();
   };
   draw();
 }
