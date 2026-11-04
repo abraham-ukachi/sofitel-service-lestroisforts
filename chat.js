@@ -862,10 +862,13 @@ function paint() {
         '</p></div>');
   // 👀 who has read up to where
   paintSeenAvatars(body);
-  // stick to the bottom (always on the first paint) ⬇️
-  if (atBottom || !paint.done) {
-    body.scrollTop = body.scrollHeight;
+  // the first paint with messages: back where we left off (< 5 min ago), else the bottom ⬇️
+  if (!paint.done && messages.length) {
     paint.done = true;
+    newBelow = 0;
+    if (!restoreScroll(body)) pinToBottom(body);
+  } else if (atBottom) {
+    body.scrollTop = body.scrollHeight;
     newBelow = 0;
   }
   paintNewBelow();
@@ -1004,6 +1007,87 @@ async function react(id, emoji) {
       ['r.' + user.uid]: current === emoji ? deleteField() : emoji,
     });
   } catch (error) {}
+}
+
+// ===== SCROLL MEMORY 📍 ===== //
+
+// where the list was when the chat closed (restored for 5 minutes, then the chat opens at the bottom) 📍
+const SCROLL_KEY = 'ltf_chat_scroll';
+const SCROLL_MEMORY_MS = 5 * 60 * 1000;
+// until when the list keeps sticking to the bottom while photos & GIFs load ⏳
+let pinnedUntil = 0;
+
+/**
+ * `saveScroll` - Function 💾
+ *
+ * Remembers the first visible message & its offset (or « at the bottom ») when the chat closes.
+ *
+ * @returns { void }
+ */
+function saveScroll() {
+  const body = overlay && overlay.querySelector('.cbody');
+  if (!body || !paint.done) return;
+  try {
+    const atBottom = body.scrollHeight - body.scrollTop - body.clientHeight < 80;
+    const rows = [...body.querySelectorAll('.cm[data-id]')];
+    const firstVisible = rows.find((row) => row.offsetTop + row.offsetHeight > body.scrollTop);
+    localStorage.setItem(
+      SCROLL_KEY,
+      JSON.stringify({
+        at: Date.now(),
+        bottom: atBottom || !firstVisible,
+        id: firstVisible ? firstVisible.dataset.id : '',
+        offset: firstVisible ? firstVisible.offsetTop - body.scrollTop : 0,
+      }),
+    );
+  } catch (error) {}
+}
+
+/**
+ * `restoreScroll` - Function 📍
+ *
+ * @param { HTMLElement } body - the message list
+ * @returns { boolean } - true when the list went back to where it was (closed less than 5 min ago)
+ */
+function restoreScroll(body) {
+  try {
+    const saved = JSON.parse(localStorage.getItem(SCROLL_KEY) || 'null');
+    if (!saved || saved.bottom || Date.now() - saved.at > SCROLL_MEMORY_MS) return false;
+    const row = body.querySelector('.cm[data-id="' + CSS.escape(saved.id) + '"]');
+    if (!row) return false;
+    body.scrollTop = row.offsetTop - saved.offset;
+    return true;
+  } catch (error) {
+    return false;
+  }
+}
+
+/**
+ * `pinToBottom` - Function ⬇️
+ *
+ * Scrolls to the newest message and keeps it there for a moment while photos & GIFs load
+ * (they make the list taller), unless the waiter starts scrolling.
+ *
+ * @param { HTMLElement } body - the message list
+ * @returns { void }
+ */
+function pinToBottom(body) {
+  body.scrollTop = body.scrollHeight;
+  pinnedUntil = Date.now() + 3000;
+  if (body.dataset.pinned) return;
+  body.dataset.pinned = '1';
+  // 🖼️ a picture finished loading: back to the bottom
+  body.addEventListener(
+    'load',
+    () => {
+      if (Date.now() < pinnedUntil) body.scrollTop = body.scrollHeight;
+    },
+    true,
+  );
+  // ✋ the waiter scrolls: stop sticking
+  const release = () => (pinnedUntil = 0);
+  body.addEventListener('touchstart', release, { passive: true });
+  body.addEventListener('wheel', release, { passive: true });
 }
 
 /**
@@ -1280,6 +1364,7 @@ function openChat() {
  */
 function closeChat() {
   if (!overlay) return;
+  saveScroll();
   clearTimeout(gifTimer);
   tellTyping(false);
   overlay.remove();
