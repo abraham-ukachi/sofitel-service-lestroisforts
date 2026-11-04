@@ -271,13 +271,55 @@ async function notifyTeam(uid, messageId, token) {
   const teamUids = new Set(
     ((teamDocs && teamDocs.documents) || []).map((teamDoc) => teamDoc.name.split('/').pop()),
   );
-  const devices = ((pushDocs && pushDocs.documents) || [])
-    .filter((pushDoc) => {
-      const ownerUid = pushDoc.name.split('/').pop();
-      return ownerUid !== uid && teamUids.has(ownerUid);
-    })
-    .flatMap(devicesOf);
-  return { status: 200, json: await sendAll(devices, payload) };
+  // 📣 the teammates named in the text with @FirstName get their own « mentioned you » notification
+  const mentionedUids = mentionsOf(text, (teamDocs && teamDocs.documents) || [], uid);
+  const mentionPayload = JSON.stringify({
+    title: '📣 ' + (stringOf(fields, 'name') || 'Les Trois Forts') + ' vous a mentionné · mentioned you',
+    body: text.slice(0, 140),
+    tag: 'ltf-mention-' + messageId,
+  });
+  const teamPushDocs = ((pushDocs && pushDocs.documents) || []).filter((pushDoc) => {
+    const ownerUid = pushDoc.name.split('/').pop();
+    return ownerUid !== uid && teamUids.has(ownerUid);
+  });
+  const isMentioned = (pushDoc) => mentionedUids.has(pushDoc.name.split('/').pop());
+  const [teamResult, mentionResult] = await Promise.all([
+    sendAll(teamPushDocs.filter((pushDoc) => !isMentioned(pushDoc)).flatMap(devicesOf), payload),
+    sendAll(teamPushDocs.filter(isMentioned).flatMap(devicesOf), mentionPayload),
+  ]);
+  return {
+    status: 200,
+    json: {
+      sent: teamResult.sent + mentionResult.sent,
+      failed: teamResult.failed + mentionResult.failed,
+      mentioned: mentionResult.sent,
+    },
+  };
+}
+
+/**
+ * `mentionsOf` - Function 📣
+ *
+ * The teammates a message names with @FirstName (same rule as the chat: the first word of their name,
+ * any case, accents kept).
+ *
+ * @param { string } text - the message text
+ * @param { Array<object> } teamDocs - the `team` docs (REST format)
+ * @param { string } senderUid - the sender (never notified twice)
+ * @returns { Set<string> } - the uids named in the text
+ */
+function mentionsOf(text, teamDocs, senderUid) {
+  const named = new Set(
+    Array.from(String(text || '').matchAll(/@([\p{L}][\p{L}\p{M}'-]*)/gu), (match) => match[1].toLowerCase()),
+  );
+  const uids = new Set();
+  if (!named.size) return uids;
+  teamDocs.forEach((teamDoc) => {
+    const memberUid = teamDoc.name.split('/').pop();
+    const firstName = stringOf(teamDoc.fields, 'name').trim().split(/\s+/)[0].toLowerCase();
+    if (memberUid !== senderUid && firstName && named.has(firstName)) uids.add(memberUid);
+  });
+  return uids;
 }
 
 /**
