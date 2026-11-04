@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. Versions follow the service-worker cache (`ltf-vNN` → `0.NN.0`), see [CONTRIBUTING.md](./CONTRIBUTING.md#git-commit-messages) for the commit guidelines.
 
+### 0.72.0 (2026-11-04)
+
+* :sparkles: Scanner engine: Google's SigLIP 2 vision model (base, 4-bit ONNX, ~63 MB, downloaded once from Hugging Face at a pinned revision, then offline) replaces MobileNet v2, run by ONNX Runtime Web 1.22 on the phone's GPU (WebGPU) or WebAssembly. Synthetic test on the reference photos: 98.9 % top-1 on cropped, blurred, darker shots (MobileNet 83.3 %)
+* :sparkles: Live mode: while you aim, the middle of the frame is matched again and again and the best guess appears as a pill on the viewfinder once it's « Probable » for two frames; tap it to open the dish or wine (and teach the scanner). The shutter still runs the full scan with the label reader
+* :recycle: Reference embeddings rebuilt with SigLIP 2 (`rust/tools/scan/emb.js`, outlier dimensions clamped); learned scans start fresh (`ltf_scan_learn_sg2`); scan cache `ltf-scan-v5`; CSP allows huggingface.co for the one-time download
+* :fire: TensorFlow.js, MobileNet and the float16 converter removed
+
 ### 0.71.1 (2026-11-04)
 
 * :bug: Scanner: a plate photo could come out « Très probable » as a champagne, because the label reader turned the plate's pattern into words like « le ». Only words Tesseract is ≥60 % sure of count, short words (le, la, de…) are ignored, one short word alone no longer counts, and a result the label pushed over a better-looking photo is never shown as « sure »
