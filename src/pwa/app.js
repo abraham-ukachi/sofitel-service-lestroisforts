@@ -719,6 +719,9 @@
   };
   // 🌍 the items, for the scan & the tests
   window.LTFitems = () => items;
+  // 🎓 a right answer outside these screens (Mise en place, setup.js): same anti-farm XP as `record`
+  window.LTFrecord = (id, xp) =>
+    typeof id === 'string' && id && xp > 0 ? record({ id }, true, Math.min(50, xp)) : 0;
   // 👋 the floor plan with today's bookings, for the welcome screen
   window.LTFbriefPlan = () => planSVG({ labels: true, res: LTF.jour.tables.map((table) => table[1]) });
 

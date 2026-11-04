@@ -335,6 +335,8 @@ const hasUnread = () => {
  */
 const markSeen = () => {
   if (messages.length) localStorage.setItem(SEEN_KEY, String(Math.max(...messages.map(timeOf))));
+  // 👀 and tell the team (only while the chat is open)
+  if (overlay) tellSeen();
 };
 
 // ===== LIVE QUERY 👂 ===== //
@@ -377,11 +379,14 @@ function listen() {
         .filter((message) => isSafeId(message.id))
         .reverse();
       // 🔔 a new message from a teammate while the app is open: chime
-      if (
-        !isFirstSnapshot &&
-        messages.some((message) => !knownIds.has(message.id) && message.uid !== user.uid)
-      )
-        playChime();
+      const freshCount = isFirstSnapshot
+        ? 0
+        : messages.filter((message) => !knownIds.has(message.id) && message.uid !== user.uid).length;
+      if (freshCount) playChime();
+      // ⬇️ scrolled up in the open chat? count them for the « ↓ nouveaux » pill
+      const listBody = overlay && overlay.querySelector('.cbody');
+      if (freshCount && listBody && listBody.scrollHeight - listBody.scrollTop - listBody.clientHeight >= 80)
+        newBelow += freshCount;
       errorText = '';
       // chat open? it's seen; repaint + refresh the button
       if (overlay) markSeen();
@@ -733,6 +738,7 @@ function bubbleHtml(message) {
       : '') +
     // 🕘 the time
     '<div class="ctm">' +
+    (message.ed ? '<span class="cedited">' + translate('modifié', 'edited') + '</span> · ' : '') +
     formatTime(timeOf(message)) +
     '</div></div>' +
     // 😍 the reaction chips
@@ -748,6 +754,8 @@ function bubbleHtml(message) {
         '">↩︎ ' +
         translate('Répondre', 'Reply') +
         '</button>' +
+        (message.text ? '<button class="crp" data-copy="' + message.id + '">📋</button>' : '') +
+        (canEdit(message) ? '<button class="crp" data-edit="' + message.id + '">✏️</button>' : '') +
         (isOwner() ? '<button class="crp" data-pin="' + message.id + '">📌</button>' : '') +
         (isMine ? '<button class="crp" data-del="' + message.id + '">🗑</button>' : '') +
         '</div>'
@@ -842,31 +850,45 @@ function paint() {
           'No messages yet. Start the conversation!',
         ) +
         '</p></div>');
+  // 👀 who has read up to where
+  paintSeenAvatars(body);
   // stick to the bottom (always on the first paint) ⬇️
   if (atBottom || !paint.done) {
     body.scrollTop = body.scrollHeight;
     paint.done = true;
+    newBelow = 0;
   }
+  paintNewBelow();
+  paintTyping();
   // the reply / photo preview
   const preview = overlay.querySelector('.crep');
-  preview.style.display = replyTo || pendingPhoto ? 'flex' : 'none';
-  preview.innerHTML =
-    (pendingPhoto ? '<img src="' + pendingPhoto + '" alt="">' : '') +
-    '<div class="grow crq" style="min-width:0' +
-    (replyTo ? ';border-color:' + colorsOf(replyTo.uid)[1] : '') +
-    '">' +
-    (replyTo
-      ? '<b style="color:' +
-        colorsOf(replyTo.uid)[1] +
-        '">↩︎ ' +
-        escapeHtml(replyTo.name) +
-        '</b><div class="crt">' +
-        escapeHtml(replyTo.text || '📷') +
-        '</div>'
-      : '<span class="muted">' + translate('Photo prête à envoyer', 'Photo ready to send') + '</span>') +
-    '</div><button aria-label="x">✕</button>';
-  // ✕ drops the reply & the photo
+  preview.style.display = replyTo || pendingPhoto || editingId ? 'flex' : 'none';
+  preview.innerHTML = editingId
+    ? '<div class="grow crq" style="min-width:0"><b>✏️ ' +
+      translate('Modifier le message', 'Edit message') +
+      '</b><div class="crt muted">' +
+      translate('Envoyez pour enregistrer', 'Send to save') +
+      '</div></div><button aria-label="x">✕</button>'
+    : (pendingPhoto ? '<img src="' + pendingPhoto + '" alt="">' : '') +
+      '<div class="grow crq" style="min-width:0' +
+      (replyTo ? ';border-color:' + colorsOf(replyTo.uid)[1] : '') +
+      '">' +
+      (replyTo
+        ? '<b style="color:' +
+          colorsOf(replyTo.uid)[1] +
+          '">↩︎ ' +
+          escapeHtml(replyTo.name) +
+          '</b><div class="crt">' +
+          escapeHtml(replyTo.text || '📷') +
+          '</div>'
+        : '<span class="muted">' + translate('Photo prête à envoyer', 'Photo ready to send') + '</span>') +
+      '</div><button aria-label="x">✕</button>';
+  // ✕ drops the reply, the photo & the edit
   preview.querySelector('button').onclick = () => {
+    if (editingId) {
+      overlay.querySelector('textarea').value = '';
+      editingId = null;
+    }
     replyTo = null;
     pendingPhoto = null;
     paint();
@@ -887,8 +909,15 @@ async function send() {
   // the text box & its trimmed text
   const textarea = overlay.querySelector('textarea'),
     text = textarea.value.trim().slice(0, 1000);
+  // ✏️ editing one of mine? save the new text instead
+  if (editingId) {
+    if (text) saveEdit(text);
+    return;
+  }
   // nothing to send?
   if (!text && !pendingPhoto) return;
+  // ✍️ not typing anymore
+  tellTyping(false);
   // the new doc 🗃️
   const newMessage = {
     uid: user.uid,
@@ -963,8 +992,8 @@ function openChat() {
   overlay.innerHTML =
     '<div class="sch"><button class="cx" aria-label="close">←</button><div class="grow"><div style="font-weight:700">' +
     translate("Chat de l'équipe", 'Team chat') +
-    '</div><div class="muted sm">Les Trois Forts</div></div><button class="cbell" hidden aria-label="notifications"></button></div>' +
-    '<div class="cpin" hidden></div><div class="cbody"></div><div class="cfoot"><div class="crep"></div>' +
+    '</div><div class="muted sm csub">Les Trois Forts</div></div><button class="cbell" hidden aria-label="notifications"></button></div>' +
+    '<div class="cpin" hidden></div><div class="cbody"></div><div class="cfoot"><button class="cnew" hidden></button><div class="crep"></div>' +
     '<div class="cmsug" hidden></div><div class="cquick" hidden></div><div class="cmenu" hidden><label><input type="file" accept="image/*" capture="environment" hidden>📷 ' +
     translate('Appareil photo', 'Camera') +
     '</label><label><input type="file" accept="image/*" hidden>🖼️ ' +
@@ -975,6 +1004,8 @@ function openChat() {
     translate('Message…', 'Message…') +
     '"></textarea><button class="cplus" aria-label="photo">+</button></div><div class="cpick" hidden></div></div>';
   addServiceStyles();
+  addPresenceStyles();
+  newBelow = 0;
   document.body.appendChild(overlay);
   // 🔙 Back (button or gesture) closes the chat
   history.pushState({ chat: 1 }, '');
@@ -1005,6 +1036,8 @@ function openChat() {
 
   // 🍽️ the pinned banner, the quick messages & the @mention suggestions
   wireServiceTools(textarea);
+  // ✍️ typing, long-press menu & the « ↓ nouveaux » pill
+  wirePresence(textarea);
 
   // 😀 the emoji / GIF panel: the smiley opens it (keyboard down), the keyboard icon or the text box closes it
   overlay.querySelector('.cemo').onclick = (event) => {
@@ -1066,6 +1099,16 @@ function openChat() {
     // 🍽️ a table chip: the floor plan
     if (target.closest('[data-table]')) {
       showTable(target.closest('[data-table]').dataset.table);
+      return;
+    }
+    // 📋 copy
+    if (target.closest('[data-copy]')) {
+      copyMessage(target.closest('[data-copy]').dataset.copy);
+      return;
+    }
+    // ✏️ edit (mine, < 5 min)
+    if (target.closest('[data-edit]')) {
+      startEdit(target.closest('[data-edit]').dataset.edit);
       return;
     }
     // 📌 pin (owner)
@@ -1179,9 +1222,11 @@ function openChat() {
 function closeChat() {
   if (!overlay) return;
   clearTimeout(gifTimer);
+  tellTyping(false);
   overlay.remove();
   overlay = null;
   selectedId = null;
+  editingId = null;
   markSeen();
   updateFab();
 }
@@ -1431,6 +1476,8 @@ function stopServiceWatchers() {
   serviceUnsubscribers = [];
   teamNames = [];
   pinnedMessage = null;
+  typingPeople = [];
+  seenBy = {};
 }
 
 /**
@@ -1443,6 +1490,8 @@ function stopServiceWatchers() {
 function startServiceWatchers() {
   stopServiceWatchers();
   if (!user || !hasChatAccess()) return;
+  // ✍️ who is typing & 👀 how far everyone has read
+  serviceUnsubscribers.push(...watchPresence());
   // 👥 the team: uid, name & first name
   serviceUnsubscribers.push(
     onSnapshot(
@@ -1721,6 +1770,362 @@ function addServiceStyles() {
 .ctcard{background:var(--sf,#1b1b1b);border-radius:20px;padding:14px;width:min(560px,100%);text-align:center}
 .ctttl{font-weight:700;font-size:17px;margin-bottom:8px;text-align:left}
 .ctcard .plan{width:100%;height:auto;margin-bottom:6px}
+`;
+  document.head.appendChild(style);
+}
+
+// ===== LIVE PRESENCE ✍️ (typing, read avatars, edit, long-press, new messages pill) ===== //
+
+// how long a message can still be edited, how long « is typing » lasts, how often we write them ⏱️
+const EDIT_WINDOW = 5 * 60000,
+  TYPING_SHOWN_FOR = 6000,
+  TYPING_WRITE_EVERY = 4000,
+  SEEN_WRITE_EVERY = 8000,
+  LONG_PRESS_DELAY = 480;
+
+// who is typing, how far each teammate has read, the message being edited, the new messages below the
+// screen & when we last wrote our typing / seen docs
+let typingPeople = [],
+  seenBy = {},
+  editingId = null,
+  newBelow = 0,
+  lastTypingWrite = 0,
+  lastSeenWrite = 0,
+  lastSeenTime = 0,
+  presenceTimer = 0;
+
+/**
+ * `millisOf` - Function ⏱️
+ *
+ * @param { any } value - a Firestore timestamp (or nothing)
+ * @returns { number } - its time in ms (0 when missing)
+ */
+const millisOf = (value) => (value && typeof value.toMillis === 'function' ? value.toMillis() : 0);
+
+/**
+ * `watchPresence` - Function 👂
+ *
+ * Listens to `typing` (who is writing now) and `seen` (how far each teammate has read).
+ * Both fail quietly when the rules refuse them.
+ *
+ * @returns { Array<() => void> } - the unsubscribers
+ */
+function watchPresence() {
+  return [
+    onSnapshot(
+      collection(firestore, 'typing'),
+      (snapshot) => {
+        typingPeople = snapshot.docs
+          .map((docSnapshot) => ({
+            uid: docSnapshot.id,
+            name: String(docSnapshot.data().name || ''),
+            at: millisOf(docSnapshot.data({ serverTimestamps: 'estimate' }).at),
+          }))
+          .filter((person) => person.name && (!user || person.uid !== user.uid));
+        paintTyping();
+      },
+      () => {},
+    ),
+    onSnapshot(
+      collection(firestore, 'seen'),
+      (snapshot) => {
+        seenBy = {};
+        snapshot.docs.forEach((docSnapshot) => {
+          const data = docSnapshot.data({ serverTimestamps: 'estimate' });
+          if (isSafeId(docSnapshot.id) || /^[A-Za-z0-9]{1,128}$/.test(docSnapshot.id))
+            seenBy[docSnapshot.id] = {
+              at: millisOf(data.at),
+              name: String(data.name || ''),
+              pic: typeof data.pic === 'string' ? data.pic : '',
+            };
+        });
+        paint();
+      },
+      () => {},
+    ),
+  ];
+}
+
+/**
+ * `paintTyping` - Function ✍️
+ *
+ * @returns { void } - « Ourya écrit… » in the header while someone typed in the last seconds
+ */
+function paintTyping() {
+  const subtitle = overlay && overlay.querySelector('.csub');
+  if (!subtitle) return;
+  const now = Date.now();
+  const names = typingPeople
+    .filter((person) => now - person.at < TYPING_SHOWN_FOR)
+    .map((person) => person.name.trim().split(/\s+/)[0]);
+  subtitle.classList.toggle('ctyp', names.length > 0);
+  subtitle.textContent = names.length
+    ? names.length === 1
+      ? translate(names[0] + ' écrit…', names[0] + ' is typing…')
+      : translate(
+          names.slice(0, 2).join(' et ') + ' écrivent…',
+          names.slice(0, 2).join(' and ') + ' are typing…',
+        )
+    : 'Les Trois Forts';
+}
+
+/**
+ * `tellTyping` - Function ✍️
+ *
+ * @param { boolean } isTyping - true while I type, false once sent (removes my doc)
+ * @returns { void }
+ */
+function tellTyping(isTyping) {
+  if (!user || !hasChatAccess()) return;
+  const typingDoc = doc(firestore, 'typing', user.uid);
+  if (!isTyping) {
+    if (lastTypingWrite) deleteDoc(typingDoc).catch(() => {});
+    lastTypingWrite = 0;
+    return;
+  }
+  if (Date.now() - lastTypingWrite < TYPING_WRITE_EVERY) return;
+  lastTypingWrite = Date.now();
+  setDoc(typingDoc, { name: (user.displayName || 'Staff').slice(0, 100), at: serverTimestamp() }).catch(
+    () => {},
+  );
+}
+
+/**
+ * `tellSeen` - Function 👀
+ *
+ * @returns { void } - tells the team how far I've read (the newest message time), at most every 8 s
+ */
+function tellSeen() {
+  if (!user || !hasChatAccess() || !overlay || !messages.length) return;
+  const newest = Math.max(...messages.map(timeOf));
+  if (newest <= lastSeenTime) return;
+  // written a moment ago? try again once the 8 s are over ⏳
+  const waitFor = SEEN_WRITE_EVERY - (Date.now() - lastSeenWrite);
+  if (waitFor > 0) {
+    clearTimeout(tellSeen.timer);
+    tellSeen.timer = setTimeout(tellSeen, waitFor + 50);
+    return;
+  }
+  lastSeenTime = newest;
+  lastSeenWrite = Date.now();
+  setDoc(doc(firestore, 'seen', user.uid), {
+    name: (user.displayName || 'Staff').slice(0, 100),
+    pic: user.photoURL || '',
+    at: serverTimestamp(),
+  }).catch(() => {});
+}
+
+/**
+ * `paintSeenAvatars` - Function 👀
+ *
+ * Puts each teammate's tiny avatar under the last message they've read (like a group chat).
+ *
+ * @param { HTMLElement } body - the message list
+ * @returns { void }
+ */
+function paintSeenAvatars(body) {
+  const rows = {};
+  Object.entries(seenBy).forEach(([uid, reader]) => {
+    if ((user && uid === user.uid) || !reader.at) return;
+    const lastRead = messages.filter((message) => timeOf(message) <= reader.at + 1000).pop();
+    if (lastRead) (rows[lastRead.id] = rows[lastRead.id] || []).push({ uid, ...reader });
+  });
+  Object.entries(rows).forEach(([id, readers]) => {
+    const messageRow = body.querySelector('.cm[data-id="' + id + '"] .cbw');
+    if (!messageRow) return;
+    const line = document.createElement('div');
+    line.className = 'cseen';
+    line.innerHTML =
+      readers
+        .slice(0, 6)
+        .map((reader) =>
+          /^https:\/\/[a-z0-9.-]+\.googleusercontent\.com\//.test(reader.pic)
+            ? '<img src="' +
+              escapeHtml(reader.pic) +
+              '" referrerpolicy="no-referrer" alt="" title="' +
+              escapeHtml(reader.name) +
+              '">'
+            : '<span style="background:' +
+              colorsOf(reader.uid)[0] +
+              '" title="' +
+              escapeHtml(reader.name) +
+              '">' +
+              escapeHtml((reader.name || '?')[0]) +
+              '</span>',
+        )
+        .join('') + (readers.length > 6 ? '<b>+' + (readers.length - 6) + '</b>' : '');
+    messageRow.appendChild(line);
+  });
+}
+
+/**
+ * `canEdit` - Function ✏️
+ *
+ * @param { object } message - a chat message
+ * @returns { boolean } - true for my own text message, less than 5 minutes old
+ */
+const canEdit = (message) =>
+  !!(user && message.uid === user.uid && message.text && Date.now() - timeOf(message) < EDIT_WINDOW);
+
+/**
+ * `startEdit` - Function ✏️
+ *
+ * @param { string } id - my message to edit (its text goes back in the composer)
+ * @returns { void }
+ */
+function startEdit(id) {
+  const message = messages.find((candidate) => candidate.id === id);
+  if (!message || !canEdit(message))
+    return showToast(translate('Trop tard pour modifier', 'Too late to edit'));
+  editingId = id;
+  replyTo = null;
+  pendingPhoto = null;
+  selectedId = null;
+  const textarea = overlay.querySelector('textarea');
+  textarea.value = message.text;
+  paint();
+  textarea.focus();
+  textarea.setSelectionRange(textarea.value.length, textarea.value.length);
+  textarea.dispatchEvent(new Event('input'));
+}
+
+/**
+ * `saveEdit` - Async Function ✏️
+ *
+ * @param { string } text - the new text
+ * @returns { Promise<void> } - saves it (marked « modifié ») or puts it back on failure
+ */
+async function saveEdit(text) {
+  const id = editingId,
+    textarea = overlay.querySelector('textarea');
+  editingId = null;
+  textarea.value = '';
+  textarea.style.height = '';
+  paint();
+  try {
+    await updateDoc(doc(firestore, 'chat', id), { text, ed: serverTimestamp() });
+  } catch (error) {
+    editingId = id;
+    textarea.value = text;
+    showToast(translate('Modification impossible', 'Could not edit'));
+    paint();
+  }
+}
+
+/**
+ * `copyMessage` - Function 📋
+ *
+ * @param { string } id - a message
+ * @returns { void } - copies its text
+ */
+function copyMessage(id) {
+  const message = messages.find((candidate) => candidate.id === id);
+  selectedId = null;
+  paint();
+  if (!message || !message.text || !navigator.clipboard) return;
+  navigator.clipboard
+    .writeText(message.text)
+    .then(() => showToast(translate('Copié', 'Copied')))
+    .catch(() => {});
+}
+
+/**
+ * `paintNewBelow` - Function ⬇️
+ *
+ * @returns { void } - the « ↓ 3 nouveaux » pill while new messages wait below the screen
+ */
+function paintNewBelow() {
+  const pill = overlay && overlay.querySelector('.cnew');
+  if (!pill) return;
+  pill.hidden = newBelow < 1;
+  pill.textContent =
+    '↓ ' + newBelow + ' ' + translate(newBelow > 1 ? 'nouveaux' : 'nouveau', newBelow > 1 ? 'new' : 'new');
+}
+
+/**
+ * `wirePresence` - Function 🔌
+ *
+ * @param { HTMLTextAreaElement } textarea - the composer
+ * @returns { void } - typing, long-press, the pill & the header refresh
+ */
+function wirePresence(textarea) {
+  const body = overlay.querySelector('.cbody');
+  // ✍️ typing
+  textarea.addEventListener('input', () => tellTyping(!!textarea.value.trim()));
+  // ⬇️ the pill: tap = to the bottom; reaching the bottom clears it
+  overlay.querySelector('.cnew').onclick = () => {
+    body.scrollTo({ top: body.scrollHeight, behavior: 'smooth' });
+    newBelow = 0;
+    paintNewBelow();
+  };
+  body.addEventListener('scroll', () => {
+    if (newBelow && body.scrollHeight - body.scrollTop - body.clientHeight < 80) {
+      newBelow = 0;
+      paintNewBelow();
+    }
+  });
+  // 👆 long-press a message: its menu (reactions, reply, copy, edit, pin, delete)
+  let press = null;
+  body.addEventListener('pointerdown', (event) => {
+    const messageRow = event.target.closest('.cm');
+    if (!messageRow || event.target.closest('button')) return;
+    const startX = event.clientX,
+      startY = event.clientY;
+    press = {
+      startX,
+      startY,
+      timer: setTimeout(() => {
+        press = null;
+        if (navigator.vibrate) navigator.vibrate(12);
+        selectedId = messageRow.dataset.id;
+        // swallow the click that follows the finger lifting
+        body.dataset.sw = '1';
+        setTimeout(() => delete body.dataset.sw, 400);
+        paint();
+      }, LONG_PRESS_DELAY),
+    };
+  });
+  const cancelPress = (event) => {
+    if (!press) return;
+    if (
+      event.type === 'pointermove' &&
+      Math.hypot(event.clientX - press.startX, event.clientY - press.startY) < 10
+    )
+      return;
+    clearTimeout(press.timer);
+    press = null;
+  };
+  ['pointermove', 'pointerup', 'pointercancel'].forEach((type) => body.addEventListener(type, cancelPress));
+  body.addEventListener('contextmenu', (event) => {
+    if (event.target.closest('.cm')) event.preventDefault();
+  });
+  // ⏱️ « écrit… » fades by itself, the ✏️ button too after 5 minutes
+  clearInterval(presenceTimer);
+  presenceTimer = setInterval(() => (overlay ? paintTyping() : clearInterval(presenceTimer)), 2000);
+}
+
+/**
+ * `addPresenceStyles` - Function 🎨
+ *
+ * @returns { void } - the CSS of the presence tools (once)
+ */
+function addPresenceStyles() {
+  if (document.getElementById('chatPresenceCss')) return;
+  const style = document.createElement('style');
+  style.id = 'chatPresenceCss';
+  style.textContent = `
+.csub.ctyp{color:var(--gold,#c9a961);font-style:italic;opacity:1}
+.cseen{display:flex;justify-content:flex-end;gap:2px;margin-top:3px;align-items:center}
+.cm:not(.me) .cseen{justify-content:flex-start}
+.cseen img,.cseen span{width:15px;height:15px;border-radius:50%;object-fit:cover;font-size:9px;font-weight:700;
+  color:#fff;display:inline-flex;align-items:center;justify-content:center}
+.cseen b{font-size:10px;opacity:.7;margin-left:2px}
+.cedited{opacity:.65;font-style:italic}
+.cnew{position:absolute;right:14px;bottom:calc(100% + 10px);border:0;border-radius:999px;padding:7px 14px;
+  background:var(--gold,#c9a961);color:#111;font:inherit;font-weight:700;font-size:13px;
+  box-shadow:0 4px 16px rgba(0,0,0,.35);cursor:pointer;z-index:2}
+.cnew[hidden]{display:none}
+.cm{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
 `;
   document.head.appendChild(style);
 }

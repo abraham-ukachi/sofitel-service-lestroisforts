@@ -74,6 +74,13 @@ const X_PATH =
 const TIMELINE = [
   [
     '2026-11-04',
+    '0.69',
+    false,
+    'Chat : « écrit… », lu par, modifier, appui long, ↓ nouveaux · XP en Mise en place',
+    'Chat: typing, read by, edit, long-press, ↓ new · XP in Setup',
+  ],
+  [
+    '2026-11-04',
     '0.68',
     true,
     'Chat : messages rapides, tables #12, mentions @ et message épinglé',

@@ -159,6 +159,15 @@ pub fn start() {
         media::ltf_say(optional_string(&id).unwrap_or_default(), optional_string(&which));
         JsValue::UNDEFINED
     });
+    // 🎓 a right answer outside the Rust screens (Mise en place, setup.js): same anti-farm XP as `record`
+    expose2("LTFrecord", |id, xp| {
+        let item_id = optional_string(&id).unwrap_or_default();
+        let full_xp = xp.as_f64().unwrap_or(0.0);
+        if item_id.is_empty() || !(full_xp > 0.0) {
+            return JsValue::from_f64(0.0);
+        }
+        JsValue::from_f64(state::record(&item_id, true, full_xp.min(50.0)))
+    });
     // 🗂️ the items (scan & tests) + the course of an item
     expose0("LTFitems", ui::ltf_items);
     // 👋 the floor plan with today's bookings (welcome screen)

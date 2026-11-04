@@ -2,6 +2,15 @@
 
 All notable changes to this project will be documented in this file. Versions follow the service-worker cache (`ltf-vNN` → `0.NN.0`), see [CONTRIBUTING.md](./CONTRIBUTING.md#git-commit-messages) for the commit guidelines.
 
+### 0.69.0 (2026-11-04)
+
+* :sparkles: Mise en place now pays XP like the other chapters: Quiz 10, Chrono 5, Range les seaux 5 per bottle, Dans l'ordre 3 per step, with the same daily anti-farm rule (100 % → 50 % → 25 % → 0); « +N XP » on the result screen (`window.LTFrecord`, Rust + JS)
+* :sparkles: Team chat: « Ourya écrit… » typing indicator in the header (`typing` collection)
+* :sparkles: Team chat: tiny avatars under the last message each teammate has read (`seen` collection)
+* :sparkles: Team chat: edit your own text message for 5 minutes (✏️, marked « modifié »), copy (📋)
+* :sparkles: Team chat: long-press a message to open its actions; « ↓ N nouveaux » pill when new messages arrive while you're scrolled up
+* :lock: Firestore rules: author-only edit within 5 min, `typing/{uid}` and `seen/{uid}` (own doc only, server time)
+
 ### 0.68.0 (2026-11-04)
 
 * :sparkles: Team chat, service tools: quick messages above the composer (one tap sends, « # » or « : » opens it to finish), editable in the dashboard › Annonce (`content/quick`)

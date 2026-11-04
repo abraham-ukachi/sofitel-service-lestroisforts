@@ -327,6 +327,7 @@ const SETUP_CSS = `
 .setbin img{display:block;width:100%;aspect-ratio:4/3;object-fit:cover}
 .setbin span{display:block;padding:9px 6px}
 .setbin.right{border-color:var(--okb)}
+.setxp{display:inline-block;margin-top:14px;padding:6px 14px;border-radius:999px;background:var(--gold);color:#111;font-weight:800}
 .setbin.wrong{border-color:var(--kob);animation:setshake .3s}
 .setresult{text-align:center;padding-top:60px}
 .setbig{font-size:64px}
@@ -640,7 +641,7 @@ function stepsView(setup) {
 // ===== THE CHAPTER PAGE 📚 ===== //
 
 // the page state: open?, the setup, the tab ('b0'… | 'reds' | 'steps'), the view, the chrono timer & the run 🌱
-const page = { isOpen: false, setup: null, tab: 'b0', view: 'page', timer: 0, run: 0 };
+const page = { isOpen: false, setup: null, tab: 'b0', view: 'page', timer: 0, run: 0, earned: 0 };
 // the best chrono scores, per tab ⏱️
 const BEST_KEY = 'ltf_setup_best_v1';
 
@@ -1116,6 +1117,41 @@ function renderStudy() {
 }
 
 /**
+ * `stableKey` - Function 🔑
+ *
+ * @param { string } text - any text
+ * @returns { string } - a short, stable id made from it (djb2 hash, base 36)
+ */
+function stableKey(text) {
+  let hash = 5381;
+  for (const character of String(text)) hash = ((hash * 33) ^ character.codePointAt(0)) >>> 0;
+  return hash.toString(36);
+}
+
+/**
+ * `award` - Function 🎓
+ *
+ * Gives the XP of a right answer through the app (`window.LTFrecord`, Rust or JS), with the same anti-farm
+ * rule as the other chapters: the same answer pays 100 % → 50 % → 25 % → 0 on the same day.
+ * Wrong answers give nothing and never go to the app's review list.
+ *
+ * @param { string } key - what was answered (turned into a stable id `set_…`)
+ * @param { number } xp - the full XP of the answer
+ * @returns { number } - the XP really earned
+ */
+function award(key, xp) {
+  if (typeof window.LTFrecord !== 'function') return 0;
+  let earned = 0;
+  try {
+    earned = Number(window.LTFrecord('set_' + stableKey(page.tab + '|' + key), xp)) || 0;
+  } catch (error) {
+    earned = 0;
+  }
+  page.earned += earned;
+  return earned;
+}
+
+/**
  * `askQuestion` - Function ❓
  *
  * Draws one question; an answer turns green / red and slides up the explanation sheet.
@@ -1151,6 +1187,8 @@ function askQuestion(question, barHtml, onAnswer, onNext) {
             });
           if (!ok) button.classList.add('wrong');
           if (navigator.vibrate) navigator.vibrate(ok ? 8 : [20, 40, 20]);
+          // 🎓 a right answer pays XP (10, or 5 in the chrono)
+          if (ok) award(question.q + '|' + question.answer, onNext ? 10 : 5);
           onAnswer(ok);
           if (!onNext) return;
           const feedback = document.createElement('div');
@@ -1301,6 +1339,8 @@ function renderSort() {
               });
             if (!ok) button.classList.add('wrong');
             if (ok) score++;
+            // 🎓 the right bucket pays 5 XP
+            if (ok) award('sort|' + entry.id + '|' + item.n, 5);
             if (navigator.vibrate) navigator.vibrate(ok ? 8 : [20, 40, 20]);
             bottleIndex++;
             setTimeout(next, ok ? 450 : 1200);
@@ -1347,6 +1387,8 @@ function renderOrder() {
               label = appRoot().querySelector('.flow .pl');
             if (fill) fill.style.width = (100 * nextIndex) / steps.length + '%';
             if (label) label.textContent = `${nextIndex}/${steps.length}`;
+            // 🎓 each step found pays 3 XP
+            award('order|' + button.dataset.step, 3);
             if (nextIndex >= steps.length)
               setTimeout(
                 () => renderResult('🔢', Math.max(0, steps.length - mistakes), steps.length, ''),
@@ -1379,7 +1421,9 @@ function renderResult(icon, score, total, extra) {
     `<div id="setPage"><div class="pad setresult"><div class="setbig">${icon}</div>` +
     `<h1 class="ptitle">${total ? `${score} / ${total}` : `${score} pts`}</h1><div class="muted">` +
     `${ratio >= 0.9 ? translate('Parfait, vous êtes prêt pour le service !', 'Perfect, you’re ready for service!') : ratio >= 0.6 ? translate('Bien joué, encore un tour ?', 'Well done, one more round?') : translate('On recommence, ça va rentrer !', 'Let’s go again, it’ll stick!')}` +
-    `</div>${extra ? `<div class="setdone">${escapeHtml(extra)}</div>` : ''}</div>` +
+    `</div>${extra ? `<div class="setdone">${escapeHtml(extra)}</div>` : ''}` +
+    (page.earned > 0 ? `<div class="setxp">+${page.earned} XP</div>` : '') +
+    `</div>` +
     `<div class="abar fixed"><button class="btn sec grow" data-go="back">${translate('Terminer', 'Done')}</button>` +
     `<button class="btn grow" data-go="${page.view}">↻ ${translate('Rejouer', 'Play again')}</button></div></div>`;
 }
@@ -1407,6 +1451,8 @@ function render(view) {
   // a new run: delayed steps of the previous game stop here ⏹️
   page.run++;
   page.view = VIEWS[view] ? view : 'page';
+  // a new game starts at 0 XP earned 🎓
+  if (['quiz', 'chrono', 'sort', 'order'].includes(page.view)) page.earned = 0;
   VIEWS[page.view]();
   window.scrollTo(0, 0);
 }
