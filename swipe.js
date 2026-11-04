@@ -170,32 +170,214 @@
   }
 
   /**
-   * `slideIn` - Function 🎞️
+   * `groupKey` - Function 🔑
    *
-   * Slides the new view in from the side the finger came from.
-   *
-   * @param { Element } scope - the drawer or page
-   * @param { number } direction - 1 = next (comes from the right), -1 = previous
-   * @returns { void }
+   * @param { Element } group - a tab bar or chip row
+   * @returns { string } - its class list as a selector, to find the same bar again after a re-render
    */
-  function slideIn(scope, direction) {
-    requestAnimationFrame(() => {
-      const fresh = scope.isConnected ? scope : document.getElementById('app');
-      const content =
-        (fresh && (fresh.querySelector('#abtView, #list, .setbody, .admbody, .sbody') || fresh)) || null;
-      if (!content || !content.animate) return;
-      content.animate(
-        [
-          { transform: `translateX(${direction * 28}px)`, opacity: 0.35 },
-          { transform: 'none', opacity: 1 },
-        ],
-        { duration: 220, easing: 'cubic-bezier(.2,.8,.2,1)' },
-      );
-    });
+  function groupKey(group) {
+    return group.className
+      ? '.' + group.className.trim().split(/\s+/).join('.')
+      : group.getAttribute('role') === 'tablist'
+        ? '[role="tablist"]'
+        : '';
   }
 
   /**
+   * `keepPlace` - Function 📌
+   *
+   * A tab tap may redraw the whole screen (scroll to the top + the little enter animation). For a
+   * swipe that feels like a reload, so this puts the page back where it was, with no animation,
+   * and leaves the chip row where the finger left it.
+   *
+   * @param { number } scrollY - the page scroll before the switch
+   * @param { string } key - the tab bar's selector
+   * @param { number } rowScroll - the chip row's sideways scroll before the switch
+   * @returns { void }
+   */
+  function keepPlace(scrollY, key, rowScroll) {
+    const app = document.getElementById('app');
+    if (app && app.classList.contains('enter')) {
+      app.classList.remove('enter');
+      if (app.getAnimations) app.getAnimations().forEach((animation) => animation.cancel());
+    }
+    let group = null;
+    try {
+      group = key ? document.querySelector(key) : null;
+    } catch (error) {}
+    if (Math.abs(window.scrollY - scrollY) > 1) {
+      // never leave the tab bar above the screen ☝️
+      const barTop = group ? group.getBoundingClientRect().top + window.scrollY - 8 : scrollY;
+      window.scrollTo(0, Math.max(0, Math.min(scrollY, barTop)));
+    }
+    if (!group) return;
+    group.scrollLeft = rowScroll;
+    const active = tabItems(group).find(isActive);
+    if (active && active.scrollIntoView)
+      active.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'smooth' });
+  }
+
+  // ===== THE SLIDE 🎞️ ===== //
+
+  // how long a page takes to slide across ⏱️
+  const SLIDE_MS = 280;
+  const SLIDE_EASING = 'cubic-bezier(.25,.8,.25,1)';
+
+  /**
+   * `contentAfter` - Function 📄
+   *
+   * The « page » of a tab bar = everything that comes after it, up to the drawer or screen.
+   *
+   * @param { Element } group - a tab bar
+   * @returns { Array<HTMLElement> } - the elements under it
+   */
+  function contentAfter(group) {
+    const stop = group.closest('.sheet, .ov, #app') || document.body;
+    let node = group;
+    while (node && node !== stop) {
+      const followers = [];
+      for (let sibling = node.nextElementSibling; sibling; sibling = sibling.nextElementSibling) {
+        if (sibling.tagName !== 'SCRIPT' && sibling.tagName !== 'STYLE' && !sibling.classList.contains('cta'))
+          followers.push(sibling);
+      }
+      if (followers.length) return followers;
+      node = node.parentElement;
+    }
+    return [];
+  }
+
+  /**
+   * `snapshot` - Function 📸
+   *
+   * Copies the current page into a fixed layer, so it can slide away after the tab redraws it.
+   *
+   * @param { Array<HTMLElement> } elements - the page under the tab bar
+   * @returns { HTMLElement | null } - the layer (not attached yet), or null
+   */
+  function snapshot(elements) {
+    const visible = elements.filter((element) => element.getClientRects().length);
+    if (!visible.length) return null;
+    const first = visible[0].getBoundingClientRect();
+    const parentBox = visible[0].parentElement.getBoundingClientRect();
+    const top = Math.max(0, first.top);
+    const layer = document.createElement('div');
+    layer.setAttribute('aria-hidden', 'true');
+    layer.style.cssText =
+      `position:fixed;left:${parentBox.left}px;top:${top}px;width:${parentBox.width}px;` +
+      `height:${Math.max(0, innerHeight - top)}px;overflow:hidden;pointer-events:none;z-index:5;`;
+    const inner = document.createElement('div');
+    inner.style.cssText = `position:absolute;left:${first.left - parentBox.left}px;right:0;top:${first.top - top}px;`;
+    visible.forEach((element) => {
+      const copy = element.cloneNode(true);
+      copy.removeAttribute('id');
+      copy.querySelectorAll('[id]').forEach((child) => child.removeAttribute('id'));
+      inner.appendChild(copy);
+    });
+    layer.appendChild(inner);
+    return layer;
+  }
+
+  /**
+   * `slidePages` - Function 🎞️
+   *
+   * The old page leaves on one side while the new one comes in from the other, as if the tabs
+   * were pages lying next to each other.
+   *
+   * @param { HTMLElement | null } oldLayer - the snapshot of the old page
+   * @param { Element | null } group - the tab bar (after the redraw)
+   * @param { number } direction - 1 = next (new page comes from the right), -1 = previous
+   * @returns { void }
+   */
+  function slidePages(oldLayer, group, direction) {
+    const reduced = !!window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const fresh = group ? contentAfter(group) : [];
+    if (reduced || !oldLayer || !fresh.length || !document.body.animate) return;
+    const root = document.documentElement;
+    const previousOverflow = root.style.overflowX;
+    root.style.overflowX = 'clip';
+    document.body.appendChild(oldLayer);
+    const timing = { duration: SLIDE_MS, easing: SLIDE_EASING };
+    oldLayer.firstChild.animate(
+      [{ transform: 'translateX(0)' }, { transform: `translateX(${-direction * 100}%)` }],
+      timing,
+    );
+    let finished = null;
+    fresh.forEach((element) => {
+      finished = element.animate(
+        [{ transform: `translateX(${direction * 100}%)` }, { transform: 'translateX(0)' }],
+        timing,
+      );
+    });
+    const cleanUp = () => {
+      oldLayer.remove();
+      root.style.overflowX = previousOverflow;
+    };
+    if (finished) finished.onfinish = finished.oncancel = cleanUp;
+    setTimeout(cleanUp, SLIDE_MS + 120);
+  }
+
+  // ===== TAP OR SWIPE ON A TAB 🔀 ===== //
+
+  // what the page looked like just before a tab was pressed (or null) 📸
+  let pending = null;
+
+  /**
+   * `onTabPress` - Function 👇 (capture)
+   *
+   * Before the tab's own handler runs: remember the place and take the snapshot.
+   *
+   * @param { MouseEvent } event - the click
+   * @returns { void }
+   */
+  function onTabPress(event) {
+    pending = null;
+    const target = event.target;
+    if (!target.closest || target.closest(IGNORE_SELECTOR)) return;
+    const group = target.closest(GROUP_SELECTOR);
+    if (!group || !isTabGroup(group)) return;
+    const items = tabItems(group);
+    const pressed = items.find((item) => item.contains(target));
+    const from = items.findIndex(isActive);
+    const to = items.indexOf(pressed);
+    if (!pressed || to === from || from < 0) return;
+    pending = {
+      direction: to > from ? 1 : -1,
+      scrollY: window.scrollY,
+      key: groupKey(group),
+      group,
+      rowScroll: group.scrollLeft,
+      layer: snapshot(contentAfter(group)),
+    };
+  }
+
+  /**
+   * `onTabPressed` - Function ✅ (bubble)
+   *
+   * After the tab's handler redrew the page: put the page back in place and slide.
+   *
+   * @returns { void }
+   */
+  function onTabPressed() {
+    const press = pending;
+    pending = null;
+    if (!press) return;
+    keepPlace(press.scrollY, press.key, press.rowScroll);
+    let group = press.group.isConnected ? press.group : null;
+    if (!group) {
+      try {
+        group = press.key ? document.querySelector(press.key) : null;
+      } catch (error) {}
+    }
+    slidePages(press.layer, group, press.direction);
+  }
+
+  addEventListener('click', onTabPress, true);
+  addEventListener('click', onTabPressed, false);
+
+  /**
    * `switchTab` - Function 🔀
+   *
+   * Selects the next or previous tab, exactly like a tap on it (same slide).
    *
    * @param { Element } target - where the finger went down
    * @param { number } touchY - its vertical position
@@ -210,11 +392,6 @@
       const nextItem = items[items.findIndex(isActive) + direction];
       if (!nextItem) continue;
       nextItem.click();
-      // keep the new tab in view in a scrolling chip row
-      if (nextItem.isConnected && nextItem.scrollIntoView)
-        nextItem.scrollIntoView({ block: 'nearest', inline: 'center', behavior: 'smooth' });
-      if (navigator.vibrate) navigator.vibrate(8);
-      slideIn(scope, direction);
       return true;
     }
     return false;
