@@ -1109,15 +1109,23 @@ function openChat() {
     translate("Chat de l'équipe", 'Team chat') +
     '</div><div class="muted sm csub">Les Trois Forts</div></div><div class="cfaces"></div><button class="cbell" hidden aria-label="notifications"></button></div>' +
     '<div class="cpin" hidden></div><div class="cho" hidden></div><div class="cbody"></div><div class="cfoot"><button class="cnew" hidden></button><div class="crep"></div>' +
-    '<div class="cmsug" hidden></div><div class="cquick" hidden></div><div class="cmenu" hidden><label><input type="file" accept="image/*" capture="environment" hidden>📷 ' +
+    '<div class="cmsug" hidden></div><div class="cquick" hidden></div><div class="cmenu" hidden><label><input type="file" accept="image/*" capture="environment" hidden>' +
+    MENU_ICONS.camera +
+    '<span>' +
     translate('Appareil photo', 'Camera') +
-    '</label><label><input type="file" accept="image/*" hidden>🖼️ ' +
+    '</span></label><label><input type="file" accept="image/*" hidden>' +
+    MENU_ICONS.photos +
+    '<span>' +
     translate('Photos', 'Photos') +
-    '</label><button data-menu="poll">📊 ' +
+    '</span></label><button data-menu="poll">' +
+    MENU_ICONS.poll +
+    '<span>' +
     translate('Sondage', 'Poll') +
-    '</button><button data-menu="handover">🔁 ' +
+    '</span></button><button data-menu="handover">' +
+    MENU_ICONS.handover +
+    '<span>' +
     translate('Passation', 'Handover') +
-    '</button></div><div class="cpill"><button class="cemo" aria-label="emoji">' +
+    '</span></button></div><div class="cpill"><button class="cemo" aria-label="emoji">' +
     SMILEY_ICON +
     '</button><textarea rows="1" maxlength="1000" enterkeyhint="send" placeholder="' +
     translate('Message…', 'Message…') +
@@ -2448,6 +2456,19 @@ function addPolishStyles() {
 .cmic[hidden]{display:none}
 .crec{position:absolute;inset:0;display:flex;align-items:center;gap:10px;padding:0 6px;border-radius:24px;
   background:var(--bar,#14203a);z-index:2}
+.cmicic{color:var(--gold,#c9a961);display:flex;justify-content:center}
+.cmicic svg{width:34px;height:34px}
+.cmicsteps{text-align:left;margin:4px 0 14px;padding-left:20px;font-size:13px;line-height:1.45;color:var(--mu)}
+.cmicsteps li{margin:4px 0}
+.cmenu{min-width:212px;padding:6px;border-radius:18px;border:0;
+  background:color-mix(in srgb,var(--bar,#14203a) 88%,#000 12%);
+  box-shadow:0 12px 32px rgba(0,0,0,.5),inset 0 0 0 .5px rgba(255,255,255,.08)}
+.cmenu label,.cmenu button{display:flex;align-items:center;gap:14px;width:100%;height:48px;padding:0 14px;
+  box-sizing:border-box;border:0;border-radius:12px;background:transparent;color:inherit;font:inherit;
+  font-size:15px;text-align:left;cursor:pointer;margin:0}
+.cmenu label + label{border-top:0}
+.cmenu label:active,.cmenu button:active,.cmenu label:hover,.cmenu button:hover{background:rgba(255,255,255,.07)}
+.cmenu svg{flex:none;color:var(--mu)}
 .crecdot{width:10px;height:10px;border-radius:50%;background:#e5484d;animation:crec 1s infinite}
 @keyframes crec{50%{opacity:.25}}
 .crect{font-weight:700;font-variant-numeric:tabular-nums}
@@ -2697,12 +2718,24 @@ async function startRecording() {
   if (recording || !user) return;
   if (!navigator.mediaDevices || typeof MediaRecorder === 'undefined')
     return showToast(translate('Micro non disponible', 'Microphone not available'));
+  // 🔐 not allowed yet? our own dialog first: its button opens the phone's « Autoriser » popup
+  const permission = await micPermission();
+  if (permission === 'denied') return showMicDialog('denied');
+  if (permission === 'prompt' && !confirmedMic) return showMicDialog('prompt');
   let stream;
   try {
     stream = await navigator.mediaDevices.getUserMedia({ audio: true });
   } catch (error) {
+    const name = (error && error.name) || '';
+    // blocked (now or before): explain how to unblock it 🔓
+    if (name === 'NotAllowedError' || name === 'SecurityError') return showMicDialog('denied');
+    if (name === 'NotFoundError') return showToast(translate('Aucun micro trouvé', 'No microphone found'));
+    if (name === 'NotReadableError')
+      return showToast(
+        translate('Le micro est utilisé par une autre app', 'The microphone is busy in another app'),
+      );
     return showToast(
-      translate('Autorisez le micro pour envoyer un vocal', 'Allow the microphone to send a voice note'),
+      translate('Micro indisponible', 'Microphone unavailable') + (name ? ' (' + name + ')' : ''),
     );
   }
   const mimeType = voiceMimeType();
@@ -2719,6 +2752,95 @@ async function startRecording() {
     if ((Date.now() - recording.startedAt) / 1000 >= VOICE_MAX_SECONDS) stopRecording(false);
     else paintRecording();
   }, 250);
+}
+
+// true once the waiter tapped « Autoriser » in our dialog (the phone's popup comes next) ✅
+let confirmedMic = false;
+
+/**
+ * `micPermission` - Async Function 🔐
+ *
+ * @returns { Promise<'granted' | 'prompt' | 'denied' | 'unknown'> } - the microphone permission
+ */
+async function micPermission() {
+  try {
+    if (!navigator.permissions || !navigator.permissions.query) return 'unknown';
+    const status = await navigator.permissions.query({ name: 'microphone' });
+    return status.state;
+  } catch (error) {
+    // Firefox & older Safari can't tell: just ask 🤷
+    return 'unknown';
+  }
+}
+
+/**
+ * `showMicDialog` - Function 🎤
+ *
+ * « prompt »: a short explanation + « Autoriser », whose tap opens the phone's own permission popup.
+ * « denied »: the phone never shows that popup again by itself (browser rule), so: how to unblock it.
+ *
+ * @param { 'prompt' | 'denied' } mode - which dialog
+ * @returns { void }
+ */
+function showMicDialog(mode) {
+  if (document.querySelector('.cdlg')) return;
+  const isDenied = mode === 'denied';
+  const dialog = document.createElement('div');
+  dialog.className = 'cdlg';
+  dialog.innerHTML =
+    '<div class="cdlgbox" role="dialog" aria-modal="true"><div class="cdlgic cmicic">' +
+    MIC_ICON +
+    '</div><h3>' +
+    (isDenied
+      ? translate('Le micro est bloqué', 'The microphone is blocked')
+      : translate('Autoriser le micro ?', 'Allow the microphone?')) +
+    '</h3><p class="cdlgtx">' +
+    (isDenied
+      ? translate(
+          'Le téléphone ne redemande pas tout seul. Débloquez-le une fois :',
+          "The phone won't ask again by itself. Unblock it once:",
+        )
+      : translate(
+          "Pour envoyer des vocaux à l'équipe. Le téléphone va vous demander, une seule fois.",
+          'To send voice notes to the team. Your phone will ask you, just once.',
+        )) +
+    '</p>' +
+    (isDenied
+      ? '<ol class="cmicsteps"><li>' +
+        translate(
+          "Touchez le cadenas à gauche de l'adresse (dans l'app installée : ⋮ puis ⓘ)",
+          'Tap the lock left of the address (in the installed app: ⋮ then ⓘ)',
+        ) +
+        '</li><li>' +
+        translate('Autorisations → Micro → Autoriser', 'Permissions → Microphone → Allow') +
+        '</li><li>' +
+        translate(
+          'Toujours bloqué ? Réglages du téléphone → Applis → Chrome → Autorisations → Micro',
+          'Still blocked? Phone Settings → Apps → Chrome → Permissions → Microphone',
+        ) +
+        '</li></ol>'
+      : '') +
+    '<div class="cdlgbt"><button class="btn sec" data-act="cancel">' +
+    translate('Plus tard', 'Later') +
+    '</button><button class="btn" data-act="allow">' +
+    (isDenied ? translate("C'est fait", 'Done') : translate('Autoriser', 'Allow')) +
+    '</button></div></div>';
+  // close (with a short fade) 👋
+  const closeDialog = () => {
+    dialog.classList.add('out');
+    setTimeout(() => dialog.remove(), 160);
+  };
+  dialog.addEventListener('click', (event) => {
+    const action = event.target.closest('[data-act]');
+    if (event.target === dialog || (action && action.dataset.act === 'cancel')) closeDialog();
+    else if (action && action.dataset.act === 'allow') {
+      // 👆 this tap is the gesture the phone wants before showing its popup
+      confirmedMic = true;
+      dialog.remove();
+      startRecording();
+    }
+  });
+  document.body.appendChild(dialog);
 }
 
 /**
@@ -2951,6 +3073,22 @@ const SMILEY_ICON =
   '<svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round">' +
   '<circle cx="12" cy="12" r="9.2"/><path d="M8 14.2c1 1.4 2.3 2.1 4 2.1s3-.7 4-2.1"/>' +
   '<circle cx="9" cy="9.8" r=".6" fill="currentColor"/><circle cx="15" cy="9.8" r=".6" fill="currentColor"/></svg>';
+// ➕ the attach menu's icons: plain outlines in one colour 📷🖼️📊🔁
+const MENU_SVG_START =
+  '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.7" ' +
+  'stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">';
+const MENU_ICONS = {
+  camera:
+    MENU_SVG_START +
+    '<path d="M4 8.5A2.5 2.5 0 0 1 6.5 6h1.7l1.3-2h5l1.3 2h1.7A2.5 2.5 0 0 1 20 8.5v8a2.5 2.5 0 0 1-2.5 2.5h-11' +
+    'A2.5 2.5 0 0 1 4 16.5z"/><circle cx="12" cy="12.5" r="3.5"/></svg>',
+  photos:
+    MENU_SVG_START +
+    '<rect x="3.5" y="4.5" width="17" height="15" rx="3"/><circle cx="9" cy="10" r="1.6"/>' +
+    '<path d="m4 17 4.6-4.6a1.5 1.5 0 0 1 2.1 0L16 17.6M14 15.5l1.8-1.8a1.5 1.5 0 0 1 2.1 0L20 15.8"/></svg>',
+  poll: MENU_SVG_START + '<path d="M5 20V11M12 20V4M19 20v-6"/></svg>',
+  handover: MENU_SVG_START + '<path d="M4 9h13l-3.5-3.5M20 15H7l3.5 3.5"/></svg>',
+};
 // 🎤 a plain outline microphone (one colour, follows the text colour)
 const MIC_ICON =
   '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" ' +
