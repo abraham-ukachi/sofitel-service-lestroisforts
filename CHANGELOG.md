@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file. Versions follow the service-worker cache (`ltf-vNN` → `0.NN.0`), see [CONTRIBUTING.md](./CONTRIBUTING.md#git-commit-messages) for the commit guidelines.
 
+### 0.70.0 (2026-11-04)
+
+* :lipstick: Team chat polish: bubbles grouped by sender (5 min), sticky day separators (« Aujourd'hui », « Hier »…), glass header with the faces of who read lately, bubble shapes per group, pop-in for new messages, softer background, gold focus ring on the composer
+* :sparkles: Voice notes: 🎤 in the composer (while empty), up to 30 s, sent inline (opus 24 kbps), tap ▶ to play
+* :sparkles: Polls: + › 📊 Sondage, 2 to 6 options, one vote each (tap again to remove), live bars
+* :sparkles: Shift handover: + › 🔁 Passation, the note stays on a gold banner for 18 h and its push says « 🔁 Passation »
+* :lock: Firestore rules: a second chat block for voice/poll/handover messages and `v.<uid>` votes; Permissions-Policy allows the microphone on our own origin
+
 ### 0.69.0 (2026-11-04)
 
 * :sparkles: Mise en place now pays XP like the other chapters: Quiz 10, Chrono 5, Range les seaux 5 per bottle, Dans l'ordre 3 per step, with the same daily anti-farm rule (100 % → 50 % → 25 % → 0); « +N XP » on the result screen (`window.LTFrecord`, Rust + JS)

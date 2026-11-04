@@ -253,13 +253,23 @@ async function notifyTeam(uid, messageId, token) {
   const text = stringOf(fields, 'text'),
     hasPhoto = !!stringOf(fields, 'img'),
     hasGif = !!stringOf(fields, 'gif'),
-    hasSticker = !!stringOf(fields, 'sticker');
+    hasSticker = !!stringOf(fields, 'sticker'),
+    hasVoice = !!stringOf(fields, 'voice'),
+    isHandover = !!(fields.ho && fields.ho.booleanValue);
   const payload = JSON.stringify({
-    title: stringOf(fields, 'name') || 'Les Trois Forts',
-    body: (text || (hasPhoto ? '📷 Photo' : hasGif ? '🎞️ GIF' : hasSticker ? '🏷️ Sticker' : '')).slice(
-      0,
-      140,
-    ),
+    title: (isHandover ? '🔁 Passation · ' : '') + (stringOf(fields, 'name') || 'Les Trois Forts'),
+    body: (
+      text ||
+      (hasPhoto
+        ? '📷 Photo'
+        : hasGif
+          ? '🎞️ GIF'
+          : hasSticker
+            ? '🏷️ Sticker'
+            : hasVoice
+              ? '🎤 Message vocal · Voice note'
+              : '')
+    ).slice(0, 140),
     tag: 'ltf-chat',
   });
 

@@ -74,6 +74,13 @@ const X_PATH =
 const TIMELINE = [
   [
     '2026-11-04',
+    '0.70',
+    true,
+    'Nouveau chat : bulles groupées, jours, vocaux, sondages et passation',
+    'New chat look: grouped bubbles, days, voice notes, polls and shift handover',
+  ],
+  [
+    '2026-11-04',
     '0.69',
     false,
     'Chat : « écrit… », lu par, modifier, appui long, ↓ nouveaux · XP en Mise en place',

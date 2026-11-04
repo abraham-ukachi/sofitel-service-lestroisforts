@@ -728,8 +728,10 @@ function bubbleHtml(message) {
     (typeof message.gif === 'string' && GIF_PATTERN.test(message.gif)
       ? '<img class="cg" src="' + escapeHtml(message.gif) + '" alt="GIF" loading="lazy">'
       : '') +
-    // ✍️ the text (new lines kept, 1 to 3 emojis alone shown big like WhatsApp 😀)
-    (message.text
+    // 🔁 handover label, 🎤 voice note, 📊 poll
+    extraHtml(message) +
+    // ✍️ the text (new lines kept, 1 to 3 emojis alone shown big like WhatsApp 😀), not for a poll
+    (message.text && !pollOf(message)
       ? '<div class="ct' +
         (isEmojiOnly(message.text) ? ' cbig' : '') +
         '">' +
@@ -781,7 +783,15 @@ function setReplyTo(id) {
     name: message.name || '',
     text: (
       message.text ||
-      (message.img ? '📷 Photo' : message.gif ? '🎞️ GIF' : message.sticker ? '🏷️ Sticker' : '')
+      (message.img
+        ? '📷 Photo'
+        : message.gif
+          ? '🎞️ GIF'
+          : message.sticker
+            ? '🏷️ Sticker'
+            : message.voice
+              ? '🎤 ' + translate('Vocal', 'Voice note')
+              : '')
     ).slice(0, 120),
   };
   selectedId = null;
@@ -843,7 +853,7 @@ function paint() {
   body.innerHTML =
     (errorText ? '<p class="warn sm" style="text-align:center">' + errorText + '</p>' : '') +
     (messages.length
-      ? messages.map(bubbleHtml).join('')
+      ? listHtml()
       : '<div class="cempty"><div style="font-size:44px">👋</div><p>' +
         translate(
           "Aucun message pour l'instant. Lancez la conversation !",
@@ -860,35 +870,51 @@ function paint() {
   }
   paintNewBelow();
   paintTyping();
+  // 🔁 the handover banner & 🧑‍🤝‍🧑 the faces in the header
+  paintHandover();
+  paintHeaderFaces();
   // the reply / photo preview
   const preview = overlay.querySelector('.crep');
-  preview.style.display = replyTo || pendingPhoto || editingId ? 'flex' : 'none';
-  preview.innerHTML = editingId
-    ? '<div class="grow crq" style="min-width:0"><b>✏️ ' +
-      translate('Modifier le message', 'Edit message') +
-      '</b><div class="crt muted">' +
-      translate('Envoyez pour enregistrer', 'Send to save') +
-      '</div></div><button aria-label="x">✕</button>'
-    : (pendingPhoto ? '<img src="' + pendingPhoto + '" alt="">' : '') +
-      '<div class="grow crq" style="min-width:0' +
-      (replyTo ? ';border-color:' + colorsOf(replyTo.uid)[1] : '') +
-      '">' +
-      (replyTo
-        ? '<b style="color:' +
-          colorsOf(replyTo.uid)[1] +
-          '">↩︎ ' +
-          escapeHtml(replyTo.name) +
-          '</b><div class="crt">' +
-          escapeHtml(replyTo.text || '📷') +
-          '</div>'
-        : '<span class="muted">' + translate('Photo prête à envoyer', 'Photo ready to send') + '</span>') +
-      '</div><button aria-label="x">✕</button>';
+  preview.style.display = replyTo || pendingPhoto || editingId || handoverMode ? 'flex' : 'none';
+  preview.innerHTML =
+    handoverMode && !editingId
+      ? '<div class="grow crq" style="min-width:0;border-color:#c9a961"><b>🔁 ' +
+        translate('Passation', 'Handover') +
+        '</b><div class="crt muted">' +
+        translate(
+          'Une note pour le prochain service, épinglée 18 h',
+          'A note for the next shift, on top for 18 h',
+        ) +
+        '</div></div><button aria-label="x">✕</button>'
+      : editingId
+        ? '<div class="grow crq" style="min-width:0"><b>✏️ ' +
+          translate('Modifier le message', 'Edit message') +
+          '</b><div class="crt muted">' +
+          translate('Envoyez pour enregistrer', 'Send to save') +
+          '</div></div><button aria-label="x">✕</button>'
+        : (pendingPhoto ? '<img src="' + pendingPhoto + '" alt="">' : '') +
+          '<div class="grow crq" style="min-width:0' +
+          (replyTo ? ';border-color:' + colorsOf(replyTo.uid)[1] : '') +
+          '">' +
+          (replyTo
+            ? '<b style="color:' +
+              colorsOf(replyTo.uid)[1] +
+              '">↩︎ ' +
+              escapeHtml(replyTo.name) +
+              '</b><div class="crt">' +
+              escapeHtml(replyTo.text || '📷') +
+              '</div>'
+            : '<span class="muted">' +
+              translate('Photo prête à envoyer', 'Photo ready to send') +
+              '</span>') +
+          '</div><button aria-label="x">✕</button>';
   // ✕ drops the reply, the photo & the edit
   preview.querySelector('button').onclick = () => {
     if (editingId) {
       overlay.querySelector('textarea').value = '';
       editingId = null;
     }
+    handoverMode = false;
     replyTo = null;
     pendingPhoto = null;
     paint();
@@ -928,6 +954,10 @@ async function send() {
   };
   if (pendingPhoto) newMessage.img = pendingPhoto;
   if (replyTo) newMessage.rep = replyTo;
+  // 🔁 the note for the next shift
+  if (handoverMode && text) newMessage.ho = true;
+  const keptHandover = handoverMode;
+  handoverMode = false;
   // clear the composer (keep a copy in case it fails) 🧹
   textarea.value = '';
   textarea.style.height = '';
@@ -947,6 +977,7 @@ async function send() {
   } catch (error) {
     pendingPhoto = keptPhoto;
     replyTo = keptReply;
+    handoverMode = keptHandover;
     textarea.value = text;
     errorText = translate('Envoi impossible', 'Could not send');
     paint();
@@ -992,19 +1023,24 @@ function openChat() {
   overlay.innerHTML =
     '<div class="sch"><button class="cx" aria-label="close">←</button><div class="grow"><div style="font-weight:700">' +
     translate("Chat de l'équipe", 'Team chat') +
-    '</div><div class="muted sm csub">Les Trois Forts</div></div><button class="cbell" hidden aria-label="notifications"></button></div>' +
-    '<div class="cpin" hidden></div><div class="cbody"></div><div class="cfoot"><button class="cnew" hidden></button><div class="crep"></div>' +
+    '</div><div class="muted sm csub">Les Trois Forts</div></div><div class="cfaces"></div><button class="cbell" hidden aria-label="notifications"></button></div>' +
+    '<div class="cpin" hidden></div><div class="cho" hidden></div><div class="cbody"></div><div class="cfoot"><button class="cnew" hidden></button><div class="crep"></div>' +
     '<div class="cmsug" hidden></div><div class="cquick" hidden></div><div class="cmenu" hidden><label><input type="file" accept="image/*" capture="environment" hidden>📷 ' +
     translate('Appareil photo', 'Camera') +
     '</label><label><input type="file" accept="image/*" hidden>🖼️ ' +
     translate('Photos', 'Photos') +
-    '</label></div><div class="cpill"><button class="cemo" aria-label="emoji">' +
+    '</label><button data-menu="poll">📊 ' +
+    translate('Sondage', 'Poll') +
+    '</button><button data-menu="handover">🔁 ' +
+    translate('Passation', 'Handover') +
+    '</button></div><div class="cpill"><button class="cemo" aria-label="emoji">' +
     SMILEY_ICON +
     '</button><textarea rows="1" maxlength="1000" enterkeyhint="send" placeholder="' +
     translate('Message…', 'Message…') +
-    '"></textarea><button class="cplus" aria-label="photo">+</button></div><div class="cpick" hidden></div></div>';
+    '"></textarea><button class="cmic" aria-label="voice">🎤</button><button class="cplus" aria-label="photo">+</button></div><div class="cpick" hidden></div></div>';
   addServiceStyles();
   addPresenceStyles();
+  addPolishStyles();
   newBelow = 0;
   document.body.appendChild(overlay);
   // 🔙 Back (button or gesture) closes the chat
@@ -1038,6 +1074,14 @@ function openChat() {
   wireServiceTools(textarea);
   // ✍️ typing, long-press menu & the « ↓ nouveaux » pill
   wirePresence(textarea);
+  // 🎤 the mic (only while the text box is empty), 📊 polls & 🔁 handover from the + menu
+  const micButton = overlay.querySelector('.cmic');
+  const syncMic = () => (micButton.hidden = !!textarea.value.trim() || !!editingId);
+  textarea.addEventListener('input', syncMic);
+  syncMic();
+  micButton.onclick = () => startRecording();
+  overlay.querySelector('[data-menu="poll"]').onclick = () => openPollDialog();
+  overlay.querySelector('[data-menu="handover"]').onclick = () => startHandover();
 
   // 😀 the emoji / GIF panel: the smiley opens it (keyboard down), the keyboard icon or the text box closes it
   overlay.querySelector('.cemo').onclick = (event) => {
@@ -1099,6 +1143,17 @@ function openChat() {
     // 🍽️ a table chip: the floor plan
     if (target.closest('[data-table]')) {
       showTable(target.closest('[data-table]').dataset.table);
+      return;
+    }
+    // ▶️ play a voice note
+    if (target.closest('[data-play]')) {
+      togglePlay(target.closest('[data-play]').dataset.play);
+      return;
+    }
+    // 📊 vote
+    if (target.closest('[data-vote]')) {
+      const option = target.closest('[data-vote]');
+      vote(option.dataset.vote, Number(option.dataset.choice));
       return;
     }
     // 📋 copy
@@ -1227,6 +1282,12 @@ function closeChat() {
   overlay = null;
   selectedId = null;
   editingId = null;
+  handoverMode = false;
+  if (recording) stopRecording(true);
+  if (player) {
+    player.audio.pause();
+    player = null;
+  }
   markSeen();
   updateFab();
 }
@@ -1556,7 +1617,15 @@ async function pinMessage(id) {
     if (!message) return;
     const text = (
       message.text ||
-      (message.img ? '📷 Photo' : message.gif ? '🎞️ GIF' : message.sticker ? '🏷️ Sticker' : '')
+      (message.img
+        ? '📷 Photo'
+        : message.gif
+          ? '🎞️ GIF'
+          : message.sticker
+            ? '🏷️ Sticker'
+            : message.voice
+              ? '🎤 ' + translate('Vocal', 'Voice note')
+              : '')
     ).slice(0, 200);
     await setDoc(doc(firestore, 'content', 'pin'), {
       data: JSON.stringify({ id, name: message.name || '', text }),
@@ -2128,6 +2197,653 @@ function addPresenceStyles() {
 .cm{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
 `;
   document.head.appendChild(style);
+}
+
+// ===== VISUAL POLISH ✨ (groups, day separators, header faces, animations) ===== //
+
+// two messages of the same person less than 5 minutes apart are one group 👥
+const GROUP_GAP = 5 * 60000;
+// the messages already drawn once (new ones pop in) ✨
+const drawnIds = new Set();
+
+/**
+ * `dayKey` - Function 📅
+ *
+ * @param { number } time - a time in ms
+ * @returns { string } - its local day (2026-11-04)
+ */
+const dayKey = (time) => {
+  const date = new Date(time);
+  return date.getFullYear() + '-' + (date.getMonth() + 1) + '-' + date.getDate();
+};
+
+/**
+ * `dayLabel` - Function 📅
+ *
+ * @param { number } time - a time in ms
+ * @returns { string } - « Aujourd'hui », « Hier » or « lundi 3 novembre »
+ */
+function dayLabel(time) {
+  const today = new Date();
+  if (dayKey(time) === dayKey(today.getTime())) return translate("Aujourd'hui", 'Today');
+  if (dayKey(time) === dayKey(today.getTime() - 86400000)) return translate('Hier', 'Yesterday');
+  const label = new Date(time).toLocaleDateString(translate('fr-FR', 'en-GB'), {
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long',
+  });
+  return label.charAt(0).toUpperCase() + label.slice(1);
+}
+
+/**
+ * `sameGroup` - Function 👥
+ *
+ * @param { object } first - a message
+ * @param { object } second - the next one
+ * @returns { boolean } - true when the same person wrote both, on the same day, less than 5 minutes apart
+ */
+const sameGroup = (first, second) =>
+  !!first &&
+  !!second &&
+  first.uid === second.uid &&
+  first.ho !== true &&
+  second.ho !== true &&
+  dayKey(timeOf(first)) === dayKey(timeOf(second)) &&
+  Math.abs(timeOf(second) - timeOf(first)) < GROUP_GAP;
+
+/**
+ * `listHtml` - Function 🧾
+ *
+ * Every bubble with its day separator, its place in its group (first / middle / last) & a pop-in for new ones.
+ *
+ * @returns { string } - the HTML of the message list
+ */
+function listHtml() {
+  const isFirstDraw = drawnIds.size === 0;
+  const html = messages
+    .map((message, index) => {
+      const previous = messages[index - 1],
+        next = messages[index + 1];
+      const separator =
+        !previous || dayKey(timeOf(previous)) !== dayKey(timeOf(message))
+          ? '<div class="cday"><span>' + dayLabel(timeOf(message)) + '</span></div>'
+          : '';
+      const classes =
+        (sameGroup(previous, message) && !separator ? ' cgc' : '') +
+        (sameGroup(message, next) ? ' cgn' : '') +
+        (!isFirstDraw && !drawnIds.has(message.id) ? ' cpop' : '');
+      // add the group classes on the bubble's root `.cm`
+      return separator + bubbleHtml(message).replace('<div class="cm', '<div class="cm' + classes);
+    })
+    .join('');
+  messages.forEach((message) => drawnIds.add(message.id));
+  return html;
+}
+
+/**
+ * `paintHeaderFaces` - Function 🧑‍🤝‍🧑
+ *
+ * @returns { void } - up to 4 faces of the teammates who read the chat lately, next to the title
+ */
+function paintHeaderFaces() {
+  const faces = overlay && overlay.querySelector('.cfaces');
+  if (!faces) return;
+  const readers = Object.entries(seenBy)
+    .filter(([uid, reader]) => (!user || uid !== user.uid) && reader.at)
+    .sort((first, second) => second[1].at - first[1].at)
+    .slice(0, 4);
+  const html = readers
+    .map(([uid, reader]) =>
+      /^https:\/\/[a-z0-9.-]+\.googleusercontent\.com\//.test(reader.pic)
+        ? '<img src="' + escapeHtml(reader.pic) + '" referrerpolicy="no-referrer" alt="">'
+        : '<span style="background:' +
+          colorsOf(uid)[0] +
+          '">' +
+          escapeHtml((reader.name || '?')[0]) +
+          '</span>',
+    )
+    .join('');
+  if (faces.innerHTML !== html) faces.innerHTML = html;
+}
+
+/**
+ * `addPolishStyles` - Function 🎨
+ *
+ * @returns { void } - the CSS of the polish & of Phase 3 (once, after the other chat styles so it wins)
+ */
+function addPolishStyles() {
+  if (document.getElementById('chatPolishCss')) return;
+  const style = document.createElement('style');
+  style.id = 'chatPolishCss';
+  style.textContent = `
+.chatov{background:radial-gradient(120% 60% at 50% 0%,rgba(201,169,97,.07),transparent 60%),var(--bg)}
+.chatov .sch{position:relative;z-index:3;background:color-mix(in srgb,var(--bg) 78%,transparent);
+  -webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px);border-bottom:1px solid rgba(255,255,255,.06)}
+.cfaces{display:flex;flex-direction:row-reverse;margin-right:2px}
+.cfaces img,.cfaces span{width:26px;height:26px;border-radius:50%;object-fit:cover;border:2px solid var(--bg);
+  margin-left:-8px;font-size:11px;font-weight:700;color:#fff;display:inline-flex;align-items:center;justify-content:center}
+.cbody{gap:12px;padding:14px 12px 18px;scroll-behavior:auto}
+.cday{position:sticky;top:6px;z-index:2;display:flex;justify-content:center;margin:6px 0 2px;pointer-events:none}
+.cday span{font-size:11.5px;font-weight:700;letter-spacing:.02em;padding:4px 12px;border-radius:999px;
+  background:color-mix(in srgb,var(--bar,#14203a) 88%,transparent);-webkit-backdrop-filter:blur(8px);
+  backdrop-filter:blur(8px);border:1px solid rgba(255,255,255,.08);color:var(--mu)}
+.cm.cgc{margin-top:-9px}
+.cm.cgc .ccap{display:none}
+.cm.cgn .cav{visibility:hidden}
+.cb{box-shadow:0 1px 2px rgba(0,0,0,.25);border-radius:18px;padding:8px 12px 6px;line-height:1.38}
+.cm:not(.me) .cb{border-top-left-radius:6px}
+.cm.me .cb{border-top-right-radius:6px}
+.cm.cgc:not(.me) .cb{border-top-left-radius:6px}
+.cm.cgn:not(.me) .cb{border-bottom-left-radius:6px}
+.cm.cgc.me .cb{border-top-right-radius:6px}
+.cm.cgn.me .cb{border-bottom-right-radius:6px}
+.cm:not(.cgc):not(.me) .cb{border-top-left-radius:4px}
+.ctm{font-size:10px;opacity:.55;margin-top:3px;font-variant-numeric:tabular-nums}
+.cm.cpop .cb{animation:cpop .28s cubic-bezier(.2,.9,.3,1.25)}
+@keyframes cpop{from{transform:scale(.86) translateY(8px);opacity:0}to{transform:none;opacity:1}}
+.cact{animation:cslide .18s ease-out}
+@keyframes cslide{from{transform:translateY(-4px);opacity:0}to{transform:none;opacity:1}}
+.cpill{background:color-mix(in srgb,var(--bar,#14203a) 92%,#fff 3%);border-color:rgba(255,255,255,.1);
+  box-shadow:0 2px 10px rgba(0,0,0,.18);transition:border-color .15s}
+.cpill:focus-within{border-color:rgba(201,169,97,.55)}
+.cfoot{border-top:0;background:linear-gradient(to top,var(--bg) 70%,transparent)}
+.cmic{width:40px;height:40px;border:0;padding:0;background:transparent;color:var(--mu);font-size:20px;
+  cursor:pointer;flex:none;display:flex;align-items:center;justify-content:center}
+.cmic[hidden]{display:none}
+.crec{position:absolute;inset:0;display:flex;align-items:center;gap:10px;padding:0 6px;border-radius:24px;
+  background:var(--bar,#14203a);z-index:2}
+.crecdot{width:10px;height:10px;border-radius:50%;background:#e5484d;animation:crec 1s infinite}
+@keyframes crec{50%{opacity:.25}}
+.crect{font-weight:700;font-variant-numeric:tabular-nums}
+.crecx,.crecs{width:36px;height:36px;border:0;border-radius:50%;cursor:pointer;font-size:16px;flex:none}
+.crecx{background:transparent;color:var(--mu)}
+.crecs{background:var(--gold,#c9a961);color:#111}
+.cvoice{display:flex;align-items:center;gap:10px;min-width:190px;padding:2px 0}
+.cvplay{width:34px;height:34px;border-radius:50%;border:0;background:rgba(255,255,255,.18);color:#fff;
+  cursor:pointer;flex:none;font-size:13px}
+.cvbar{flex:1;height:4px;border-radius:4px;background:rgba(255,255,255,.22);overflow:hidden}
+.cvbar i{display:block;height:100%;background:#fff;width:0;transition:width .2s linear}
+.cvdur{font-size:12px;opacity:.8;font-variant-numeric:tabular-nums}
+.cpoll{min-width:220px;display:flex;flex-direction:column;gap:6px}
+.cpollq{font-weight:700;margin-bottom:2px}
+.cpollo{position:relative;overflow:hidden;display:flex;align-items:center;gap:8px;text-align:left;border:1px solid
+  rgba(255,255,255,.22);background:rgba(255,255,255,.06);color:#fff;border-radius:10px;padding:8px 10px;
+  font:inherit;cursor:pointer}
+.cpollo i{position:absolute;inset:0 auto 0 0;background:rgba(255,255,255,.14);transition:width .3s}
+.cpollo span{position:relative;flex:1}
+.cpollo b{position:relative;font-size:12px;opacity:.85}
+.cpollo.on{border-color:var(--gold,#c9a961)}
+.cpollo.on i{background:rgba(201,169,97,.35)}
+.cpollt{font-size:11px;opacity:.65}
+.cpolldlg{position:absolute;inset:0;z-index:9;background:rgba(0,0,0,.55);display:flex;align-items:center;
+  justify-content:center;padding:18px}
+.cpollbox{width:min(420px,100%);background:var(--bg);border:1px solid rgba(255,255,255,.1);border-radius:18px;
+  padding:16px;display:flex;flex-direction:column;gap:10px}
+.cpollopts{display:flex;flex-direction:column;gap:8px}
+.cholbl{font-size:11px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;color:#f3d58a;margin-bottom:3px}
+.cm .cb:has(.cholbl){outline:1.5px solid rgba(201,169,97,.7)}
+.cho{display:flex;gap:10px;align-items:center;padding:8px 14px;border-bottom:1px solid rgba(255,255,255,.06);
+  background:rgba(201,169,97,.08);cursor:pointer}
+.cho[hidden]{display:none}
+@media (prefers-reduced-motion:reduce){.cm.cpop .cb,.cact{animation:none}}
+`;
+  document.head.appendChild(style);
+}
+
+// ===== VOICE NOTES, POLLS & SHIFT HANDOVER 🎤📊🔁 ===== //
+
+// a voice note: at most 30 s, sent inline as a small data URL (no Storage on the free plan) 🎤
+const VOICE_MAX_SECONDS = 30,
+  VOICE_MAX_LENGTH = 700000,
+  VOICE_PATTERN = /^data:audio\/(webm|mp4|ogg|aac|mpeg)(;codecs=[a-z0-9.]+)?;base64,[A-Za-z0-9+/=]+$/;
+// a handover stays on top for 18 hours (one evening → the next lunch) 🔁
+const HANDOVER_HOURS = 18;
+// a poll: 2 to 6 options of at most 80 characters 📊
+const POLL_MIN = 2,
+  POLL_MAX = 6;
+
+// the recorder while recording, the playing note & the handover mode of the composer
+let recording = null,
+  player = null,
+  handoverMode = false;
+
+/**
+ * `isSafeVoice` - Function 🛡️
+ *
+ * @param { any } source - a voice note
+ * @returns { boolean } - true for a base64 audio data URL of a sane size
+ */
+const isSafeVoice = (source) =>
+  typeof source === 'string' && source.length < VOICE_MAX_LENGTH && VOICE_PATTERN.test(source);
+
+/**
+ * `formatSeconds` - Function ⏱️
+ *
+ * @param { number } seconds - a duration
+ * @returns { string } - 0:07
+ */
+const formatSeconds = (seconds) => {
+  const whole = Math.max(0, Math.round(seconds || 0));
+  return Math.floor(whole / 60) + ':' + String(whole % 60).padStart(2, '0');
+};
+
+/**
+ * `pollOf` - Function 📊
+ *
+ * @param { object } message - a chat message
+ * @returns { {question: string, options: Array<string>} | null } - its clean poll (null when none)
+ */
+function pollOf(message) {
+  const poll = message.poll;
+  if (!poll || typeof poll !== 'object' || !Array.isArray(poll.o)) return null;
+  const options = poll.o.slice(0, POLL_MAX).map((option) => String(option).slice(0, 80));
+  return options.length >= POLL_MIN ? { question: String(poll.q || '').slice(0, 200), options } : null;
+}
+
+/**
+ * `extraHtml` - Function 🧩
+ *
+ * The parts of a bubble that belong to Phase 3: the handover label, the voice player, the poll card.
+ *
+ * @param { object } message - a chat message
+ * @returns { string } - their HTML (empty when none)
+ */
+function extraHtml(message) {
+  let html = '';
+  if (message.ho === true) html += '<div class="cholbl">🔁 ' + translate('Passation', 'Handover') + '</div>';
+  if (isSafeVoice(message.voice)) {
+    const isPlaying = player && player.id === message.id;
+    html +=
+      '<div class="cvoice' +
+      (isPlaying ? ' on' : '') +
+      '"><button class="cvplay" data-play="' +
+      message.id +
+      '" aria-label="play">' +
+      (isPlaying && !player.audio.paused ? '❚❚' : '▶') +
+      '</button><div class="cvbar"><i style="width:' +
+      (isPlaying ? player.progress : 0) +
+      '%"></i></div>' +
+      '<span class="cvdur">' +
+      formatSeconds(Number(message.dur) || 0) +
+      '</span></div>';
+  }
+  const poll = pollOf(message);
+  if (poll) {
+    const votes = message.v && typeof message.v === 'object' ? message.v : {},
+      counts = poll.options.map(() => 0);
+    Object.values(votes).forEach((choice) => {
+      if (Number.isInteger(choice) && choice >= 0 && choice < counts.length) counts[choice]++;
+    });
+    const total = counts.reduce((sum, count) => sum + count, 0),
+      mine = user ? votes[user.uid] : undefined;
+    html +=
+      '<div class="cpoll"><div class="cpollq">📊 ' +
+      escapeHtml(poll.question) +
+      '</div>' +
+      poll.options
+        .map(
+          (option, index) =>
+            '<button class="cpollo' +
+            (mine === index ? ' on' : '') +
+            '" data-vote="' +
+            message.id +
+            '" data-choice="' +
+            index +
+            '"><i style="width:' +
+            (total ? (100 * counts[index]) / total : 0) +
+            '%"></i><span>' +
+            escapeHtml(option) +
+            '</span><b>' +
+            counts[index] +
+            '</b></button>',
+        )
+        .join('') +
+      '<div class="cpollt">' +
+      total +
+      ' ' +
+      translate(total > 1 ? 'votes' : 'vote', total > 1 ? 'votes' : 'vote') +
+      '</div></div>';
+  }
+  return html;
+}
+
+/**
+ * `vote` - Async Function 📊
+ *
+ * @param { string } id - the poll message
+ * @param { number } choice - the option (the same again removes my vote)
+ * @returns { Promise<void> }
+ */
+async function vote(id, choice) {
+  const message = messages.find((candidate) => candidate.id === id);
+  if (!message || !user || !pollOf(message)) return;
+  const current = (message.v || {})[user.uid];
+  if (navigator.vibrate) navigator.vibrate(8);
+  try {
+    await updateDoc(doc(firestore, 'chat', id), {
+      ['v.' + user.uid]: current === choice ? deleteField() : choice,
+    });
+  } catch (error) {
+    showToast(translate('Vote impossible', 'Could not vote'));
+  }
+}
+
+/**
+ * `togglePlay` - Function ▶️
+ *
+ * @param { string } id - a voice message (one note plays at a time)
+ * @returns { void }
+ */
+function togglePlay(id) {
+  const message = messages.find((candidate) => candidate.id === id);
+  if (!message || !isSafeVoice(message.voice)) return;
+  if (player && player.id === id) {
+    if (player.audio.paused) player.audio.play().catch(() => {});
+    else player.audio.pause();
+    return paintPlayer();
+  }
+  if (player) player.audio.pause();
+  const audio = new Audio(message.voice);
+  player = { id, audio, progress: 0 };
+  audio.ontimeupdate = () => {
+    const length = isFinite(audio.duration) && audio.duration > 0 ? audio.duration : Number(message.dur) || 1;
+    player.progress = Math.min(100, (100 * audio.currentTime) / length);
+    paintPlayer();
+  };
+  audio.onended = () => {
+    player.progress = 0;
+    paintPlayer();
+    player = null;
+  };
+  audio.onpause = paintPlayer;
+  audio.play().catch(() => showToast(translate('Lecture impossible', 'Could not play')));
+  paintPlayer();
+}
+
+/**
+ * `paintPlayer` - Function ▶️
+ *
+ * @returns { void } - updates every voice bubble (button & progress) without repainting the list
+ */
+function paintPlayer() {
+  if (!overlay) return;
+  overlay.querySelectorAll('[data-play]').forEach((button) => {
+    const isCurrent = player && player.id === button.dataset.play,
+      bar = button.parentNode.querySelector('.cvbar i');
+    button.textContent = isCurrent && !player.audio.paused ? '❚❚' : '▶';
+    button.parentNode.classList.toggle('on', !!isCurrent);
+    if (bar) bar.style.width = (isCurrent ? player.progress : 0) + '%';
+  });
+}
+
+/**
+ * `voiceMimeType` - Function 🎙️
+ *
+ * @returns { string } - the first audio format this browser records (Android: webm/opus, iPhone: mp4)
+ */
+function voiceMimeType() {
+  if (typeof MediaRecorder === 'undefined' || !MediaRecorder.isTypeSupported) return '';
+  return (
+    ['audio/webm;codecs=opus', 'audio/ogg;codecs=opus', 'audio/mp4', 'audio/webm'].find((type) =>
+      MediaRecorder.isTypeSupported(type),
+    ) || ''
+  );
+}
+
+/**
+ * `startRecording` - Async Function 🎙️
+ *
+ * Asks for the microphone, then records up to 30 s while the recording bar replaces the composer.
+ *
+ * @returns { Promise<void> }
+ */
+async function startRecording() {
+  if (recording || !user) return;
+  if (!navigator.mediaDevices || typeof MediaRecorder === 'undefined')
+    return showToast(translate('Micro non disponible', 'Microphone not available'));
+  let stream;
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+  } catch (error) {
+    return showToast(
+      translate('Autorisez le micro pour envoyer un vocal', 'Allow the microphone to send a voice note'),
+    );
+  }
+  const mimeType = voiceMimeType();
+  const recorder = new MediaRecorder(stream, mimeType ? { mimeType, audioBitsPerSecond: 24000 } : undefined);
+  const chunks = [];
+  recording = { recorder, stream, chunks, startedAt: Date.now(), cancelled: false, timer: 0 };
+  recorder.ondataavailable = (event) => event.data && event.data.size && chunks.push(event.data);
+  recorder.onstop = () => finishRecording();
+  recorder.start();
+  if (navigator.vibrate) navigator.vibrate(15);
+  paintRecording();
+  recording.timer = setInterval(() => {
+    if (!recording) return;
+    if ((Date.now() - recording.startedAt) / 1000 >= VOICE_MAX_SECONDS) stopRecording(false);
+    else paintRecording();
+  }, 250);
+}
+
+/**
+ * `stopRecording` - Function ⏹️
+ *
+ * @param { boolean } cancel - true drops the note, false sends it
+ * @returns { void }
+ */
+function stopRecording(cancel) {
+  if (!recording) return;
+  recording.cancelled = cancel;
+  clearInterval(recording.timer);
+  if (recording.recorder.state !== 'inactive') recording.recorder.stop();
+  else finishRecording();
+}
+
+/**
+ * `finishRecording` - Function 📤
+ *
+ * Frees the microphone, then turns the note into a data URL and sends it (unless cancelled or too big).
+ *
+ * @returns { void }
+ */
+function finishRecording() {
+  const done = recording;
+  recording = null;
+  if (!done) return;
+  done.stream.getTracks().forEach((track) => track.stop());
+  paintRecording();
+  const seconds = Math.min(VOICE_MAX_SECONDS, Math.max(1, Math.round((Date.now() - done.startedAt) / 1000)));
+  if (done.cancelled || !done.chunks.length) return;
+  const blob = new Blob(done.chunks, { type: done.recorder.mimeType || done.chunks[0].type || 'audio/webm' });
+  const reader = new FileReader();
+  reader.onload = () => {
+    // some browsers write « audio/webm;codecs=opus » with capitals or spaces: keep the strict form 🛡️
+    const dataUrl = String(reader.result).replace(/^data:([^;,]+)(;[^,]*)?;base64,/, (all, type, codec) => {
+      const cleanCodec = (codec || '')
+        .toLowerCase()
+        .replace(/\s/g, '')
+        .match(/;codecs=[a-z0-9.]+/);
+      return 'data:' + type.toLowerCase() + (cleanCodec ? cleanCodec[0] : '') + ';base64,';
+    });
+    if (!isSafeVoice(dataUrl)) return showToast(translate('Vocal trop long', 'Voice note too long'));
+    sendExtra({ voice: dataUrl, dur: seconds });
+  };
+  reader.readAsDataURL(blob);
+}
+
+/**
+ * `paintRecording` - Function 🔴
+ *
+ * @returns { void } - the recording bar (red dot, time, ✕ cancel, ➤ send) over the composer
+ */
+function paintRecording() {
+  if (!overlay) return;
+  let bar = overlay.querySelector('.crec');
+  if (!recording) {
+    if (bar) bar.remove();
+    return;
+  }
+  if (!bar) {
+    bar = document.createElement('div');
+    bar.className = 'crec';
+    bar.innerHTML =
+      '<button class="crecx" aria-label="cancel">✕</button><span class="crecdot"></span><span class="crect"></span>' +
+      '<span class="grow muted sm">' +
+      translate('Enregistrement… 30 s max', 'Recording… 30 s max') +
+      '</span><button class="crecs" aria-label="send">➤</button>';
+    bar.querySelector('.crecx').onclick = () => stopRecording(true);
+    bar.querySelector('.crecs').onclick = () => stopRecording(false);
+    overlay.querySelector('.cpill').appendChild(bar);
+  }
+  bar.querySelector('.crect').textContent = formatSeconds((Date.now() - recording.startedAt) / 1000);
+}
+
+/**
+ * `sendExtra` - Async Function 📤
+ *
+ * Posts a voice note or a poll (same doc shape as `send`, plus its own fields).
+ *
+ * @param { object } extra - { voice, dur } or { text, poll }
+ * @returns { Promise<void> }
+ */
+async function sendExtra(extra) {
+  if (!user) return;
+  const newMessage = Object.assign(
+    {
+      uid: user.uid,
+      name: user.displayName || 'Staff',
+      pic: user.photoURL || '',
+      text: '',
+      ts: serverTimestamp(),
+    },
+    extra,
+  );
+  if (replyTo) newMessage.rep = replyTo;
+  replyTo = null;
+  paint.done = false;
+  paint();
+  try {
+    const added = await addDoc(collection(firestore, 'chat'), newMessage);
+    playChime();
+    notifyTeam(added.id);
+  } catch (error) {
+    errorText = translate('Envoi impossible', 'Could not send');
+    paint();
+  }
+}
+
+/**
+ * `openPollDialog` - Function 📊
+ *
+ * A small dialog: the question, 2 to 6 options, « Envoyer ».
+ *
+ * @returns { void }
+ */
+function openPollDialog() {
+  overlay.querySelector('.cmenu').hidden = true;
+  const dialog = document.createElement('div');
+  dialog.className = 'cpolldlg';
+  const optionInput = (index) =>
+    '<input class="admfield" maxlength="80" data-opt="' +
+    index +
+    '" placeholder="' +
+    translate('Option ', 'Option ') +
+    (index + 1) +
+    '">';
+  dialog.innerHTML =
+    '<div class="cpollbox"><b>📊 ' +
+    translate('Nouveau sondage', 'New poll') +
+    '</b>' +
+    '<input class="admfield" maxlength="200" data-q placeholder="' +
+    translate('Question (ex. Qui prend le brunch dimanche ?)', 'Question (e.g. Who takes Sunday brunch?)') +
+    '">' +
+    '<div class="cpollopts">' +
+    optionInput(0) +
+    optionInput(1) +
+    '</div>' +
+    '<button class="btn sec" data-add>+ ' +
+    translate('Option', 'Option') +
+    '</button>' +
+    '<div class="abar"><button class="btn sec grow" data-cancel>' +
+    translate('Annuler', 'Cancel') +
+    '</button><button class="btn grow" data-send>' +
+    translate('Envoyer', 'Send') +
+    '</button></div></div>';
+  overlay.appendChild(dialog);
+  dialog.querySelector('[data-q]').focus();
+  dialog.querySelector('[data-add]').onclick = () => {
+    const list = dialog.querySelector('.cpollopts');
+    if (list.children.length >= POLL_MAX) return;
+    list.insertAdjacentHTML('beforeend', optionInput(list.children.length));
+    list.lastElementChild.focus();
+  };
+  dialog.querySelector('[data-cancel]').onclick = () => dialog.remove();
+  dialog.onclick = (event) => event.target === dialog && dialog.remove();
+  dialog.querySelector('[data-send]').onclick = () => {
+    const question = dialog.querySelector('[data-q]').value.trim().slice(0, 200),
+      options = [...dialog.querySelectorAll('[data-opt]')]
+        .map((input) => input.value.trim().slice(0, 80))
+        .filter(Boolean);
+    if (!question || options.length < POLL_MIN)
+      return showToast(translate('Une question et 2 options minimum', 'A question and at least 2 options'));
+    dialog.remove();
+    sendExtra({ text: '📊 ' + question, poll: { q: question, o: options } });
+  };
+}
+
+/**
+ * `startHandover` - Function 🔁
+ *
+ * Puts the composer in handover mode: the next message is the note for the next shift.
+ *
+ * @returns { void }
+ */
+function startHandover() {
+  overlay.querySelector('.cmenu').hidden = true;
+  handoverMode = true;
+  editingId = null;
+  paint();
+  overlay.querySelector('textarea').focus();
+}
+
+/**
+ * `latestHandover` - Function 🔁
+ *
+ * @returns { object | null } - the newest handover of the last 18 hours (null when none)
+ */
+function latestHandover() {
+  const since = Date.now() - HANDOVER_HOURS * 3600000;
+  return (
+    messages.filter((message) => message.ho === true && message.text && timeOf(message) >= since).pop() ||
+    null
+  );
+}
+
+/**
+ * `paintHandover` - Function 🔁
+ *
+ * @returns { void } - the handover banner under the pinned one (tap = jump to it)
+ */
+function paintHandover() {
+  const banner = overlay && overlay.querySelector('.cho');
+  if (!banner) return;
+  const handover = latestHandover();
+  banner.hidden = !handover;
+  if (!handover) return;
+  const key = handover.id + (handover.ed ? '+' : '');
+  if (banner.dataset.key === key) return;
+  banner.dataset.key = key;
+  banner.innerHTML =
+    '<span class="cpini">🔁</span><div class="grow" style="min-width:0"><b>' +
+    translate('Passation', 'Handover') +
+    ' · ' +
+    escapeHtml((handover.name || '').split(' ')[0]) +
+    ' · ' +
+    formatTime(timeOf(handover)) +
+    '</b><div class="cpint">' +
+    escapeHtml(handover.text) +
+    '</div></div>';
+  banner.onclick = () => jumpTo(handover.id);
 }
 
 // ===== EMOJI & GIF PANEL 😀 ===== //

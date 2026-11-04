@@ -178,6 +178,51 @@ service cloud.firestore {
       allow delete: if isMember() && (resource.data.uid == request.auth.uid || isAdmin());
     }
 
+    // ===== CHAT PHASE 3 🎤📊🔁 (voice notes, polls, shift handover, votes; 0.70.0) ===== //
+    // a second chat block: Firestore ORs it with the one above, and it repeats every check of a new message
+    match /chat/{id} {
+      allow create: if isMember()
+        && id.matches('^[A-Za-z0-9]{1,40}$')
+        && request.resource.data.keys().hasOnly(['uid', 'name', 'pic', 'text', 'img', 'rep', 'ts', 'voice', 'dur', 'poll', 'ho'])
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.ts == request.time
+        && isText(request.resource.data.name, 100)
+        && isPicture(request.resource.data.pic)
+        && isText(request.resource.data.text, 1000)
+        && !('img' in request.resource.data)
+        && (!('rep' in request.resource.data)
+          || (request.resource.data.rep is map
+            && request.resource.data.rep.keys().hasOnly(['id', 'uid', 'name', 'text'])
+            && request.resource.data.rep.id.matches('^[A-Za-z0-9]{1,40}$')
+            && isText(request.resource.data.rep.get('uid', ''), 128)
+            && isText(request.resource.data.rep.get('name', ''), 100)
+            && isText(request.resource.data.rep.get('text', ''), 200)))
+        && (!('voice' in request.resource.data)
+          || (request.resource.data.voice is string
+            && request.resource.data.voice.size() < 700000
+            && request.resource.data.voice.split(',').size() == 2
+            && request.resource.data.voice.split(',')[0].matches('^data:audio/(webm|mp4|ogg|aac|mpeg)(;codecs=[a-z0-9.]+)?;base64$')))
+        && (!('dur' in request.resource.data)
+          || (request.resource.data.dur is int && request.resource.data.dur >= 1 && request.resource.data.dur <= 60))
+        && (!('poll' in request.resource.data)
+          || (request.resource.data.poll is map
+            && request.resource.data.poll.keys().hasOnly(['q', 'o'])
+            && isText(request.resource.data.poll.q, 200)
+            && request.resource.data.poll.o is list
+            && request.resource.data.poll.o.size() >= 2
+            && request.resource.data.poll.o.size() <= 6))
+        && (!('ho' in request.resource.data) || request.resource.data.ho == true);
+      // 📊 a vote: only `v.<my uid>`, an option number 0-5
+      allow update: if isMember()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['v'])
+        && request.resource.data.v is map
+        && request.resource.data.v.diff(resource.data.get('v', {})).affectedKeys().hasOnly([request.auth.uid])
+        && (!(request.auth.uid in request.resource.data.v)
+          || (request.resource.data.v[request.auth.uid] is int
+            && request.resource.data.v[request.auth.uid] >= 0
+            && request.resource.data.v[request.auth.uid] <= 5));
+    }
+
     // ===== TYPING ✍️ (« Ourya écrit… », 0.69.0) ===== //
     match /typing/{uid} {
       allow read: if isMember();
