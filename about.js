@@ -74,6 +74,13 @@ const X_PATH =
 const TIMELINE = [
   [
     '2026-11-04',
+    '0.68',
+    true,
+    'Chat : messages rapides, tables #12, mentions @ et message épinglé',
+    'Chat: quick messages, #12 tables, @mentions and a pinned message',
+  ],
+  [
+    '2026-11-04',
     '0.67',
     false,
     'Mise en place devient un vrai chapitre : onglets, quiz, chrono et jeux',

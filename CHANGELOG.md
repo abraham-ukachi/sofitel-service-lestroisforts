@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. Versions follow the service-worker cache (`ltf-vNN` → `0.NN.0`), see [CONTRIBUTING.md](./CONTRIBUTING.md#git-commit-messages) for the commit guidelines.
 
+### 0.68.0 (2026-11-04)
+
+* :sparkles: Team chat, service tools: quick messages above the composer (one tap sends, « # » or « : » opens it to finish), editable in the dashboard › Annonce (`content/quick`)
+* :sparkles: Table tags: #12, #T12, #B2 become gold chips, tap one to see that table on the floor plan
+* :sparkles: @mentions: type @ to pick a teammate; the name is highlighted, the message gets a gold ring for them and `/api/notify` sends them a « vous a mentionné » push
+* :sparkles: Pinned message (owner): 📌 in a message's action bar pins it on top of the chat, tap the banner to jump to it, ✕ to unpin (`content/pin`)
+
 ### 0.67.0 (2026-11-04)
 
 * :sparkles: « Mise en place » is now a real chapter page (no more drawer): scrollable tabs Seau 1 · Seau 2 · Seau 3 · Rouges · Accueil, each with Aperçu, Apprendre (flashcards), Quiz (10 questions with explanations), Chrono (60 s, combos, best score) and a game: « Range les seaux » (each bottle in the right bucket) or « Dans l'ordre » (the steps of service); daily checklist per bucket
