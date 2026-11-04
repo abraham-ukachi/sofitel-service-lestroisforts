@@ -2,6 +2,15 @@
 
 All notable changes to this project will be documented in this file. Versions follow the service-worker cache (`ltf-vNN` → `0.NN.0`), see [CONTRIBUTING.md](./CONTRIBUTING.md#git-commit-messages) for the commit guidelines.
 
+### 0.73.0 (2026-11-04)
+
+* :sparkles: Swipe between tabs everywhere (pwa/swipe.js): swipe left for the next tab or chip, right for the previous one (About drawer, Carte courses & categories, Mise en place, leaderboard, dashboard); the new view slides in. Quiz answers, settings toggles, the team chat, the scanner and sideways-scrolling rows are left alone
+
+### 0.72.6 (2026-11-04)
+
+* :sparkles: Chat: tapping the mic asks first in an app dialog (« Autoriser le micro ? ») whose button opens the phone's own permission popup; when the mic was blocked before, a dialog explains how to unblock it; clearer errors (no mic, mic busy)
+* :lipstick: Chat: the + attach menu has four even 48 px rows with plain outline icons (camera, photos, poll, handover) and a soft press highlight
+
 ### 0.72.5 (2026-11-04)
 
 * :sparkles: Chat: opens at the newest message (and stays there while photos & GIFs load), or back where you left off when you closed it less than 5 minutes ago

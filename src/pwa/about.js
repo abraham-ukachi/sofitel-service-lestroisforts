@@ -74,6 +74,13 @@ const X_PATH =
 const TIMELINE = [
   [
     '2026-11-04',
+    '0.73',
+    true,
+    'Glissez à gauche ou à droite pour changer d’onglet, partout',
+    'Swipe left or right to switch tabs, everywhere',
+  ],
+  [
+    '2026-11-04',
     '0.72',
     true,
     'Scanner IA SigLIP 2 : le nom apparaît en direct dans le viseur',
