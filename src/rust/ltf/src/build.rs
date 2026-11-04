@@ -443,7 +443,7 @@ pub fn build() -> App {
         Ch { id: "diner", name: translate("Dîner", "Dinner"), sub: translate("La carte du soir (ne change pas)", "The evening menu (stays the same)") },
         Ch { id: "deg", name: translate("Menu Dégustation", "Tasting Menu"), sub: if data["degSub"].is_object() { js(&data["degSub"][if en_ { "en" } else { "fr" }]) } else { translate("Menu surprise du jour · 89 €", "Surprise menu of the day · 89 €") } },
         Ch { id: "dess", name: translate("Desserts & Fromages", "Desserts & Cheese"), sub: translate("Douceurs et plateau Lemarié", "Sweets and the Lemarié cheese board") },
-        Ch { id: "from", name: translate("Plateau de fromages", "Cheese board"), sub: translate("8 fromages, du plus doux au plus fort", "8 cheeses, mildest to strongest") },
+        Ch { id: "from", name: translate("Plateau de fromages", "Cheese board"), sub: translate("9 fromages, du plus doux au plus fort", "9 cheeses, mildest to strongest") },
         Ch { id: "cock", name: translate("Cocktails & Softs", "Cocktails & Soft drinks"), sub: translate("Signatures, fiches techniques, softs, eaux", "Signatures, recipe cards, softs, waters") },
         Ch { id: "cafe", name: translate("Cafés & Thés", "Coffee & Tea"), sub: "Illy & Maison Père Blaize".into() },
         Ch { id: "vins", name: translate("Vins", "Wines"), sub: translate("Au verre, Provence, Méditerranée, France", "By the glass, Provence, Mediterranean, France") },

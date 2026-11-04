@@ -509,7 +509,7 @@
       id: 'from',
       name: translate('Plateau de fromages', 'Cheese board'),
       icon: '🧀',
-      sub: translate('8 fromages, du plus doux au plus fort', '8 cheeses, mildest to strongest'),
+      sub: translate('9 fromages, du plus doux au plus fort', '9 cheeses, mildest to strongest'),
     },
     {
       id: 'cock',

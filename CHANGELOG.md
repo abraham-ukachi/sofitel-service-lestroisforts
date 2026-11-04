@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file. Versions follow the service-worker cache (`ltf-vNN` → `0.NN.0`), see [CONTRIBUTING.md](./CONTRIBUTING.md#git-commit-messages) for the commit guidelines.
 
+### 0.73.2 (2026-11-04)
+
+* :sparkles: The cheese board chapter shows the full board like La Carte: the mildest-to-strongest scale plus every cheese with photo, milk, origin and type
+* :sparkles: New cheese: Crottin de Chavignol (goat, Loire AOP), placed between Brin d'Amour and the Comté 18 mois; the board now has 9 cheeses
+
 ### 0.73.1 (2026-11-04)
 
 * :lipstick: Tabs slide like pages side by side: on a tap or a swipe the old page leaves to one side and the next one comes in from the other; the screen no longer jumps to the top or replays the enter animation
