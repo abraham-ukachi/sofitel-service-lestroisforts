@@ -139,10 +139,15 @@
   );
   // words that never count (French & English filler, menu words) 🚫
   const STOP_WORDS = new Set(
-    'les des une pour avec sans sur aux par the and from with cuvee vin vins domaine chateau maison verre bouteille cl aop igp dejeuner diner dinner glass bottle half demi provence formule semaine entree plat dessert menu'.split(
+    'le la de du et au en un il on ou ce sa se of in at to by le les des une pour avec sans sur aux par the and from with cuvee vin vins domaine chateau maison verre bouteille cl aop igp dejeuner diner dinner glass bottle half demi provence formule semaine entree plat dessert menu'.split(
       ' ',
     ),
   );
+
+  // a read word counts from this Tesseract confidence (0-100) 🏷️
+  const OCR_MIN_CONFIDENCE = 60;
+  // the label may beat the photo by this much before the result stops being « sure » ⚖️
+  const LABEL_OVERRIDE_GAP = 0.08;
 
   // ===== LOADING ⏳ ===== //
 
@@ -381,12 +386,12 @@
    * @returns { Object<string, number> } - score by group key (only the groups that matched)
    */
   function textScores(groups, text) {
-    // the distinct OCR tokens (>= 2 letters)
+    // the distinct OCR tokens (>= 3 letters, no stop words)
     const tokens = [
       ...new Set(
         normalize(text)
           .split(' ')
-          .filter((word) => word.length >= 2),
+          .filter((word) => word.length >= 3 && !STOP_WORDS.has(word)),
       ),
     ];
     if (!tokens.length) return {};
@@ -399,14 +404,17 @@
     const scores = {};
     groups.forEach((group) => {
       let sum = 0,
-        matched = 0;
+        matched = 0,
+        longest = 0;
       group.words.forEach((word) => {
         if (hasWord(word)) {
           sum += group.idf[word];
           matched++;
+          longest = Math.max(longest, word.length);
         }
       });
-      if (matched) scores[group.k] = sum * (matched >= 2 ? 1.3 : 1);
+      // one short word alone is too weak to count (« brut », « rose »…): 2 words, or one of 6+ letters
+      if (matched >= 2 || (matched === 1 && longest >= 6)) scores[group.k] = sum * (matched >= 2 ? 1.3 : 1);
     });
     return scores;
   }
@@ -653,7 +661,14 @@
       status(translate("Lecture de l'étiquette…", 'Reading the label…'));
       try {
         const result = await ocr.recognize(canvas);
-        text = (result.data && result.data.text) || '';
+        // 🛡️ only the words Tesseract is fairly sure of (a plate's pattern reads as random « le », « re »…)
+        const words = (result.data && result.data.words) || [];
+        text = words.length
+          ? words
+              .filter((word) => word.confidence >= OCR_MIN_CONFIDENCE && /\p{L}{3,}/u.test(word.text || ''))
+              .map((word) => word.text)
+              .join(' ')
+          : (result.data && result.data.text) || '';
       } catch (error) {}
     }
     // the label scores & the best one
@@ -681,7 +696,11 @@
       .sort((firstRanked, secondRanked) => secondRanked.score - firstRanked.score);
     // the confidence of the top result (0.25 -> 0, 0.75 -> 1)
     const top = ranked[0];
-    const confidence = top ? Math.max(0, Math.min(1, (top.score - 0.25) / 0.5)) : 0;
+    let confidence = top ? Math.max(0, Math.min(1, (top.score - 0.25) / 0.5)) : 0;
+    // 🛡️ the label beat a clearly better-looking photo without a strong read: never « sure » then
+    if (top && top.i < imageMax - LABEL_OVERRIDE_GAP && !(top.t >= 3)) confidence = Math.min(confidence, 0.5);
+    // 🛡️ the top two are neck and neck: at most « Probable »
+    if (ranked[1] && top.score - ranked[1].score < 0.03) confidence = Math.min(confidence, 0.65);
     return { v: vector, text, res: ranked.slice(0, 4), conf: confidence, imax: imageMax };
   }
 
@@ -771,9 +790,12 @@
 .scmeter.l1 i:nth-child(-n+1){background:#e5a04d}
 .scmeter.l2 i:nth-child(-n+2){background:var(--gold,#c9a961)}
 .scmeter.l3 i:nth-child(-n+3){background:#4cc38a}
-.scres.big{padding:12px;border-radius:18px;box-shadow:0 6px 20px rgba(0,0,0,.25);animation:scup .35s ease-out}
+.scres.big{display:flex;flex-wrap:nowrap;align-items:center;gap:12px;padding:12px;border-radius:18px;box-shadow:0 6px 20px rgba(0,0,0,.25);animation:scup .35s ease-out}
 .scres.big .thumb{width:76px;height:76px;border-radius:14px}
-.scres.big .n{font-size:17px}
+.scres.big .n{font-size:17px;line-height:1.25}
+.scres.big .tx{flex:1;min-width:0}
+.scsticky{display:flex;gap:10px}
+.scsticky .btn{flex:1 1 0;min-width:0;width:auto;white-space:nowrap;text-decoration:none}
 @keyframes scup{from{transform:translateY(12px);opacity:0}to{transform:none;opacity:1}}
 .scalts{display:flex;gap:10px;overflow-x:auto;padding:2px 2px 8px;scroll-snap-type:x mandatory}
 .scalt{flex:0 0 116px;scroll-snap-align:start;display:flex;flex-direction:column;gap:6px;text-align:left;

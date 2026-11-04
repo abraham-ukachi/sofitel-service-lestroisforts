@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file. Versions follow the service-worker cache (`ltf-vNN` → `0.NN.0`), see [CONTRIBUTING.md](./CONTRIBUTING.md#git-commit-messages) for the commit guidelines.
 
+### 0.71.1 (2026-11-04)
+
+* :bug: Scanner: a plate photo could come out « Très probable » as a champagne, because the label reader turned the plate's pattern into words like « le ». Only words Tesseract is ≥60 % sure of count, short words (le, la, de…) are ignored, one short word alone no longer counts, and a result the label pushed over a better-looking photo is never shown as « sure »
+* :bug: Scanner results: the « Rescanner » button was squeezed to nothing next to « En ligne »; the top match card stays on one row
+
 ### 0.71.0 (2026-11-04)
 
 * :lipstick: Scanner redesign: full-screen camera, gold corner brackets with a moving scan line, glass header, readiness pill on the video, camera-style shutter with gallery & 🔦 flashlight (when the phone has one), flash + buzz on capture
