@@ -160,6 +160,12 @@
     'ba1f3b0843f24bc5417d38e19c37b287d719b2f4/onnx/vision_model_q4.onnx';
   // its size in bytes (for the progress bar when the server doesn't say) 📏
   const MODEL_BYTES = 63267466;
+  // everything the first download fetches, rounded (model 63 MB + engine 22 MB + label reader & photos 12 MB) 📦
+  const DOWNLOAD_LABEL = '≈ 97 Mo';
+  // the close button's cross (an SVG, so it sits exactly in the middle of its circle) ✕
+  const CLOSE_ICON =
+    '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.4" ' +
+    'stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>';
   // the model's input: a 224 x 224 RGB picture 🖼️
   const INPUT_SIZE = 224;
   // the length of an embedding (refs or learned scans of another length come from the old model) 🔢
@@ -218,6 +224,114 @@
       doneCount++;
       onProgress && onProgress(doneCount / ASSETS.length);
     }
+  }
+
+  /**
+   * `isDownloaded` - Async Function 🗄️
+   *
+   * @returns { Promise<boolean> } - true when the model & every scan asset are already in the scan cache
+   */
+  async function isDownloaded() {
+    if (!window.caches) return false;
+    try {
+      const cache = await caches.open(SCAN_CACHE);
+      if (!(await cache.match(MODEL_URL))) return false;
+      for (const asset of ASSETS) if (!(await cache.match(BASE + asset))) return false;
+      return true;
+    } catch (error) {
+      return false;
+    }
+  }
+
+  // the last download progress (0..1), so a reopened scanner shows where the download is ⏳
+  let lastProgress = 0;
+
+  /**
+   * `paintPrep` - Function 🎨
+   *
+   * Shows the state of the AI scanner on the viewfinder pill: a download button the first time,
+   * the progress while it downloads (or loads from the phone), « Prêt ✓ » for a moment, then nothing.
+   *
+   * @param { 'offer' | 'loading' | 'ready' | 'error' } state - what to show
+   * @param { number } [fraction] - the progress (0..1) while loading
+   * @returns { void }
+   */
+  function paintPrep(state, fraction) {
+    const box = queryOne('#scPrepBox');
+    if (!box) return;
+    box.classList.remove('gone');
+    if (state === 'offer' || state === 'error') {
+      // ⬇️ the button (again after an error)
+      box.innerHTML =
+        (state === 'error' ? `<span>${translate('Pas de connexion. ', 'No connection. ')}</span>` : '') +
+        `<button class="scdl" id="scDl">⬇️ ${translate('Télécharger le scanner IA', 'Download the AI scanner')}` +
+        ` · ${DOWNLOAD_LABEL}</button>`;
+      box.classList.add('offer');
+      queryOne('#scDl').onclick = () => startDownload();
+      return;
+    }
+    box.classList.remove('offer');
+    if (state === 'loading') {
+      const percent = Math.round((fraction || 0) * 100);
+      // the bar & the text (created once, then only updated)
+      if (!queryOne('#scPrep'))
+        box.innerHTML = `<div class="scbar"><div id="scPrep"></div></div><div id="scPrepT"></div>`;
+      queryOne('#scPrep').style.width = percent + '%';
+      queryOne('#scPrepT').textContent = downloading
+        ? translate('Téléchargement… ', 'Downloading… ') + percent + '%'
+        : translate('Chargement…', 'Loading…');
+      return;
+    }
+    // ✅ ready: say it for a moment, then the pill goes away
+    box.innerHTML = `<div id="scPrepT">${translate('Prêt, fonctionne hors-ligne ✓', 'Ready, works offline ✓')}</div>`;
+    setTimeout(() => box.isConnected && box.classList.add('gone'), 1600);
+  }
+
+  // true while the first download runs (else loading means « from the phone ») 📥
+  let downloading = false;
+
+  /**
+   * `startDownload` - Function ⬇️
+   *
+   * Downloads (or loads) the engines, showing the progress on the viewfinder, then starts the live mode.
+   *
+   * @returns { Promise<void> }
+   */
+  function startDownload() {
+    if (!loading) downloading = true;
+    paintPrep('loading', lastProgress);
+    return loadEngines()
+      .then(() => {
+        downloading = false;
+        paintPrep('ready');
+        const video = queryOne('#scVid');
+        if (stream && video && overlay && overlay.classList.contains('sclive')) startLive(video);
+      })
+      .catch(() => {
+        downloading = false;
+        paintPrep('error');
+      });
+  }
+
+  /**
+   * `prepareEngines` - Async Function 🚦
+   *
+   * On the viewfinder: nothing when the model is in memory, a silent load when it's already on the
+   * phone, the progress when a download is running, else the download button.
+   *
+   * @returns { Promise<void> }
+   */
+  async function prepareEngines() {
+    if (model) {
+      const video = queryOne('#scVid');
+      if (stream && video) startLive(video);
+      return;
+    }
+    if (loading || (await isDownloaded())) {
+      startDownload();
+      return;
+    }
+    paintPrep('offer');
   }
 
   /**
@@ -297,7 +411,13 @@
    * @param { (progress: number) => void } [onProgress] - called with 0..1
    * @returns { Promise<void> }
    */
-  async function loadEngines(onProgress) {
+  async function loadEngines(onProgressOption) {
+    // every progress also goes to the viewfinder pill 🎨
+    const onProgress = (fraction) => {
+      lastProgress = fraction;
+      if (onProgressOption) onProgressOption(fraction);
+      if (fraction < 1) paintPrep('loading', fraction);
+    };
     // already loading (or loaded)? share the same promise
     if (loading) return loading;
     loading = (async () => {
@@ -898,7 +1018,8 @@
 .scanov .sch{position:relative;z-index:3;gap:10px;padding:10px 12px;padding-top:max(10px,env(safe-area-inset-top))}
 .scanov .sch b{flex:1;text-align:center;font-size:16px;letter-spacing:.02em}
 .scx,.scgap{width:40px;height:40px;flex:none}
-.scx{border:0;border-radius:50%;background:rgba(255,255,255,.1);color:inherit;font-size:17px;cursor:pointer;
+.scx{border:0;border-radius:50%;background:rgba(255,255,255,.1);color:inherit;cursor:pointer;padding:0;
+  display:flex;align-items:center;justify-content:center;line-height:0;
   -webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px)}
 .scanov.sclive{background:#000;color:#fff}
 .scanov.sclive .sch{position:absolute;top:0;left:0;right:0;background:linear-gradient(rgba(0,0,0,.55),transparent)}
@@ -965,6 +1086,11 @@
 .scalt span:last-child{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
 .scsticky{position:sticky;bottom:0;margin:12px -14px 0;padding:12px 14px;
   padding-bottom:max(12px,env(safe-area-inset-bottom));background:linear-gradient(transparent,var(--bg) 30%)}
+.scv .scprep{transition:opacity .4s}
+.scv .scprep.gone{opacity:0;pointer-events:none}
+.scv .scprep.offer{padding:4px;background:transparent;-webkit-backdrop-filter:none;backdrop-filter:none}
+.scdl{border:0;border-radius:999px;padding:10px 16px;background:var(--gold,#c9a961);color:#111;font:inherit;
+  font-size:13px;font-weight:600;cursor:pointer;box-shadow:0 4px 18px rgba(0,0,0,.4);white-space:nowrap}
 .sclivetag{position:absolute;left:50%;bottom:7%;transform:translate(-50%,16px);opacity:0;pointer-events:none;
   display:flex;align-items:center;gap:10px;max-width:86%;padding:7px 14px 7px 7px;border-radius:18px;border:0;
   background:rgba(0,0,0,.62);-webkit-backdrop-filter:blur(12px);backdrop-filter:blur(12px);color:#fff;
@@ -1188,7 +1314,7 @@
     overlay.className = 'ov scanov';
     overlay.id = 'scanOv';
     overlay.innerHTML =
-      `<div class="sch"><button class="scx" id="scX" aria-label="close">✕</button>` +
+      `<div class="sch"><button class="scx" id="scX" aria-label="close">${CLOSE_ICON}</button>` +
       `<b>${translate('Scanner', 'Scan')}</b><span class="scgap"></span></div><div class="scb"></div>`;
     addScanStyles();
     document.body.appendChild(overlay);
@@ -1200,28 +1326,8 @@
         observer.disconnect();
       }
     }).observe(document.body, { childList: true });
-    // 🎥 the camera
+    // 🎥 the camera (it decides about the download: button, silent load or nothing)
     showCamera();
-    // ⏳ load in the background and show the progress
-    loadEngines((fraction) => {
-      const bar = queryOne('#scPrep');
-      if (bar) bar.style.width = Math.round(fraction * 100) + '%';
-      const label = queryOne('#scPrepT');
-      if (label)
-        label.textContent =
-          fraction < 1
-            ? translate('Préparation hors-ligne… ', 'Getting ready for offline… ') +
-              Math.round(fraction * 100) +
-              '%'
-            : translate('Prêt, fonctionne hors-ligne ✓', 'Ready, works offline ✓');
-    }).catch(() => {
-      const label = queryOne('#scPrepT');
-      if (label)
-        label.textContent = translate(
-          'Connexion nécessaire pour la première utilisation.',
-          'A connection is needed the first time.',
-        );
-    });
   }
 
   /**
@@ -1235,8 +1341,7 @@
     setBody(
       `<div class="scv"><video id="scVid" playsinline muted autoplay></video>` +
         `<div class="scframe"><i></i><i></i><i></i><i></i><span class="scline"></span></div>` +
-        `<div class="scprep"><div class="scbar"><div id="scPrep"></div></div>` +
-        `<div id="scPrepT">${loading ? '' : translate('Préparation…', 'Preparing…')}</div></div>` +
+        `<div class="scprep gone" id="scPrepBox"></div>` +
         `<div class="schint">${translate("Cadrez l'assiette, l'étiquette ou la bouteille", 'Frame the plate, the label or the bottle')}</div>` +
         `<div class="scflash"></div></div>` +
         `<div class="scbtns sclivebar"><label class="scround" for="scFile" aria-label="gallery">🖼</label>` +
@@ -1245,13 +1350,6 @@
         `<button class="scround" id="scTorch" aria-label="torch" style="visibility:hidden">🔦</button></div>`,
     );
     overlay.classList.add('sclive');
-    // already loaded? say so ✅
-    if (model) {
-      const label = queryOne('#scPrepT');
-      if (label) label.textContent = translate('Prêt, fonctionne hors-ligne ✓', 'Ready, works offline ✓');
-      const bar = queryOne('#scPrep');
-      if (bar) bar.style.width = '100%';
-    }
     const video = queryOne('#scVid');
     // the back camera (up to 1280 px)
     try {
@@ -1260,12 +1358,6 @@
         audio: false,
       });
       video.srcObject = stream;
-      // 🎯 live guesses as soon as the model is ready
-      loadEngines()
-        .then(() => {
-          if (stream && video.isConnected) startLive(video);
-        })
-        .catch(() => {});
       // 🔦 the flashlight, when the back camera has one (dim tables at night)
       const track = stream.getVideoTracks()[0],
         capabilities = track && track.getCapabilities ? track.getCapabilities() : {},
@@ -1291,6 +1383,8 @@
       const fileInput = queryOne('#scFile');
       if (fileInput) fileInput.setAttribute('capture', 'environment');
     }
+    // 🚦 the AI scanner: download button, silent load or straight to live guesses
+    prepareEngines();
     // 📸 shutter: grab the frame (or open the picker when there's no video)
     queryOne('#scShot').onclick = () => {
       if (!stream || !video.videoWidth) {
@@ -1328,10 +1422,26 @@
    * @param { HTMLCanvasElement } canvas - the photo
    * @returns { Promise<void> }
    */
-  async function runScan(canvas) {
+  async function runScan(canvas, confirmed) {
     if (overlay) overlay.classList.remove('sclive');
     // the photo as a JPEG (shown on top of the results)
     const shot = canvas.toDataURL('image/jpeg', 0.7);
+    // ⬇️ not downloaded yet? ask first (it's big), then scan this photo
+    if (!confirmed && !model && !loading && !(await isDownloaded())) {
+      setBody(
+        `<img class="scshotimg" src="${shot}" alt=""><div class="card sm">` +
+          `${translate('Le scanner IA doit être téléchargé une fois (de préférence en Wi-Fi), ensuite il marche hors-ligne.', 'The AI scanner needs one download (Wi-Fi is best), then it works offline.')}` +
+          `</div><div class="scbtns scsticky"><button class="btn grow" id="scDlNow">⬇️ ` +
+          `${translate('Télécharger', 'Download')} · ${DOWNLOAD_LABEL}</button>` +
+          `<button class="btn sec" id="scAgain">${translate('Retour', 'Back')}</button></div>`,
+      );
+      queryOne('#scDlNow').onclick = () => {
+        downloading = true;
+        runScan(canvas, true);
+      };
+      queryOne('#scAgain').onclick = showCamera;
+      return;
+    }
     setBody(
       `<div class="scanal"><img class="scshotimg" src="${shot}" alt=""><span class="scsweep"></span></div>` +
         `<div class="scstat"><span class="scspin"></span><b id="scSt">${translate('Préparation…', 'Preparing…')}</b></div>` +
@@ -1348,12 +1458,16 @@
         const bar = queryOne('#scPrep');
         if (bar) bar.style.width = Math.round(fraction * 100) + '%';
         setStatus(
-          translate('Préparation hors-ligne… ', 'Getting ready for offline… ') +
+          (downloading
+            ? translate('Téléchargement… ', 'Downloading… ')
+            : translate('Chargement… ', 'Loading… ')) +
             Math.round(fraction * 100) +
             '%',
         );
       });
+      downloading = false;
     } catch (error) {
+      downloading = false;
       setBody(
         `<img class="scshotimg" src="${shot}" alt=""><div class="card sm">` +
           `${translate('Le scanner doit être téléchargé une première fois avec une connexion.', 'The scanner needs a connection once to download.')}` +
