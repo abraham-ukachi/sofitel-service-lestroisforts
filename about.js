@@ -74,6 +74,13 @@ const X_PATH =
 const TIMELINE = [
   [
     '2026-11-04',
+    '0.67',
+    false,
+    'Mise en place devient un vrai chapitre : onglets, quiz, chrono et jeux',
+    'Setup becomes a real chapter: tabs, quiz, chrono and games',
+  ],
+  [
+    '2026-11-04',
     '0.66',
     true,
     'Nouveau chapitre Mise en place : les 3 seaux, les rouges, l’accueil du client',

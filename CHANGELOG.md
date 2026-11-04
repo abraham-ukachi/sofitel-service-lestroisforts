@@ -2,6 +2,10 @@
 
 All notable changes to this project will be documented in this file. Versions follow the service-worker cache (`ltf-vNN` → `0.NN.0`), see [CONTRIBUTING.md](./CONTRIBUTING.md#git-commit-messages) for the commit guidelines.
 
+### 0.67.0 (2026-11-04)
+
+* :sparkles: « Mise en place » is now a real chapter page (no more drawer): scrollable tabs Seau 1 · Seau 2 · Seau 3 · Rouges · Accueil, each with Aperçu, Apprendre (flashcards), Quiz (10 questions with explanations), Chrono (60 s, combos, best score) and a game: « Range les seaux » (each bottle in the right bucket) or « Dans l'ordre » (the steps of service); daily checklist per bucket
+
 ### 0.66.0 (2026-11-04)
 
 * :sparkles: New « Mise en place » chapter (pwa/setup.js) on the home screen: the 3 ice buckets bottle by bottle with photos (from the owner's videos of 2026-11-01), the reds at room temperature, the steps of service from the coat to the order, and a daily checklist
