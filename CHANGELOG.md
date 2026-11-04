@@ -2,6 +2,10 @@
 
 All notable changes to this project will be documented in this file. Versions follow the service-worker cache (`ltf-vNN` → `0.NN.0`), see [CONTRIBUTING.md](./CONTRIBUTING.md#git-commit-messages) for the commit guidelines.
 
+### 0.72.5 (2026-11-04)
+
+* :sparkles: Chat: opens at the newest message (and stays there while photos & GIFs load), or back where you left off when you closed it less than 5 minutes ago
+
 ### 0.72.4 (2026-11-04)
 
 * :lipstick: Scanner: the gallery and torch buttons are plain white outline icons with no circle behind them (the torch turns gold when on)
