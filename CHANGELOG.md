@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file. Versions follow the service-worker cache (`ltf-vNN` → `0.NN.0`), see [CONTRIBUTING.md](./CONTRIBUTING.md#git-commit-messages) for the commit guidelines.
 
+### 0.66.0 (2026-11-04)
+
+* :sparkles: New « Mise en place » chapter (pwa/setup.js) on the home screen: the 3 ice buckets bottle by bottle with photos (from the owner's videos of 2026-11-01), the reds at room temperature, the steps of service from the coat to the order, and a daily checklist
+* :sparkles: Dashboard tab « Service »: edit buckets, bottles (name, type, quantity, note), reds and steps, FR / EN switch, drag ⠿ to reorder, publish to Firestore `content/setup`, restore the built-in version
+* :recycle: Generic `startDragSort` helper shared by Credits and Service
+
 ### 0.65.0 (2026-11-03)
 
 * :lipstick: Dashboard confirmations use the app's own dialog (icon, title, Annuler / red action, Escape & Enter) instead of the system `confirm()`

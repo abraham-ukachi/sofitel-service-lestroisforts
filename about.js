@@ -73,6 +73,13 @@ const X_PATH =
 // the journey so far: [date, version, major?, FR, EN] (newest first) 🧭
 const TIMELINE = [
   [
+    '2026-11-04',
+    '0.66',
+    true,
+    'Nouveau chapitre Mise en place : les 3 seaux, les rouges, l’accueil du client',
+    'New Setup chapter: the 3 buckets, the reds, welcoming guests',
+  ],
+  [
     '2026-11-03',
     '0.65',
     false,
