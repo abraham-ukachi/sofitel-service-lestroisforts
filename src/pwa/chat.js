@@ -1037,7 +1037,11 @@ function openChat() {
     SMILEY_ICON +
     '</button><textarea rows="1" maxlength="1000" enterkeyhint="send" placeholder="' +
     translate('Message…', 'Message…') +
-    '"></textarea><button class="cmic" aria-label="voice">🎤</button><button class="cplus" aria-label="photo">+</button></div><div class="cpick" hidden></div></div>';
+    '"></textarea><button class="cmic" aria-label="voice">' +
+    MIC_ICON +
+    '</button><button class="cplus" aria-label="photo">' +
+    PLUS_ICON +
+    '</button></div><div class="cpick" hidden></div></div>';
   addServiceStyles();
   addPresenceStyles();
   addPolishStyles();
@@ -2343,11 +2347,18 @@ function addPolishStyles() {
 @keyframes cpop{from{transform:scale(.86) translateY(8px);opacity:0}to{transform:none;opacity:1}}
 .cact{animation:cslide .18s ease-out}
 @keyframes cslide{from{transform:translateY(-4px);opacity:0}to{transform:none;opacity:1}}
-.cpill{background:color-mix(in srgb,var(--bar,#14203a) 92%,#fff 3%);border-color:rgba(255,255,255,.1);
-  box-shadow:0 2px 10px rgba(0,0,0,.18);transition:border-color .15s}
-.cpill:focus-within{border-color:rgba(201,169,97,.55)}
-.cfoot{border-top:0;background:linear-gradient(to top,var(--bg) 70%,transparent)}
-.cmic{width:40px;height:40px;border:0;padding:0;background:transparent;color:var(--mu);font-size:20px;
+/* 💬 the composer: a soft filled pill, no outline, icons in one muted colour */
+.cpill{background:rgba(255,255,255,.07);border:0;border-radius:22px;padding:3px 4px 3px 3px;
+  box-shadow:inset 0 0 0 .5px rgba(255,255,255,.06);transition:background .2s,box-shadow .2s}
+.cpill:focus-within{background:rgba(255,255,255,.1);box-shadow:inset 0 0 0 .5px rgba(255,255,255,.1)}
+.cpill textarea::placeholder{color:var(--mu);opacity:.8}
+.cfoot{border-top:0;background:color-mix(in srgb,var(--bg) 82%,transparent);
+  -webkit-backdrop-filter:blur(18px) saturate(1.4);backdrop-filter:blur(18px) saturate(1.4)}
+.cmic,.cplus,.cemo{color:var(--mu);transition:color .15s,transform .15s}
+.cmic:active,.cplus:active,.cemo:active{transform:scale(.88);color:var(--tx,#fff)}
+.cplus{font-size:0}
+.crecs{display:flex;align-items:center;justify-content:center}
+.cmic{width:40px;height:40px;border:0;padding:0;background:transparent;
   cursor:pointer;flex:none;display:flex;align-items:center;justify-content:center}
 .cmic[hidden]{display:none}
 .crec{position:absolute;inset:0;display:flex;align-items:center;gap:10px;padding:0 6px;border-radius:24px;
@@ -2690,7 +2701,9 @@ function paintRecording() {
       '<button class="crecx" aria-label="cancel">✕</button><span class="crecdot"></span><span class="crect"></span>' +
       '<span class="grow muted sm">' +
       translate('Enregistrement… 30 s max', 'Recording… 30 s max') +
-      '</span><button class="crecs" aria-label="send">➤</button>';
+      '</span><button class="crecs" aria-label="send">' +
+      SEND_ICON +
+      '</button>';
     bar.querySelector('.crecx').onclick = () => stopRecording(true);
     bar.querySelector('.crecs').onclick = () => stopRecording(false);
     overlay.querySelector('.cpill').appendChild(bar);
@@ -2853,6 +2866,19 @@ const SMILEY_ICON =
   '<svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round">' +
   '<circle cx="12" cy="12" r="9.2"/><path d="M8 14.2c1 1.4 2.3 2.1 4 2.1s3-.7 4-2.1"/>' +
   '<circle cx="9" cy="9.8" r=".6" fill="currentColor"/><circle cx="15" cy="9.8" r=".6" fill="currentColor"/></svg>';
+// 🎤 a plain outline microphone (one colour, follows the text colour)
+const MIC_ICON =
+  '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" ' +
+  'stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+  '<rect x="9" y="3" width="6" height="11.5" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21"/></svg>';
+// ➕ the attach button (photos, poll, handover)
+const PLUS_ICON =
+  '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" ' +
+  'stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>';
+// ➤ send (voice note)
+const SEND_ICON =
+  '<svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor" aria-hidden="true">' +
+  '<path d="M4.4 19.6 21 12 4.4 4.4l.02 5.9L15 12 4.42 13.7z"/></svg>';
 const KEYBOARD_ICON =
   '<svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round">' +
   '<rect x="2.5" y="6" width="19" height="12" rx="2.5"/><path d="M6 10h.01M9.3 10h.01M12.6 10h.01M15.9 10h.01M18 10h.01M6.5 14h11"/></svg>';
