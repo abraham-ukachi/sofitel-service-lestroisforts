@@ -803,7 +803,7 @@ function setReplyTo(id) {
     uid: message.uid || '',
     name: message.name || '',
     text: (
-      message.text ||
+      stripMarkdown(message.text) ||
       (message.img
         ? '📷 Photo'
         : message.gif
@@ -1571,6 +1571,67 @@ function mentionsMe(text) {
   );
 }
 
+// ===== TEXT FORMATTING ✨ (WhatsApp-style markdown, 0.75.6) ===== //
+
+// the inline styles: *gras*, _italique_, ~barré~ (a marker hugs the text & sits between words) 🅱️
+const INLINE_FORMATS = [
+  { pattern: /(^|[\s([{>"'«])\*(?=\S)([^*\n]*?\S)\*(?=$|[\s)\]}<.,;:!?"'»])/g, tag: 'b' },
+  { pattern: /(^|[\s([{>"'«])_(?=\S)([^_\n]*?\S)_(?=$|[\s)\]}<.,;:!?"'»])/g, tag: 'i' },
+  { pattern: /(^|[\s([{>"'«])~(?=\S)([^~\n]*?\S)~(?=$|[\s)\]}<.,;:!?"'»])/g, tag: 's' },
+];
+
+/**
+ * `formatMarkdown` - Function ✨
+ *
+ * Turns the chat's markdown into HTML, on text that is ALREADY escaped (so it never lets HTML in):
+ * ```bloc```, `code`, *gras*, _italique_, ~barré~, « > citation » lines and « - » / « • » list lines.
+ * Nothing is styled inside code.
+ *
+ * @param { string } escaped - the escaped message text
+ * @returns { string } - the HTML
+ */
+function formatMarkdown(escaped) {
+  // 🧱 the code first, kept aside so nothing inside it gets styled
+  const codes = [];
+  const keep = (html) => '\u0000' + (codes.push(html) - 1) + '\u0000';
+  let html = escaped
+    .replace(/```\n?([\s\S]+?)\n?```/g, (whole, code) => keep('<pre class="cpre">' + code + '</pre>'))
+    .replace(/`([^`\n]+)`/g, (whole, code) => keep('<code class="ccode">' + code + '</code>'));
+  // 🅱️ bold, italic, strike
+  INLINE_FORMATS.forEach((format) => {
+    html = html.replace(
+      format.pattern,
+      (whole, before, inner) => before + '<' + format.tag + '>' + inner + '</' + format.tag + '>',
+    );
+  });
+  // 💬 quote lines & • list lines
+  html = html
+    .split('\n')
+    .map((line) => {
+      if (/^&gt; ?/.test(line)) return '<span class="cquote">' + line.replace(/^&gt; ?/, '') + '</span>';
+      if (/^[-•] /.test(line)) return '<span class="clist">' + line.slice(2) + '</span>';
+      return line;
+    })
+    .join('\n')
+    // a styled line is its own block: no extra line break after it
+    .replace(/<\/span>\n/g, '</span>');
+  // 🧱 the code comes back
+  return html.replace(/\u0000(\d+)\u0000/g, (whole, index) => codes[Number(index)]);
+}
+
+/**
+ * `stripMarkdown` - Function ✨
+ *
+ * @param { string } text - a raw message text
+ * @returns { string } - the same text without the markers (for quotes & notifications)
+ */
+function stripMarkdown(text) {
+  return String(text || '')
+    .replace(/```\n?([\s\S]+?)\n?```/g, '$1')
+    .replace(/`([^`\n]+)`/g, '$1')
+    .replace(/(^|\s)([*_~])(?=\S)([^*_~\n]*?\S)\2(?=$|[\s.,;:!?])/g, '$1$3');
+}
+
 /**
  * `richText` - Function ✍️
  *
@@ -1582,7 +1643,7 @@ function mentionsMe(text) {
  */
 function richText(text) {
   const knownNames = new Set(teamNames.map((member) => member.first));
-  return escapeHtml(text)
+  return formatMarkdown(escapeHtml(text))
     .replace(MENTION_PATTERN, (whole, name) =>
       knownNames.has(name.toLowerCase()) ? '<b class="cmen">' + whole + '</b>' : whole,
     )
@@ -3069,7 +3130,19 @@ async function openChatSettings() {
       translate("L'envoi qui s'envole, le défilement doux", 'The flying send, the smooth scroll'),
       prefs.motion,
     ) +
-    '</div><p class="muted sm csetft">' +
+    '</div><div class="csetmd"><b>' +
+    translate('Mise en forme', 'Formatting') +
+    '</b><span><code>*gras*</code> → <b>' +
+    translate('gras', 'bold') +
+    '</b></span><span><code>_italique_</code> → <i>' +
+    translate('italique', 'italic') +
+    '</i></span><span><code>~barré~</code> → <s>' +
+    translate('barré', 'strike') +
+    '</s></span><span><code>`code`</code> → <code class="ccode">code</code></span><span><code>&gt; texte</code> → ' +
+    translate('citation', 'quote') +
+    '</span><span><code>- texte</code> → ' +
+    translate('liste', 'list') +
+    '</span></div><p class="muted sm csetft">' +
     translate('Ces réglages restent sur ce téléphone.', 'These settings stay on this phone.') +
     '</p></div></div>';
   overlay.appendChild(drawer);
@@ -3269,6 +3342,18 @@ function addPolishStyles() {
 .chatov .cbell.on{color:var(--tx,#fff);box-shadow:none}
 .chatov .cbell:active,.chatov .cgear:active{background:rgba(255,255,255,.08)}
 .chatov .cb{font-size:15px;font-weight:400;letter-spacing:normal;text-transform:none}
+.chatov .ct b{font-weight:700}
+.chatov .ct s{opacity:.75}
+.ccode{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:.9em;background:rgba(0,0,0,.25);
+  padding:1px 5px;border-radius:5px}
+.cpre{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:.86em;background:rgba(0,0,0,.25);
+  padding:8px 10px;border-radius:8px;margin:4px 0;white-space:pre-wrap;overflow-wrap:anywhere}
+.cquote{display:block;border-left:3px solid rgba(255,255,255,.45);padding-left:8px;margin:2px 0;opacity:.88}
+.clist{display:block;padding-left:14px;position:relative}
+.clist::before{content:'•';position:absolute;left:2px}
+.csetmd{display:flex;flex-direction:column;gap:6px;margin:14px 16px 0;padding:12px 14px;border-radius:14px;
+  background:rgba(255,255,255,.05);font-size:13.5px}
+.csetmd code{font-family:ui-monospace,Menlo,Consolas,monospace;color:var(--mu)}
 .chatov.cfs-s .cb{font-size:13px}
 .chatov.cfs-l .cb{font-size:17.5px}
 .chatov .cb .ct.cbig{font-size:40px}
