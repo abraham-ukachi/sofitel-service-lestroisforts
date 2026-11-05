@@ -754,15 +754,6 @@ function bubbleHtml(message) {
         REACTIONS.map(
           (emoji) => '<button data-re="' + message.id + '" data-e="' + emoji + '">' + emoji + '</button>',
         ).join('') +
-        '<button class="crp" data-rp="' +
-        message.id +
-        '">↩︎ ' +
-        translate('Répondre', 'Reply') +
-        '</button>' +
-        (message.text ? '<button class="crp" data-copy="' + message.id + '">📋</button>' : '') +
-        (canEdit(message) ? '<button class="crp" data-edit="' + message.id + '">✏️</button>' : '') +
-        (isOwner() ? '<button class="crp" data-pin="' + message.id + '">📌</button>' : '') +
-        (isMine ? '<button class="crp" data-del="' + message.id + '">🗑</button>' : '') +
         '</div>'
       : '') +
     '</div></div>'
@@ -892,6 +883,7 @@ function paint() {
   paint86Bar();
   paintNewBelow();
   paintTyping();
+  paintSelectionBar();
   // 🔁 the handover banner & 🧑‍🤝‍🧑 the faces in the header
   paintHandover();
   paintHeaderFaces();
@@ -2725,6 +2717,94 @@ function openSoldOutDialog() {
 
 // ===== CHAT SETTINGS ⚙️ & DIALOG PARTS (0.75.0) ===== //
 
+// ===== THE SELECTION BAR ✅ (WhatsApp-like, 0.75.2) ===== //
+
+// the play / pause of a voice note: drawn, so they sit right in the middle of the round button ▶️
+const PLAY_ICONS = {
+  play: '<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M8 5.5v13l10.5-6.5z" fill="currentColor"/></svg>',
+  pause:
+    '<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><rect x="6.5" y="5" width="4" height="14" rx="1" fill="currentColor"/>' +
+    '<rect x="13.5" y="5" width="4" height="14" rx="1" fill="currentColor"/></svg>',
+};
+
+// the actions of the selection bar: outline icons, one colour 🖊️
+const SELECTION_ICONS = {
+  reply: '<path d="M9 7 4 12l5 5"/><path d="M4 12h10a6 6 0 0 1 6 6v1"/>',
+  copy: '<rect x="8.5" y="8.5" width="11" height="11" rx="2"/><path d="M15.5 8.5V6a1.5 1.5 0 0 0-1.5-1.5H6A1.5 1.5 0 0 0 4.5 6v8A1.5 1.5 0 0 0 6 15.5h2.5"/>',
+  pin: '<path d="M9 4h6l-1 5 3 3v2H7v-2l3-3z"/><path d="M12 14v6"/>',
+  edit: '<path d="M4 20h4L19 9l-4-4L4 16z"/><path d="m13.5 6.5 4 4"/>',
+  delete:
+    '<path d="M4.5 7h15"/><path d="M9.5 7V4.5h5V7"/><path d="M6.5 7l1 12.5h9l1-12.5"/><path d="M10 11v5M14 11v5"/>',
+};
+
+/**
+ * `paintSelectionBar` - Function ✅
+ *
+ * While a message is selected (long-press or tap), the header turns into a bar with ← and the actions
+ * (reply, copy, pin, edit, delete) as outline icons, like on WhatsApp. The emojis stay on the bubble.
+ *
+ * @returns { void }
+ */
+function paintSelectionBar() {
+  const header = overlay && overlay.querySelector('.sch');
+  if (!header) return;
+  let bar = header.querySelector('.csel');
+  const message = selectedId && messages.find((candidate) => candidate.id === selectedId);
+  if (!message) {
+    if (bar) bar.hidden = true;
+    return;
+  }
+  if (!bar) {
+    bar = document.createElement('div');
+    bar.className = 'csel';
+    header.appendChild(bar);
+    bar.addEventListener('click', onSelectionAction);
+  }
+  const action = (name, label) =>
+    '<button data-sel="' +
+    name +
+    '" aria-label="' +
+    label +
+    '" title="' +
+    label +
+    '">' +
+    MENU_SVG_START +
+    SELECTION_ICONS[name] +
+    '</svg></button>';
+  bar.innerHTML =
+    '<button data-sel="close" aria-label="back">' +
+    HEADER_ICONS.back +
+    '</button><b class="grow">1</b>' +
+    action('reply', translate('Répondre', 'Reply')) +
+    (message.text ? action('copy', translate('Copier', 'Copy')) : '') +
+    (isOwner() ? action('pin', translate('Épingler', 'Pin')) : '') +
+    (canEdit(message) ? action('edit', translate('Modifier', 'Edit')) : '') +
+    (user && message.uid === user.uid ? action('delete', translate('Supprimer', 'Delete')) : '');
+  bar.hidden = false;
+}
+
+/**
+ * `onSelectionAction` - Function ✅
+ *
+ * @param { MouseEvent } event - a tap in the selection bar
+ * @returns { void } - runs the action on the selected message, then clears the selection
+ */
+function onSelectionAction(event) {
+  const button = event.target.closest('[data-sel]');
+  if (!button) return;
+  event.stopPropagation();
+  const id = selectedId,
+    name = button.dataset.sel;
+  selectedId = null;
+  paint();
+  if (!id || name === 'close') return;
+  if (name === 'reply') setReplyTo(id);
+  else if (name === 'copy') copyMessage(id);
+  else if (name === 'pin') pinMessage(id);
+  else if (name === 'edit') startEdit(id);
+  else if (name === 'delete') askDelete(id);
+}
+
 // the chat settings of this phone: key & defaults 💾
 const PREFS_KEY = 'ltf_chat_prefs',
   DEFAULT_PREFS = { sound: true, enter: true, size: 'm', motion: true, strip: true };
@@ -2800,7 +2880,9 @@ function dialogHeadHtml(icon, title, subtitle) {
     title +
     '</b><small>' +
     subtitle +
-    '</small></div><button class="cdx" aria-label="close">✕</button></div>'
+    '</small></div><button class="cdx" aria-label="close">' +
+    MENU_SVG_START +
+    '<path d="M6 6l12 12M18 6 6 18"/></svg></button></div>'
   );
 }
 
@@ -3123,8 +3205,26 @@ function addPolishStyles() {
 .chatov .cbell[hidden]{display:none}
 .chatov .cbell.on{color:var(--tx,#fff);box-shadow:none}
 .chatov .cbell:active,.chatov .cgear:active{background:rgba(255,255,255,.08)}
-.chatov.cfs-s .ct{font-size:13.5px}
-.chatov.cfs-l .ct{font-size:17.5px}
+.chatov .cb{font-size:15px;font-weight:400;letter-spacing:normal;text-transform:none}
+.chatov.cfs-s .cb{font-size:13px}
+.chatov.cfs-l .cb{font-size:17.5px}
+.chatov .cb .ct.cbig{font-size:40px}
+.cdx,.cdbtn,.cvplay,.cseg button,.csel button{display:inline-flex;align-items:center;justify-content:center;
+  text-align:center;line-height:1;padding:0}
+.cdx svg,.cvplay svg{display:block}
+.cdx svg{width:18px;height:18px}
+.chatov .cact{gap:2px;padding:4px;border-radius:24px}
+.chatov .cact button{width:40px;height:40px;display:inline-flex;align-items:center;justify-content:center;padding:0;
+  font-size:24px;line-height:1;border-radius:50%}
+.chatov .cact button:active{background:rgba(255,255,255,.1);transform:scale(1.15)}
+.cvplay svg{margin-left:1px}
+.cvplay.on svg,.cvoice.on .cvplay svg{margin-left:0}
+.csel{position:absolute;inset:0;z-index:4;display:flex;align-items:center;gap:4px;padding:0 8px;
+  padding-top:max(0px,env(safe-area-inset-top));background:var(--bar,#14203a);animation:fade .15s}
+.csel[hidden]{display:none}
+.csel b{font-size:18px;margin-left:6px}
+.csel button{width:44px;height:44px;flex:none;border:0;border-radius:50%;background:transparent;color:var(--tx,#fff);cursor:pointer}
+.csel button:active{background:rgba(255,255,255,.1)}
 .chatov.cnomo .cm.cpop .cb{animation:none}
 .cset{position:absolute;inset:0;z-index:40;background:rgba(0,0,0,0);transition:background .28s}
 .cset.on{background:rgba(0,0,0,.45)}
@@ -3234,7 +3334,7 @@ function extraHtml(message) {
       '"><button class="cvplay" data-play="' +
       message.id +
       '" aria-label="play">' +
-      (isPlaying && !player.audio.paused ? '❚❚' : '▶') +
+      (isPlaying && !player.audio.paused ? PLAY_ICONS.pause : PLAY_ICONS.play) +
       '</button><div class="cvbar"><i style="width:' +
       (isPlaying ? player.progress : 0) +
       '%"></i></div>' +
@@ -3345,7 +3445,7 @@ function paintPlayer() {
   overlay.querySelectorAll('[data-play]').forEach((button) => {
     const isCurrent = player && player.id === button.dataset.play,
       bar = button.parentNode.querySelector('.cvbar i');
-    button.textContent = isCurrent && !player.audio.paused ? '❚❚' : '▶';
+    button.innerHTML = isCurrent && !player.audio.paused ? PLAY_ICONS.pause : PLAY_ICONS.play;
     button.parentNode.classList.toggle('on', !!isCurrent);
     if (bar) bar.style.width = (isCurrent ? player.progress : 0) + '%';
   });
