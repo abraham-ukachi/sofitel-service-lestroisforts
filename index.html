@@ -3358,47 +3358,49 @@ body:has(.ov.scrim) {
         on: false,
         dead: false,
       };
+      // 👂 the sheet listens to the finger (once per sheet)
+      if (!overlay.dataset.sdrag) {
+        overlay.dataset.sdrag = '1';
+        overlay.addEventListener('touchmove', onMove, { passive: false });
+      }
     },
     { passive: true },
   );
-  // 👉 finger moves: decide (drag the sheet down or let it scroll), then follow the finger
-  addEventListener(
-    'touchmove',
-    function (event) {
-      if (!gesture) return;
-      var dy = event.touches[0].clientY - gesture.y,
-        dx = event.touches[0].clientX - gesture.x;
-      // not decided yet: a vertical move down from the top = drag 🏁, anything else = dead
-      if (!gesture.on && !gesture.dead) {
-        if (Math.abs(dy) < 6 && Math.abs(dx) < 6) {
-          if (event.cancelable && dy > 0 && gesture.top) event.preventDefault();
-          return;
-        }
-        if (
-          dy > 0 &&
-          Math.abs(dy) > Math.abs(dx) &&
-          gesture.top &&
-          (!gesture.box || gesture.box.scrollTop <= 0)
-        ) {
-          gesture.on = true;
-          gesture.y0 = event.touches[0].clientY;
-          gesture.sh.classList.add('drag');
-        } else {
-          gesture.dead = true;
-        }
+  // 👉 finger moves: decide (drag the sheet down or let it scroll), then follow the finger.
+  // Listened on the open sheet only (0.75.7): a blocking touchmove on the whole window made every scroll wait.
+  function onMove(event) {
+    if (!gesture) return;
+    var dy = event.touches[0].clientY - gesture.y,
+      dx = event.touches[0].clientX - gesture.x;
+    // not decided yet: a vertical move down from the top = drag 🏁, anything else = dead
+    if (!gesture.on && !gesture.dead) {
+      if (Math.abs(dy) < 6 && Math.abs(dx) < 6) {
+        if (event.cancelable && dy > 0 && gesture.top) event.preventDefault();
+        return;
       }
-      // dragging: move the sheet & fade the scrim
-      if (gesture.on) {
-        if (event.cancelable) event.preventDefault();
-        gesture.dy = Math.max(0, event.touches[0].clientY - gesture.y0);
-        gesture.sh.style.transform = 'translateY(' + gesture.dy + 'px)';
-        gesture.ov.style.opacity = String(Math.max(0.35, 1 - gesture.dy / (gesture.sh.offsetHeight * 1.4)));
-      } else if (gesture.dead && dy > 0 && gesture.box && gesture.box.scrollTop <= 0 && event.cancelable) {
-        event.preventDefault();
+      if (
+        dy > 0 &&
+        Math.abs(dy) > Math.abs(dx) &&
+        gesture.top &&
+        (!gesture.box || gesture.box.scrollTop <= 0)
+      ) {
+        gesture.on = true;
+        gesture.y0 = event.touches[0].clientY;
+        gesture.sh.classList.add('drag');
+      } else {
+        gesture.dead = true;
       }
-    },
-    { passive: false },
-  );
+    }
+    // dragging: move the sheet & fade the scrim
+    if (gesture.on) {
+      if (event.cancelable) event.preventDefault();
+      gesture.dy = Math.max(0, event.touches[0].clientY - gesture.y0);
+      gesture.sh.style.transform = 'translateY(' + gesture.dy + 'px)';
+      gesture.ov.style.opacity = String(Math.max(0.35, 1 - gesture.dy / (gesture.sh.offsetHeight * 1.4)));
+    } else if (gesture.dead && dy > 0 && gesture.box && gesture.box.scrollTop <= 0 && event.cancelable) {
+      event.preventDefault();
+    }
+  }
 
   /**
    * `end` - Function 👆
