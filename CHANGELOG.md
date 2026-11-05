@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file. Versions follow the service-worker cache (`ltf-vNN` → `0.NN.0`), see [CONTRIBUTING.md](./CONTRIBUTING.md#git-commit-messages) for the commit guidelines.
 
+### 0.75.2 (2026-11-05)
+
+* :sparkles: WhatsApp-like selection bar: long-press or tap a message, the header shows ← and outline icons (reply, copy, pin, edit, delete); only the quick emojis pop on the bubble
+* :bug: Chat bubbles inherited the 10.5 px course-badge `.cb` style; text sizes are now 13 / 15 / 17.5 px (Small / Normal / Large)
+* :lipstick: Centred icons and labels: poll and 86 close buttons (drawn cross), poll Cancel / Send, voice note play / pause (drawn), text size buttons
+
 ### 0.75.1 (2026-11-05)
 
 * :bug: Cheese strength card and chapter list read 0 cheeses in the Rust app (no `window.LTF`): the inline script now carries the board (`BOARD`, same as data.js) and uses it when `LTF.fromages` is missing
