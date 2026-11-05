@@ -2,6 +2,10 @@
 
 All notable changes to this project will be documented in this file. Versions follow the service-worker cache (`ltf-vNN` → `0.NN.0`), see [CONTRIBUTING.md](./CONTRIBUTING.md#git-commit-messages) for the commit guidelines.
 
+### 0.75.8 (2026-11-05)
+
+* :sparkles: Signed in with a Google photo: the « Profil » tab shows it in place of the person icon (ring in the tab colour, gold when active)
+
 ### 0.75.7 (2026-11-05)
 
 * :zap: The swipe-down-to-close sheet listened to every touchmove of the whole window as a blocking listener; it now listens on the open sheet only, so scrolling no longer waits on the page

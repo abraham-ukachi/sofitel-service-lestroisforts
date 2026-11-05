@@ -42,7 +42,7 @@
   const SEEN_KEY = 'ltf_welcome_v1';
 
   // 🏷️ the current version of the app (shown at the bottom of the Profil tab, bump it with every release)
-  const APP_VERSION = '0.75.7';
+  const APP_VERSION = '0.75.8';
   // 🏷️ shared with the owner dashboard (admin.js)
   window.LTF_APP_VERSION = APP_VERSION;
 
