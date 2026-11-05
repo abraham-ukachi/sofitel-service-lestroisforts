@@ -731,13 +731,14 @@ function bubbleHtml(message) {
     // 🔁 handover label, 🎤 voice note, 📊 poll
     extraHtml(message) +
     // ✍️ the text (new lines kept, 1 to 3 emojis alone shown big like WhatsApp 😀), not for a poll
-    (message.text && !pollOf(message)
-      ? '<div class="ct' +
-        (isEmojiOnly(message.text) ? ' cbig' : '') +
-        '">' +
-        richText(message.text) +
-        '</div>'
-      : '') +
+    (soldOutHtml(message.text) ||
+      (message.text && !pollOf(message)
+        ? '<div class="ct' +
+          (isEmojiOnly(message.text) ? ' cbig' : '') +
+          '">' +
+          richText(message.text) +
+          '</div>'
+        : '')) +
     // 🕘 the time
     '<div class="ctm">' +
     (message.ed ? '<span class="cedited">' + translate('modifié', 'edited') + '</span> · ' : '') +
@@ -847,11 +848,14 @@ function paint() {
   }
   // show the composer
   footer.style.display = '';
-  // were we at the bottom (within 80 px)?
-  const atBottom = body.scrollHeight - body.scrollTop - body.clientHeight < 80;
+  // were we at the bottom (within 80 px)? & where exactly (to glide from there)
+  const atBottom = body.scrollHeight - body.scrollTop - body.clientHeight < 80,
+    previousTop = body.scrollTop,
+    justSent = Date.now() < scrollAfterSendUntil;
   // the error line + the bubbles (or the empty state 👋)
   body.innerHTML =
     (errorText ? '<p class="warn sm" style="text-align:center">' + errorText + '</p>' : '') +
+    threadBannerHtml() +
     (messages.length
       ? listHtml()
       : '<div class="cempty"><div style="font-size:44px">👋</div><p>' +
@@ -867,10 +871,23 @@ function paint() {
     paint.done = true;
     newBelow = 0;
     if (!restoreScroll(body)) pinToBottom(body);
-  } else if (atBottom) {
-    body.scrollTop = body.scrollHeight;
+  } else if (atBottom || justSent) {
+    // 🛝 glide to the newest message instead of jumping
+    body.scrollTop = previousTop;
+    glideToBottom(body);
     newBelow = 0;
   }
+  // ✈️ my message flies from the composer to its place
+  flyFromComposer(body);
+  // 🍽️ the table thread's ✕
+  const threadClose = body.querySelector('.cthread button');
+  if (threadClose)
+    threadClose.onclick = () => {
+      tableFilter = '';
+      paint.done = false;
+      paint();
+    };
+  paint86Bar();
   paintNewBelow();
   paintTyping();
   // 🔁 the handover banner & 🧑‍🤝‍🧑 the faces in the header
@@ -947,12 +964,17 @@ async function send() {
   if (!text && !pendingPhoto) return;
   // ✍️ not typing anymore
   tellTyping(false);
+  // 🍽️ inside a table thread: the message gets the table's tag
+  const threadText =
+    tableFilter && text && !textNamesTable(text, tableFilter) ? '#' + tableFilter + ' ' + text : text;
+  // ✈️ remember where the text left from (the bubble flies from there)
+  markFlight(textarea);
   // the new doc 🗃️
   const newMessage = {
     uid: user.uid,
     name: user.displayName || 'Staff',
     pic: user.photoURL || '',
-    text,
+    text: threadText.slice(0, 1000),
     ts: serverTimestamp(),
   };
   if (pendingPhoto) newMessage.img = pendingPhoto;
@@ -969,7 +991,6 @@ async function send() {
   pendingPhoto = null;
   replyTo = null;
   selectedId = null;
-  paint.done = false;
   paint();
   // post it (❌ restore everything on failure)
   try {
@@ -982,7 +1003,8 @@ async function send() {
     replyTo = keptReply;
     handoverMode = keptHandover;
     textarea.value = text;
-    errorText = translate('Envoi impossible', 'Could not send');
+    flight = null;
+    errorText = translate('Envoi impossible', 'Could not send') + errorCodeOf(error);
     paint();
   }
 }
@@ -1108,7 +1130,7 @@ function openChat() {
     '<div class="sch"><button class="cx" aria-label="close">←</button><div class="grow"><div style="font-weight:700">' +
     translate("Chat de l'équipe", 'Team chat') +
     '</div><div class="muted sm csub">Les Trois Forts</div></div><div class="cfaces"></div><button class="cbell" hidden aria-label="notifications"></button></div>' +
-    '<div class="cpin" hidden></div><div class="cho" hidden></div><div class="cbody"></div><div class="cfoot"><button class="cnew" hidden></button><div class="crep"></div>' +
+    '<div class="cpin" hidden></div><div class="c86bar" hidden></div><div class="cho" hidden></div><div class="cbody"></div><div class="cfoot"><button class="cnew" hidden></button><div class="crep"></div>' +
     '<div class="cmsug" hidden></div><div class="cquick" hidden></div><div class="cmenu" hidden><label><input type="file" accept="image/*" capture="environment" hidden>' +
     MENU_ICONS.camera +
     '<span>' +
@@ -1125,6 +1147,10 @@ function openChat() {
     MENU_ICONS.handover +
     '<span>' +
     translate('Passation', 'Handover') +
+    '</span></button><button data-menu="eighty-six">' +
+    MENU_ICONS.soldOut +
+    '<span>' +
+    translate('Épuisé (86)', 'Sold out (86)') +
     '</span></button></div><div class="cpill"><button class="cemo" aria-label="emoji">' +
     SMILEY_ICON +
     '</button><textarea rows="1" maxlength="1000" enterkeyhint="send" placeholder="' +
@@ -1178,6 +1204,12 @@ function openChat() {
   micButton.onclick = () => startRecording();
   overlay.querySelector('[data-menu="poll"]').onclick = () => openPollDialog();
   overlay.querySelector('[data-menu="handover"]').onclick = () => startHandover();
+  overlay.querySelector('[data-menu="eighty-six"]').onclick = () => openSoldOutDialog();
+  // 🚫 the « épuisé » strip: ✕ puts a dish back on the menu
+  overlay.querySelector('.c86bar').addEventListener('click', (event) => {
+    const back = event.target.closest('[data-back]');
+    if (back) sendExtra({ text: BACK_PREFIX + back.dataset.back });
+  });
 
   // 😀 the emoji / GIF panel: the smiley opens it (keyboard down), the keyboard icon or the text box closes it
   overlay.querySelector('.cemo').onclick = (event) => {
@@ -1603,10 +1635,23 @@ function showTable(tableId) {
     (table.cap ? ' <span class="muted sm">' + escapeHtml(table.cap) + '</span>' : '') +
     '</div>' +
     planHtml(tableId) +
+    (overlay
+      ? '<button class="btn ctthr" data-thread>💬 ' +
+        translate('Messages de cette table', 'Messages for this table') +
+        '</button>'
+      : '') +
     '<div class="muted sm">' +
     translate('Touchez pour fermer', 'Tap to close') +
     '</div></div>';
-  viewer.onclick = () => viewer.remove();
+  viewer.onclick = (event) => {
+    viewer.remove();
+    // 🍽️ open the table's thread
+    if (event.target.closest('[data-thread]')) {
+      tableFilter = tableId;
+      paint.done = false;
+      paint();
+    }
+  };
   document.body.appendChild(viewer);
 }
 
@@ -2357,13 +2402,21 @@ const sameGroup = (first, second) =>
  */
 function listHtml() {
   const isFirstDraw = drawnIds.size === 0;
-  const html = messages
+  // 🍽️ a table thread shows only the messages that name the table
+  const shown = tableFilter
+    ? messages.filter((message) => textNamesTable(message.text, tableFilter))
+    : messages;
+  const html = shown
     .map((message, index) => {
-      const previous = messages[index - 1],
-        next = messages[index + 1];
+      const previous = shown[index - 1],
+        next = shown[index + 1];
+      // 📅 each day is its own section, so its sticky pill leaves when the day scrolls away (no overlap)
       const separator =
         !previous || dayKey(timeOf(previous)) !== dayKey(timeOf(message))
-          ? '<div class="cday"><span>' + dayLabel(timeOf(message)) + '</span></div>'
+          ? (previous ? '</section>' : '') +
+            '<section class="cdg"><div class="cday"><span>' +
+            dayLabel(timeOf(message)) +
+            '</span></div>'
           : '';
       const classes =
         (sameGroup(previous, message) && !separator ? ' cgc' : '') +
@@ -2374,7 +2427,7 @@ function listHtml() {
     })
     .join('');
   messages.forEach((message) => drawnIds.add(message.id));
-  return html;
+  return html ? html + '</section>' : '';
 }
 
 /**
@@ -2403,6 +2456,244 @@ function paintHeaderFaces() {
   if (faces.innerHTML !== html) faces.innerHTML = html;
 }
 
+// ===== SEND FLIGHT, GLIDE, 86 & TABLE THREADS (0.74.0) ===== //
+
+// ✈️ where the last sent message left from ({ rect, at }), & until when a paint must glide to the bottom
+let flight = null,
+  scrollAfterSendUntil = 0,
+  // 🍽️ the table whose thread is open ('' = the whole chat)
+  tableFilter = '';
+
+// 🚫 the « 86 » texts (French, like the quick messages): a dish is out / back on the menu
+const OUT_PREFIX = '🚫 86 · ',
+  BACK_PREFIX = '✅ De retour · ';
+
+/**
+ * `errorCodeOf` - Function 🧾
+ *
+ * @param { any } error - a Firebase or DOM error
+ * @returns { string } - « (its code) » to help when a waiter sends a screenshot, or ''
+ */
+function errorCodeOf(error) {
+  const code = error && (error.code || error.name);
+  return code ? ' (' + String(code).slice(0, 40) + ')' : '';
+}
+
+/**
+ * `markFlight` - Function ✈️
+ *
+ * @param { HTMLElement | null } origin - the element the new message leaves from (text box or pill)
+ * @returns { void }
+ */
+function markFlight(origin) {
+  scrollAfterSendUntil = Date.now() + 2500;
+  flight = origin ? { rect: origin.getBoundingClientRect(), at: Date.now() } : null;
+}
+
+/**
+ * `glideToBottom` - Function 🛝
+ *
+ * @param { HTMLElement } body - the message list
+ * @returns { void } - a smooth scroll to the newest message (a jump when motion is reduced)
+ */
+function glideToBottom(body) {
+  const reduced = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
+  body.scrollTo({ top: body.scrollHeight, behavior: reduced ? 'auto' : 'smooth' });
+}
+
+/**
+ * `flyFromComposer` - Function ✈️
+ *
+ * My new bubble starts where the text box was and lands at its place in the list while the list glides
+ * down (a FLIP with the Web Animations API). Used once per sent message.
+ *
+ * @param { HTMLElement } body - the message list
+ * @returns { void }
+ */
+function flyFromComposer(body) {
+  if (!flight || Date.now() - flight.at > 4000) return;
+  const row = [...body.querySelectorAll('.cm.me.cpop')].pop();
+  if (!row) return;
+  const bubble = row.querySelector('.cb'),
+    from = flight.rect;
+  flight = null;
+  if (!bubble || !bubble.animate) return;
+  if (window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  row.classList.remove('cpop');
+  row.classList.add('cfly');
+  const to = bubble.getBoundingClientRect();
+  // right edges meet (my bubbles sit on the right), the tops meet
+  const shiftX = from.right - to.right,
+    shiftY = from.top - to.top,
+    scaleX = Math.min(1.6, Math.max(0.6, from.width / Math.max(1, to.width)));
+  const animation = bubble.animate(
+    [
+      {
+        transform: 'translate(' + shiftX + 'px,' + shiftY + 'px) scale(' + scaleX + ',.92)',
+        transformOrigin: 'right bottom',
+        opacity: 0.55,
+      },
+      { transform: 'none', transformOrigin: 'right bottom', opacity: 1 },
+    ],
+    { duration: 340, easing: 'cubic-bezier(.2,.85,.25,1)' },
+  );
+  animation.onfinish = () => row.classList.remove('cfly');
+}
+
+/**
+ * `textNamesTable` - Function 🍽️
+ *
+ * @param { string } text - a message text
+ * @param { string } tableId - a floor plan id (T12, B2)
+ * @returns { boolean } - true when the text tags that table (#12, #T12…)
+ */
+function textNamesTable(text, tableId) {
+  if (!text || !tableId) return false;
+  return Array.from(String(text).matchAll(TABLE_PATTERN)).some((match) => tableIdOf(match[2]) === tableId);
+}
+
+/**
+ * `threadBannerHtml` - Function 🍽️
+ *
+ * @returns { string } - the « Table T12 · 4 messages ✕ » bar of an open table thread, or ''
+ */
+function threadBannerHtml() {
+  if (!tableFilter) return '';
+  const count = messages.filter((message) => textNamesTable(message.text, tableFilter)).length;
+  return (
+    '<div class="cthread">🍽️ <b>' +
+    translate('Table ', 'Table ') +
+    escapeHtml(tableFilter) +
+    '</b><span class="muted">· ' +
+    count +
+    ' message' +
+    (count > 1 ? 's' : '') +
+    '</span><button aria-label="close">✕</button></div>'
+  );
+}
+
+/**
+ * `soldOutHtml` - Function 🚫
+ *
+ * @param { string } text - a message text
+ * @returns { string } - the « 86 » card of a dish out / back on the menu, or '' for any other text
+ */
+function soldOutHtml(text) {
+  const value = String(text || '');
+  const isOut = value.startsWith(OUT_PREFIX),
+    isBack = value.startsWith(BACK_PREFIX);
+  if (!isOut && !isBack) return '';
+  const dish = value.slice((isOut ? OUT_PREFIX : BACK_PREFIX).length);
+  return (
+    '<div class="c86 ' +
+    (isOut ? 'out' : 'back') +
+    '"><b>' +
+    (isOut ? '86' : '✓') +
+    '</b><div><span>' +
+    escapeHtml(dish) +
+    '</span><small>' +
+    (isOut
+      ? translate('Épuisé, ne plus le proposer', 'Sold out, stop offering it')
+      : translate('De retour à la carte', 'Back on the menu')) +
+    '</small></div></div>'
+  );
+}
+
+/**
+ * `soldOutToday` - Function 🚫
+ *
+ * @returns { string[] } - the dishes still « 86 » today (an « out » not followed by a « back »)
+ */
+function soldOutToday() {
+  const today = dayKey(Date.now()),
+    out = new Map();
+  messages.forEach((message) => {
+    const value = String(message.text || '');
+    if (dayKey(timeOf(message)) !== today) return;
+    if (value.startsWith(OUT_PREFIX))
+      out.set(value.slice(OUT_PREFIX.length).toLowerCase(), value.slice(OUT_PREFIX.length));
+    else if (value.startsWith(BACK_PREFIX)) out.delete(value.slice(BACK_PREFIX.length).toLowerCase());
+  });
+  return [...out.values()];
+}
+
+/**
+ * `paint86Bar` - Function 🚫
+ *
+ * @returns { void } - the red strip under the header with today's sold-out dishes (✕ = back on the menu)
+ */
+function paint86Bar() {
+  const bar = overlay && overlay.querySelector('.c86bar');
+  if (!bar) return;
+  const dishes = user && hasChatAccess() ? soldOutToday() : [];
+  bar.hidden = !dishes.length;
+  const html = dishes.length
+    ? '<b>86</b>' +
+      dishes
+        .map(
+          (dish) =>
+            '<button data-back="' +
+            escapeHtml(dish) +
+            '" title="' +
+            translate('Remettre à la carte', 'Back on the menu') +
+            '">' +
+            escapeHtml(dish) +
+            '<i>✕</i></button>',
+        )
+        .join('')
+    : '';
+  if (bar.innerHTML !== html) bar.innerHTML = html;
+}
+
+/**
+ * `openSoldOutDialog` - Function 🚫
+ *
+ * A dialog to say a dish is out: search the menu's dishes (or type any name), tap to send « 86 ».
+ *
+ * @returns { void }
+ */
+function openSoldOutDialog() {
+  overlay.querySelector('.cmenu').hidden = true;
+  const names = [
+    ...new Set(((window.LTF && window.LTF.dishes) || []).map((dish) => dish.n).filter(Boolean)),
+  ].sort((first, second) => first.localeCompare(second, 'fr'));
+  const dialog = document.createElement('div');
+  dialog.className = 'cpolldlg c86dlg';
+  dialog.innerHTML =
+    '<div class="cpollbox"><b>🚫 ' +
+    translate('Plat épuisé (86)', 'Dish sold out (86)') +
+    '</b><input class="admfield" maxlength="80" data-search placeholder="' +
+    translate('Chercher ou écrire un plat', 'Search or type a dish') +
+    '"><div class="c86list"></div><div class="abar"><button class="btn sec grow" data-cancel>' +
+    translate('Annuler', 'Cancel') +
+    '</button></div></div>';
+  overlay.appendChild(dialog);
+  const search = dialog.querySelector('[data-search]'),
+    list = dialog.querySelector('.c86list');
+  // the matching dishes (+ the typed name when it's not one of them) 🔎
+  const paintList = () => {
+    const query = search.value.trim(),
+      folded = query.toLowerCase();
+    const matches = names.filter((name) => name.toLowerCase().includes(folded)).slice(0, 40);
+    const typed = query && !matches.some((name) => name.toLowerCase() === folded) ? [query.slice(0, 80)] : [];
+    list.innerHTML = typed
+      .concat(matches)
+      .map((name) => '<button data-dish="' + escapeHtml(name) + '">' + escapeHtml(name) + '</button>')
+      .join('');
+  };
+  paintList();
+  search.addEventListener('input', paintList);
+  search.focus();
+  dialog.onclick = (event) => {
+    const dish = event.target.closest('[data-dish]');
+    if (event.target === dialog || event.target.closest('[data-cancel]')) dialog.remove();
+    else if (dish) {
+      dialog.remove();
+      sendExtra({ text: OUT_PREFIX + dish.dataset.dish });
+    }
+  };
+}
+
 /**
  * `addPolishStyles` - Function 🎨
  *
@@ -2420,6 +2711,8 @@ function addPolishStyles() {
 .cfaces img,.cfaces span{width:26px;height:26px;border-radius:50%;object-fit:cover;border:2px solid var(--bg);
   margin-left:-8px;font-size:11px;font-weight:700;color:#fff;display:inline-flex;align-items:center;justify-content:center}
 .cbody{gap:12px;padding:14px 12px 18px;scroll-behavior:auto}
+.cbody{overscroll-behavior:contain}
+.cdg{display:flex;flex-direction:column;gap:12px}
 .cday{position:sticky;top:6px;z-index:2;display:flex;justify-content:center;margin:6px 0 2px;pointer-events:none}
 .cday span{font-size:11.5px;font-weight:700;letter-spacing:.02em;padding:4px 12px;border-radius:999px;
   background:color-mix(in srgb,var(--bar,#14203a) 88%,transparent);-webkit-backdrop-filter:blur(8px);
@@ -2437,6 +2730,29 @@ function addPolishStyles() {
 .cm:not(.cgc):not(.me) .cb{border-top-left-radius:4px}
 .ctm{font-size:10px;opacity:.55;margin-top:3px;font-variant-numeric:tabular-nums}
 .cm.cpop .cb{animation:cpop .28s cubic-bezier(.2,.9,.3,1.25)}
+.cm.cfly .cb{animation:none;will-change:transform}
+.c86bar{display:flex;gap:6px;align-items:center;overflow-x:auto;padding:6px 12px;scrollbar-width:none;
+  border-bottom:1px solid rgba(255,255,255,.06);background:color-mix(in srgb,#b3261e 10%,var(--bg))}
+.c86bar[hidden]{display:none}
+.c86bar>b{flex:none;font-size:11px;letter-spacing:.06em;color:#ff8a80}
+.c86bar button{flex:none;display:inline-flex;align-items:center;gap:6px;height:28px;padding:0 6px 0 11px;border-radius:999px;
+  border:1px solid rgba(255,138,128,.35);background:transparent;color:var(--tx,#fff);font:inherit;font-size:12.5px}
+.c86bar button i{font-style:normal;opacity:.6;font-size:11px;padding:0 4px}
+.c86{display:flex;align-items:center;gap:10px;padding:4px 2px}
+.c86 b{flex:none;display:inline-flex;align-items:center;justify-content:center;min-width:38px;height:26px;border-radius:8px;
+  border:1.5px solid currentColor;font-size:13px;letter-spacing:.04em}
+.c86.out b{color:#ff8a80}
+.c86.back b{color:#81c995}
+.c86 span{font-weight:600}
+.c86 small{display:block;font-size:11px;opacity:.65;font-weight:400}
+.cthread{position:sticky;top:0;z-index:3;display:flex;align-items:center;gap:8px;margin:-6px 0 0;padding:8px 8px 8px 14px;
+  border-radius:14px;background:color-mix(in srgb,var(--gold,#c9a961) 16%,var(--bg));border:1px solid rgba(201,169,97,.35);font-size:13px}
+.cthread b{color:var(--gold,#c9a961)}
+.cthread button{margin-left:auto;width:30px;height:30px;border-radius:50%;border:0;background:rgba(255,255,255,.08);color:inherit}
+.ctthr{margin:10px 0 6px}
+.c86dlg .c86list{display:flex;flex-direction:column;max-height:46vh;overflow:auto;margin:4px 0}
+.c86dlg .c86list button{text-align:left;padding:11px 12px;border:0;border-radius:12px;background:transparent;color:inherit;font:inherit}
+.c86dlg .c86list button:active,.c86dlg .c86list button:hover{background:rgba(255,255,255,.07)}
 @keyframes cpop{from{transform:scale(.86) translateY(8px);opacity:0}to{transform:none;opacity:1}}
 .cact{animation:cslide .18s ease-out}
 @keyframes cslide{from{transform:translateY(-4px);opacity:0}to{transform:none;opacity:1}}
@@ -2719,8 +3035,9 @@ async function startRecording() {
   if (!navigator.mediaDevices || typeof MediaRecorder === 'undefined')
     return showToast(translate('Micro non disponible', 'Microphone not available'));
   // 🔐 not allowed yet? our own dialog first: its button opens the phone's « Autoriser » popup
+  // (« denied » from the Permissions API can be stale in installed apps: we still try, the real
+  // getUserMedia error below decides whether the unblock dialog shows)
   const permission = await micPermission();
-  if (permission === 'denied') return showMicDialog('denied');
   if (permission === 'prompt' && !confirmedMic) return showMicDialog('prompt');
   let stream;
   try {
@@ -2739,12 +3056,23 @@ async function startRecording() {
     );
   }
   const mimeType = voiceMimeType();
-  const recorder = new MediaRecorder(stream, mimeType ? { mimeType, audioBitsPerSecond: 24000 } : undefined);
+  let recorder;
+  try {
+    recorder = new MediaRecorder(stream, mimeType ? { mimeType, audioBitsPerSecond: 24000 } : undefined);
+  } catch (error) {
+    // 🔁 this phone refuses our format: let it pick its own
+    recorder = new MediaRecorder(stream);
+  }
   const chunks = [];
   recording = { recorder, stream, chunks, startedAt: Date.now(), cancelled: false, timer: 0 };
   recorder.ondataavailable = (event) => event.data && event.data.size && chunks.push(event.data);
   recorder.onstop = () => finishRecording();
-  recorder.start();
+  recorder.onerror = (event) => {
+    showToast(translate('Erreur du micro', 'Microphone error') + errorCodeOf(event && event.error));
+    stopRecording(true);
+  };
+  // a chunk every second, so a note is never empty 🧩
+  recorder.start(1000);
   if (navigator.vibrate) navigator.vibrate(15);
   paintRecording();
   recording.timer = setInterval(() => {
@@ -2871,7 +3199,9 @@ function finishRecording() {
   done.stream.getTracks().forEach((track) => track.stop());
   paintRecording();
   const seconds = Math.min(VOICE_MAX_SECONDS, Math.max(1, Math.round((Date.now() - done.startedAt) / 1000)));
-  if (done.cancelled || !done.chunks.length) return;
+  if (done.cancelled) return;
+  if (!done.chunks.length)
+    return showToast(translate('Vocal vide, réessayez', 'Empty voice note, try again'));
   const blob = new Blob(done.chunks, { type: done.recorder.mimeType || done.chunks[0].type || 'audio/webm' });
   const reader = new FileReader();
   reader.onload = () => {
@@ -2940,14 +3270,15 @@ async function sendExtra(extra) {
   );
   if (replyTo) newMessage.rep = replyTo;
   replyTo = null;
-  paint.done = false;
+  markFlight(overlay && overlay.querySelector('.cpill'));
   paint();
   try {
     const added = await addDoc(collection(firestore, 'chat'), newMessage);
     playChime();
     notifyTeam(added.id);
   } catch (error) {
-    errorText = translate('Envoi impossible', 'Could not send');
+    flight = null;
+    errorText = translate('Envoi impossible', 'Could not send') + errorCodeOf(error);
     paint();
   }
 }
@@ -3088,6 +3419,7 @@ const MENU_ICONS = {
     '<path d="m4 17 4.6-4.6a1.5 1.5 0 0 1 2.1 0L16 17.6M14 15.5l1.8-1.8a1.5 1.5 0 0 1 2.1 0L20 15.8"/></svg>',
   poll: MENU_SVG_START + '<path d="M5 20V11M12 20V4M19 20v-6"/></svg>',
   handover: MENU_SVG_START + '<path d="M4 9h13l-3.5-3.5M20 15H7l3.5 3.5"/></svg>',
+  soldOut: MENU_SVG_START + '<circle cx="12" cy="12" r="8.5"/><path d="m6 6 12 12"/></svg>',
 };
 // 🎤 a plain outline microphone (one colour, follows the text colour)
 const MIC_ICON =
