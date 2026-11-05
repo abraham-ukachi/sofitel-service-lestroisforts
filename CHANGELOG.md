@@ -2,6 +2,10 @@
 
 All notable changes to this project will be documented in this file. Versions follow the service-worker cache (`ltf-vNN` → `0.NN.0`), see [CONTRIBUTING.md](./CONTRIBUTING.md#git-commit-messages) for the commit guidelines.
 
+### 0.74.2 (2026-11-05)
+
+* :sparkles: Cheese strength card (La Carte and the cheese chapter) opens and closes on tap: closed shows the gradient with each cheese's animal at its strength; open lists the cheeses sorted mildest to strongest with animal, meter and a Doux/Moyen/Corsé/Fort label (state remembered)
+
 ### 0.74.1 (2026-11-05)
 
 * :sparkles: Mise en place › Le service: the cutlery in detail (setting for the order; fish, meat or soup; carrying on a napkin-lined plate; changing after each course; changing glasses with each wine). 27 steps
