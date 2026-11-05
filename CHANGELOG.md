@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file. Versions follow the service-worker cache (`ltf-vNN` → `0.NN.0`), see [CONTRIBUTING.md](./CONTRIBUTING.md#git-commit-messages) for the commit guidelines.
 
+### 0.73.3 (2026-11-05)
+
+* :lipstick: Dashboard content lists reorder by holding the ⠿ grip and dragging, like the credits (the ↑ button is gone)
+* :camera_flash: Crottin de Chavignol photo (Markus Lindholm, CC BY-SA 2.5, Wikimedia Commons), scanner embeddings regenerated
+
 ### 0.73.2 (2026-11-04)
 
 * :sparkles: The cheese board chapter shows the full board like La Carte: the mildest-to-strongest scale plus every cheese with photo, milk, origin and type
