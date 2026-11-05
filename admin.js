@@ -330,6 +330,9 @@ const DASHBOARD_CSS = `
 .crDel{flex:none;width:30px;height:30px;border-radius:50%;border:0;background:none;color:inherit;font-size:14px;opacity:.35;
   cursor:pointer;transition:opacity .15s,background .15s,color .15s}
 .crDel:hover,.crDel:focus-visible{opacity:1;color:#e5484d;background:rgba(229,72,77,.12)}
+.admsort{gap:10px}
+.admsort.crDrag{position:relative;transition:box-shadow .18s ease,background .18s ease;z-index:3;
+  background:var(--sf2,#2a2a2a);box-shadow:0 12px 30px rgba(0,0,0,.35)}
 .admcredit.crDrag{transition:box-shadow .18s ease,background .18s ease;z-index:3;background:var(--sf2,#2a2a2a);
   box-shadow:0 12px 30px rgba(0,0,0,.35)}
 .admcredit.crDrag .crGrip{cursor:grabbing;opacity:.9}

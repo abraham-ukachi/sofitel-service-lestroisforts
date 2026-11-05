@@ -1674,27 +1674,34 @@ const isListSection = (value) =>
 /**
  * `entryRowHtml` - Function ➖
  *
- * One tappable entry row (tap = edit), with its small ↑ / 🗑️ buttons.
+ * One tappable entry row (tap = edit), with a ⠿ grip to drag it (like the credits) and a 🗑️ button.
  *
  * @param { string } title - the row title (plain text)
  * @param { string } subtitle - the row subtitle (plain text)
  * @param { string } attributes - the data-* attributes of the row
- * @param { boolean } withTools - show ↑ & 🗑️
+ * @param { boolean } withTools - show the ⠿ grip & 🗑️
  * @param { number } index - the entry position (for the tools)
+ * @param { boolean } canDrag - show the ⠿ grip (not while the list is filtered)
  * @returns { string } - the row
  */
-const entryRowHtml = (title, subtitle, attributes, withTools, index) =>
-  '<div class="admrow" ' +
+const entryRowHtml = (title, subtitle, attributes, withTools, index, canDrag) =>
+  '<div class="admrow' +
+  (withTools ? ' admsort' : '') +
+  '" ' +
   attributes +
-  '><div class="grow" style="min-width:0"><div class="n">' +
+  '>' +
+  (withTools && canDrag
+    ? '<span class="crGrip" title="' +
+      translate('Glisser pour déplacer', 'Drag to move') +
+      '" aria-label="drag">⠿</span>'
+    : '') +
+  '<div class="grow" style="min-width:0"><div class="n">' +
   escapeHtml(title) +
   '</div>' +
   (subtitle ? '<div class="muted sm admclip">' + escapeHtml(subtitle) + '</div>' : '') +
   '</div>' +
   (withTools
-    ? '<button class="admicon" data-do="up" data-index="' +
-      index +
-      '" aria-label="up">↑</button><button class="admicon danger" data-do="remove" data-index="' +
+    ? '<button class="admicon danger" data-do="remove" data-index="' +
       index +
       '" aria-label="delete">🗑️</button>'
     : '<div class="muted">›</div>') +
@@ -1814,17 +1821,25 @@ function sectionRowsHtml(entries, nameField) {
     .map((entry, index) => ({ entry, index }))
     .filter((row) => !sectionQuery.trim() || matchesQuery(entryText(row.entry), sectionQuery));
   if (!rows.length) return '<p class="admempty">' + translate('Aucun élément', 'No item') + '</p>';
-  return rows
-    .map((row) =>
-      entryRowHtml(
-        entryLabel(row.entry, nameField, row.index),
-        entrySubtitle(row.entry),
-        'data-do="edit" data-index="' + row.index + '"',
-        true,
-        row.index,
-      ),
-    )
-    .join('');
+  // ⠿ dragging only makes sense on the whole list (not on search results)
+  const canDrag = !sectionQuery.trim() && rows.length > 1;
+  return (
+    (canDrag
+      ? `<p class="crHint">${translate('Maintenez ⠿ et glissez pour changer l’ordre.', 'Hold ⠿ and drag to reorder.')}</p>`
+      : '') +
+    rows
+      .map((row) =>
+        entryRowHtml(
+          entryLabel(row.entry, nameField, row.index),
+          entrySubtitle(row.entry),
+          'data-do="edit" data-index="' + row.index + '"',
+          true,
+          row.index,
+          canDrag,
+        ),
+      )
+      .join('')
+  );
 }
 
 /**
@@ -1938,7 +1953,19 @@ function drawContent(body) {
       footer;
   }
 
+  // ✋ drag a row by its grip ⠿ (like the credits): the others slide out of the way, drop = new position
+  body.onpointerdown = (event) =>
+    Array.isArray(workingValue) &&
+    startDragSort(event, '.admsort', (from, target) => {
+      if (target !== from) {
+        workingValue.splice(target, 0, workingValue.splice(from, 1)[0]);
+        redraw();
+      }
+    });
+
   body.onclick = async (event) => {
+    // a tap on the grip is not a tap on the row
+    if (event.target.closest('.crGrip')) return;
     const button = event.target.closest('[data-do]');
     if (!button) return;
     const index = Number(button.dataset.index);
@@ -1984,13 +2011,6 @@ function drawContent(body) {
         break;
       case 'edit':
         openEntry(body, index, redraw, false);
-        break;
-      case 'up':
-        if (index > 0) {
-          const moved = workingValue.splice(index, 1)[0];
-          workingValue.splice(index - 1, 0, moved);
-          redraw();
-        }
         break;
       case 'remove':
         if (
