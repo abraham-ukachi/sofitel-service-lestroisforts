@@ -89,6 +89,24 @@ const firebaseApp = getApps()[0] || initializeApp(firebaseConfig),
 
 // the last tap on a bubble & the gap (ms) that makes two taps a double tap 👆👆
 let lastTap = { id: '', time: 0 };
+// the message whose time is shown under its bubble 🕘
+let timeShownId = '';
+
+/**
+ * `toggleTime` - Function 🕘
+ *
+ * Shows the time under a message (and hides the one shown before), or hides it when it is already shown.
+ *
+ * @param { string } id - the message id
+ * @returns { void }
+ */
+function toggleTime(id) {
+  timeShownId = timeShownId === id ? '' : id;
+  if (!overlay) return;
+  overlay
+    .querySelectorAll('.cm')
+    .forEach((row) => row.classList.toggle('ctshow', row.dataset.id === timeShownId));
+}
 const DOUBLE_TAP_DELAY = 320;
 
 // the quick reactions (one emoji per user and message) 😍
@@ -696,6 +714,7 @@ function bubbleHtml(message) {
   return (
     '<div class="cm' +
     (isMine ? ' me' : '') +
+    (timeShownId === message.id ? ' ctshow' : '') +
     (!isMine && mentionsMe(message.text) ? ' cmine' : '') +
     '" data-id="' +
     message.id +
@@ -745,11 +764,12 @@ function bubbleHtml(message) {
           richText(message.text) +
           '</div>'
         : '')) +
-    // 🕘 the time
+    '</div>' +
+    // 🕘 the time, under the bubble: shown on a single tap (0.75.4)
     '<div class="ctm">' +
     (message.ed ? '<span class="cedited">' + translate('modifié', 'edited') + '</span> · ' : '') +
     formatTime(timeOf(message)) +
-    '</div></div>' +
+    '</div>' +
     // 😍 the reaction chips
     (chips ? '<div class="crs">' + chips + '</div>' : '') +
     // the action bar of the selected message
@@ -1334,6 +1354,8 @@ function openChat() {
       rowId = bubble && messageRow ? messageRow.dataset.id : '',
       isDoubleTap = rowId && lastTap.id === rowId && now - lastTap.time < DOUBLE_TAP_DELAY;
     lastTap = isDoubleTap ? { id: '', time: 0 } : { id: rowId, time: now };
+    // 🕘 a single tap shows / hides that message's time (a double tap puts it back as it was)
+    if (rowId) toggleTime(rowId);
     const nextId = isDoubleTap ? rowId : null;
     if (nextId === selectedId) return;
     if (isDoubleTap && navigator.vibrate) navigator.vibrate(12);
@@ -2602,7 +2624,7 @@ function soldOutHtml(text) {
   const dish = value.slice((isOut ? OUT_PREFIX : BACK_PREFIX).length);
   return (
     '<div class="c86 ' +
-    (isOut ? 'out' : 'back') +
+    (isOut ? 'out' : 'cback') +
     '"><b>' +
     (isOut ? '86' : '✓') +
     '</b><div><span>' +
@@ -3085,7 +3107,10 @@ function addPolishStyles() {
 .cm.cgc.me .cb{border-top-right-radius:6px}
 .cm.cgn.me .cb{border-bottom-right-radius:6px}
 .cm:not(.cgc):not(.me) .cb{border-top-left-radius:4px}
-.ctm{font-size:10px;opacity:.55;margin-top:3px;font-variant-numeric:tabular-nums}
+.chatov .ctm{font-size:11px;opacity:0;max-height:0;overflow:hidden;margin:0 6px;color:var(--mu,#9aa3b2);
+  font-variant-numeric:tabular-nums;transition:opacity .18s,max-height .18s,margin .18s}
+.chatov .cm.ctshow .ctm{opacity:.9;max-height:20px;margin-top:3px}
+.chatov .cm:not(.me) .ctm{text-align:left}
 .cm.cpop .cb{animation:cpop .28s cubic-bezier(.2,.9,.3,1.25)}
 .cm.cfly .cb{animation:none;will-change:transform}
 .c86bar{display:flex;gap:6px;align-items:center;overflow-x:auto;padding:6px 12px;scrollbar-width:none;
@@ -3099,7 +3124,7 @@ function addPolishStyles() {
 .c86 b{flex:none;display:inline-flex;align-items:center;justify-content:center;min-width:38px;height:26px;border-radius:8px;
   border:1.5px solid currentColor;font-size:13px;letter-spacing:.04em}
 .c86.out b{color:#ff8a80}
-.c86.back b{color:#81c995}
+.c86.cback b{color:#81c995}
 .c86 span{font-weight:600}
 .c86 small{display:block;font-size:11px;opacity:.65;font-weight:400}
 .cthread{position:sticky;top:0;z-index:3;display:flex;align-items:center;gap:8px;margin:-6px 0 0;padding:8px 8px 8px 14px;
