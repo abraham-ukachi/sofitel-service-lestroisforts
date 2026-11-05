@@ -2,6 +2,10 @@
 
 All notable changes to this project will be documented in this file. Versions follow the service-worker cache (`ltf-vNN` → `0.NN.0`), see [CONTRIBUTING.md](./CONTRIBUTING.md#git-commit-messages) for the commit guidelines.
 
+### 0.75.1 (2026-11-05)
+
+* :bug: Cheese strength card and chapter list read 0 cheeses in the Rust app (no `window.LTF`): the inline script now carries the board (`BOARD`, same as data.js) and uses it when `LTF.fromages` is missing
+
 ### 0.75.0 (2026-11-05)
 
 * :sparkles: Chat settings drawer (gear in the header, slides in from the right): notifications, sound, « 86 » strip, Enter to send, text size, animations. Saved on the phone (`ltf_chat_prefs`)
