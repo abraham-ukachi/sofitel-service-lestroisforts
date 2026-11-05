@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file. Versions follow the service-worker cache (`ltf-vNN` → `0.NN.0`), see [CONTRIBUTING.md](./CONTRIBUTING.md#git-commit-messages) for the commit guidelines.
 
+### 0.75.5 (2026-11-05)
+
+* :zap: Scrolling cancels the touch: no swipe, long-press or tap starts while (or right after) the list scrolls; pointer listeners are passive
+* :zap: A read receipt no longer rebuilds the whole list, only the avatars
+* :zap: No blur behind the header, the day pills and the composer (it repainted on every scroll frame)
+
 ### 0.75.4 (2026-11-05)
 
 * :sparkles: The time sits under each bubble, hidden; a single tap shows or hides it
