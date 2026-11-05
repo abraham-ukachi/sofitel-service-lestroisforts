@@ -2,6 +2,10 @@
 
 All notable changes to this project will be documented in this file. Versions follow the service-worker cache (`ltf-vNN` → `0.NN.0`), see [CONTRIBUTING.md](./CONTRIBUTING.md#git-commit-messages) for the commit guidelines.
 
+### 0.75.3 (2026-11-05)
+
+* :bug: A single tap on a message no longer opens the emojis; only a double tap or a long-press selects it (a single tap clears the selection)
+
 ### 0.75.2 (2026-11-05)
 
 * :sparkles: WhatsApp-like selection bar: long-press or tap a message, the header shows ← and outline icons (reply, copy, pin, edit, delete); only the quick emojis pop on the bubble
