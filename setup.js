@@ -22,7 +22,7 @@
  *
  * Example usage:
  *   1+|> (index.html) script type="module" src="setup.js"
- *    -|> Accueil › Chapitres › « Mise en place » opens the chapter page (tabs: Seau 1-3 · Rouges · Accueil)
+ *    -|> Accueil › Chapitres › « Mise en place » opens the chapter page (tabs: Seau 1-3 · Rouges · Le service)
  *   2+|> import { SETUP_DEFAULT, cleanSetup } from './setup.js' (the dashboard editor, admin-edit.js)
  *
  */
@@ -34,7 +34,7 @@
  */
 
 // 🧊 Mise en place: a chapter row on the home screen that opens a chapter page, like the others, with
-// scrollable tabs (Seau 1 · Seau 2 · Seau 3 · Rouges · Accueil). Each tab has its modes:
+// scrollable tabs (Seau 1 · Seau 2 · Seau 3 · Rouges · Le service). Each tab has its modes:
 // - 👁️ Aperçu: the bucket bottle by bottle (photo, type, how many, a note) or the steps of service
 // - 🃏 Apprendre: flashcards · ❓ Quiz: 10 questions · ⏱️ Chrono: 60 seconds with combos
 // - 🧊 Range les seaux (each bottle in the right bucket) or 🔢 Dans l'ordre (the steps of service)
@@ -299,6 +299,180 @@ export const SETUP_DEFAULT = {
       text: {
         fr: "L'eau servie, revenez prendre la commande.",
         en: 'Once the water is served, come back to take the order.',
+      },
+      say: { fr: '', en: '' },
+    },
+    {
+      icon: '🩺',
+      title: { fr: 'Allergies & cuissons', en: 'Allergies & cooking' },
+      text: {
+        fr: 'Avant de partir, demandez les allergies et la cuisson des viandes. Relisez la commande à voix haute pour être sûr.',
+        en: 'Before leaving, ask about allergies and how they want the meat cooked. Read the order back to be sure.',
+      },
+      say: {
+        fr: 'Avez-vous des allergies ou des choses que vous ne mangez pas ? Et pour la cuisson du bœuf ?',
+        en: "Any allergies or anything you don't eat? And how would you like the beef cooked?",
+      },
+    },
+    {
+      icon: '🍾',
+      title: { fr: 'Le vin', en: 'The wine' },
+      text: {
+        fr: "Présentez la bouteille à la personne qui a choisi, étiquette face à elle, en annonçant le nom et le millésime. Ouvrez-la sur le guéridon, faites goûter, puis servez les dames d'abord et l'hôte en dernier.",
+        en: 'Show the bottle to the guest who ordered it, label facing them, naming the wine and the vintage. Open it on the side table, let them taste, then serve the ladies first and the host last.',
+      },
+      say: {
+        fr: 'Voici votre Château Crémat 2020. Je vous laisse le goûter ?',
+        en: 'Here is your Château Crémat 2020. Would you like to taste it?',
+      },
+    },
+    {
+      icon: '🥖',
+      title: { fr: 'Pain & mise en bouche', en: 'Bread & amuse-bouche' },
+      text: {
+        fr: 'Servez le pain et le beurre par la gauche, puis la mise en bouche offerte par le chef. Annoncez-la en une phrase.',
+        en: "Serve the bread and butter from the left, then the chef's complimentary amuse-bouche. Announce it in one sentence.",
+      },
+      say: {
+        fr: 'Pour commencer, une petite attention du chef.',
+        en: 'To start, a little something from the chef.',
+      },
+    },
+    {
+      icon: '🍴',
+      title: { fr: 'Les couverts', en: 'The cutlery' },
+      text: {
+        fr: 'Avant chaque plat, ajustez les couverts à ce qui a été commandé : couteau à poisson, couteau à viande, cuillère à dessert.',
+        en: 'Before each course, set the cutlery for what was ordered: fish knife, steak knife, dessert spoon.',
+      },
+      say: { fr: '', en: '' },
+    },
+    {
+      icon: '🍽️',
+      title: { fr: "L'envoi des plats", en: 'Serving the dishes' },
+      text: {
+        fr: "Tous les plats de la table arrivent en même temps, servis par la droite, les dames d'abord. Annoncez chaque plat en le posant.",
+        en: 'Every plate at the table arrives at the same time, served from the right, ladies first. Name each dish as you set it down.',
+      },
+      say: {
+        fr: "Votre dos de maigre, en croûte d'olives. Bonne dégustation.",
+        en: 'Your meagre fillet, in an olive crust. Enjoy.',
+      },
+    },
+    {
+      icon: '👀',
+      title: { fr: 'Le suivi', en: 'The check-back' },
+      text: {
+        fr: "Deux bouchées plus tard, passez discrètement demander si tout va bien. Remplissez l'eau et le vin sans attendre qu'on vous le demande : un verre ne reste jamais vide.",
+        en: 'Two bites in, pass by quietly and ask if everything is fine. Top up water and wine without being asked: a glass is never left empty.',
+      },
+      say: { fr: 'Tout se passe bien ?', en: 'Is everything to your liking?' },
+    },
+    {
+      icon: '🧺',
+      title: { fr: 'Débarrasser', en: 'Clearing' },
+      text: {
+        fr: "Attendez que tout le monde ait fini (couverts posés ensemble sur l'assiette). Débarrassez par la droite, sans empiler devant les clients.",
+        en: 'Wait until everyone has finished (cutlery laid together on the plate). Clear from the right, never stacking plates in front of the guests.',
+      },
+      say: { fr: 'Je peux vous débarrasser ?', en: 'May I clear your plates?' },
+    },
+    {
+      icon: '🧹',
+      title: { fr: 'Avant le dessert', en: 'Before dessert' },
+      text: {
+        fr: 'Retirez le pain, le beurre, le sel et le poivre. Passez la ramasse-miettes, puis redressez les couverts à dessert.',
+        en: 'Remove the bread, butter, salt and pepper. Crumb the table, then set the dessert cutlery.',
+      },
+      say: { fr: '', en: '' },
+    },
+    {
+      icon: '🧀',
+      title: { fr: 'Fromage & dessert', en: 'Cheese & dessert' },
+      text: {
+        fr: 'Proposez le plateau de fromages, du plus doux au plus fort, puis la carte des desserts. Pensez à un vin doux ou un verre pour le fromage.',
+        en: 'Offer the cheese board, mildest to strongest, then the dessert menu. Suggest a sweet wine or a glass for the cheese.',
+      },
+      say: {
+        fr: 'Vous laisserez-vous tenter par nos fromages, ou plutôt un dessert ?',
+        en: 'Can I tempt you with our cheeses, or would you rather have dessert?',
+      },
+    },
+    {
+      icon: '☕',
+      title: { fr: 'Café & mignardises', en: 'Coffee & petits fours' },
+      text: {
+        fr: 'Proposez café, thé, infusion ou un digestif. Servez les mignardises avec.',
+        en: 'Offer coffee, tea, herbal tea or a digestif. Serve the petits fours with it.',
+      },
+      say: {
+        fr: 'Un café, un thé ou un digestif pour terminer ?',
+        en: 'A coffee, a tea or a digestif to finish?',
+      },
+    },
+    {
+      icon: '🧾',
+      title: { fr: "L'addition", en: 'The bill' },
+      text: {
+        fr: "Ne l'apportez jamais avant qu'on la demande. Quand on la demande, apportez-la vite, dans le porte-addition fermé, à la personne qui l'a demandée, puis laissez-les un moment.",
+        en: "Never bring it before it's asked for. When it is, bring it quickly, in the closed bill folder, to the guest who asked, then give them a moment.",
+      },
+      say: {
+        fr: 'Je vous laisse regarder, prenez votre temps.',
+        en: "I'll leave this with you, take your time.",
+      },
+    },
+    {
+      icon: '🏨',
+      title: { fr: "Client de l'hôtel", en: 'Hotel guest' },
+      text: {
+        fr: "Un client de l'hôtel peut mettre le repas sur sa chambre : demandez le numéro de chambre et le nom, puis faites signer le ticket.",
+        en: 'A hotel guest can charge the meal to their room: ask for the room number and the name, then have them sign the slip.',
+      },
+      say: {
+        fr: 'Souhaitez-vous le mettre sur votre chambre ?',
+        en: 'Would you like to charge it to your room?',
+      },
+    },
+    {
+      icon: '💳',
+      title: { fr: 'Le paiement', en: 'Payment' },
+      text: {
+        fr: 'Le terminal vient à la table, la carte ne quitte jamais les yeux du client. Rendez le ticket et remerciez.',
+        en: "The card machine comes to the table, the card never leaves the guest's sight. Hand back the receipt and thank them.",
+      },
+      say: {
+        fr: "Merci beaucoup. Tout s'est bien passé ce soir ?",
+        en: 'Thank you very much. Did you enjoy your evening?',
+      },
+    },
+    {
+      icon: '🧥',
+      title: { fr: 'Les manteaux', en: 'The coats' },
+      text: {
+        fr: "Grâce au numéro de table sur le cintre, apportez les manteaux et aidez à les enfiler, la dame d'abord.",
+        en: 'Using the table number on the hanger, bring the coats and help them on, the lady first.',
+      },
+      say: { fr: '', en: '' },
+    },
+    {
+      icon: '👋',
+      title: { fr: 'Le départ', en: 'The farewell' },
+      text: {
+        fr: 'Raccompagnez-les vers la sortie, remerciez-les et invitez-les à revenir.',
+        en: 'Walk them towards the exit, thank them and invite them back.',
+      },
+      say: {
+        fr: 'Merci pour votre visite, au plaisir de vous revoir très vite. Bonne soirée !',
+        en: 'Thank you for coming, we hope to see you again soon. Have a lovely evening!',
+      },
+    },
+    {
+      icon: '🔄',
+      title: { fr: 'Redresser la table', en: 'Resetting the table' },
+      text: {
+        fr: 'Débarrassez tout, changez la nappe si besoin et redressez la table comme au départ, prête pour les suivants.',
+        en: 'Clear everything, change the tablecloth if needed and reset the table as it was, ready for the next guests.',
       },
       say: { fr: '', en: '' },
     },
@@ -904,7 +1078,7 @@ function tabsHtml() {
       entry.id,
       (entry.id === 'reds' ? '🍷 ' : entry.group.icon + ' ') + entry.short.split(' (')[0],
     ])
-    .concat([['steps', '🤵 ' + translate('Accueil', 'Service')]]);
+    .concat([['steps', '🤵 ' + translate('Le service', 'Service')]]);
   return (
     `<div class="chips scroll settabs" role="tablist">` +
     tabs
@@ -931,7 +1105,9 @@ function renderPage() {
   const isSteps = page.tab === 'steps';
   const count = isSteps ? page.setup.steps.length : current.group.items.length;
   const bottles = isSteps ? 0 : current.group.items.reduce((sum, item) => sum + item.qty, 0);
-  const title = isSteps ? translate('Accueil du client', 'Welcoming guests') : pick(current.group.name);
+  const title = isSteps
+    ? translate("Le service, de l'accueil au départ", 'Service, from welcome to farewell')
+    : pick(current.group.name);
   const hint = isSteps
     ? translate("De l'arrivée à la commande, étape par étape.", 'From arrival to the order, step by step.')
     : pick(current.group.hint);

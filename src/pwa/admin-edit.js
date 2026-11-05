@@ -1055,7 +1055,7 @@ export async function renderSetup(body) {
     const parts = [
       ['buckets', '🧊 ' + translate('Seaux', 'Buckets')],
       ['reds', '🍷 ' + translate('Rouges', 'Reds')],
-      ['steps', '🤵 ' + translate('Accueil', 'Service')],
+      ['steps', '🤵 ' + translate('Le service', 'Service')],
     ];
     let content = '';
     if (part === 'buckets')
