@@ -74,6 +74,13 @@ const X_PATH =
 const TIMELINE = [
   [
     '2026-11-05',
+    '0.75',
+    false,
+    'Réglages du chat, sondage et 86 redessinés',
+    'Chat settings, redesigned poll and 86 dialogs',
+  ],
+  [
+    '2026-11-05',
     '0.74',
     true,
     'Le service complet, de l’accueil au départ · chat : 86, fils par table, envoi animé',

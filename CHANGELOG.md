@@ -2,6 +2,18 @@
 
 All notable changes to this project will be documented in this file. Versions follow the service-worker cache (`ltf-vNN` → `0.NN.0`), see [CONTRIBUTING.md](./CONTRIBUTING.md#git-commit-messages) for the commit guidelines.
 
+### 0.75.0 (2026-11-05)
+
+* :sparkles: Chat settings drawer (gear in the header, slides in from the right): notifications, sound, « 86 » strip, Enter to send, text size, animations. Saved on the phone (`ltf_chat_prefs`)
+* :lipstick: Poll and « 86 » dialogs as bottom sheets: icon header, labelled 50 px fields with a gold focus ring, numbered poll options with ✕, dashed « Ajouter une option », pill buttons; 86 search with icon and dish rows
+* :lipstick: Header bell and gear are plain outline icons
+* :bug: The + menu sits above the day pills
+
+### 0.74.3 (2026-11-05)
+
+* :bug: Cheese strength card: the open list now shows (the rows' fade-in restarted on every redraw)
+* :bug: Crottin de Chavignol photo in the menu lists (full wasm rebuild with the new image map)
+
 ### 0.74.2 (2026-11-05)
 
 * :sparkles: Cheese strength card (La Carte and the cheese chapter) opens and closes on tap: closed shows the gradient with each cheese's animal at its strength; open lists the cheeses sorted mildest to strongest with animal, meter and a Doux/Moyen/Corsé/Fort label (state remembered)
