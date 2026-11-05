@@ -2,6 +2,10 @@
 
 All notable changes to this project will be documented in this file. Versions follow the service-worker cache (`ltf-vNN` → `0.NN.0`), see [CONTRIBUTING.md](./CONTRIBUTING.md#git-commit-messages) for the commit guidelines.
 
+### 0.74.1 (2026-11-05)
+
+* :sparkles: Mise en place › Le service: the cutlery in detail (setting for the order; fish, meat or soup; carrying on a napkin-lined plate; changing after each course; changing glasses with each wine). 27 steps
+
 ### 0.74.0 (2026-11-05)
 
 * :sparkles: Mise en place › Le service: 16 new steps after the order, through the bill, payment, coats, farewell and resetting the table (the filmed steps are unchanged)
