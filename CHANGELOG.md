@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file. Versions follow the service-worker cache (`ltf-vNN` → `0.NN.0`), see [CONTRIBUTING.md](./CONTRIBUTING.md#git-commit-messages) for the commit guidelines.
 
+### 0.75.6 (2026-11-05)
+
+* :sparkles: WhatsApp-style formatting in chat: *gras*, _italique_, ~barré~, `code`, ```bloc```, « > » quotes and « - » lists (on escaped text, nothing styled inside code); cheat sheet in the chat settings
+* :lipstick: No text selection or long-press callout anywhere, except in fields (input, textarea, select, contenteditable)
+
 ### 0.75.5 (2026-11-05)
 
 * :zap: Scrolling cancels the touch: no swipe, long-press or tap starts while (or right after) the list scrolls; pointer listeners are passive
