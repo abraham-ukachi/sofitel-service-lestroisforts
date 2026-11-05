@@ -747,10 +747,14 @@ function bubbleHtml(message) {
         '</div>'
       : '') +
     // 📷 the photo
-    (isSafePhoto(message.img) ? '<img class="ci" src="' + escapeHtml(message.img) + '" alt="">' : '') +
+    (isSafePhoto(message.img)
+      ? '<img class="ci" src="' + escapeHtml(message.img) + '" alt="" decoding="async" loading="lazy">'
+      : '') +
     // 🏷️ our sticker
     (isStickerSlug(message.sticker)
-      ? '<img class="cst" src="stickers/' + message.sticker + '.webp" alt="sticker">'
+      ? '<img class="cst" src="stickers/' +
+        message.sticker +
+        '.webp" alt="sticker" decoding="async" loading="lazy">'
       : '') +
     // 🎞️ the GIF (GIPHY only)
     (typeof message.gif === 'string' && GIF_PATTERN.test(message.gif)
@@ -2188,8 +2192,7 @@ function paintTyping() {
   const names = typingPeople
     .filter((person) => now - person.at < TYPING_SHOWN_FOR)
     .map((person) => person.name.trim().split(/\s+/)[0]);
-  subtitle.classList.toggle('ctyp', names.length > 0);
-  subtitle.textContent = names.length
+  const text = names.length
     ? names.length === 1
       ? translate(names[0] + ' écrit…', names[0] + ' is typing…')
       : translate(
@@ -2197,6 +2200,10 @@ function paintTyping() {
           names.slice(0, 2).join(' and ') + ' are typing…',
         )
     : 'Les Trois Forts';
+  // ✋ unchanged (most of the time): touch nothing, so the page does no layout every 2 s
+  if (subtitle.textContent === text) return;
+  subtitle.classList.toggle('ctyp', names.length > 0);
+  subtitle.textContent = text;
 }
 
 /**
@@ -3247,7 +3254,7 @@ function addPolishStyles() {
 .cpill:focus-within{background:rgba(255,255,255,.1);box-shadow:inset 0 0 0 .5px rgba(255,255,255,.1)}
 .cpill textarea::placeholder{color:var(--mu);opacity:.8}
 .cfoot{border-top:0;background:var(--bg)}
-.cbody{will-change:scroll-position;-webkit-tap-highlight-color:transparent}
+.cbody{-webkit-tap-highlight-color:transparent}
 .cmic,.cplus,.cemo{color:var(--mu);transition:color .15s,transform .15s}
 .cmic:active,.cplus:active,.cemo:active{transform:scale(.88);color:var(--tx,#fff)}
 .cplus{font-size:0}
