@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file. Versions follow the service-worker cache (`ltf-vNN` → `0.NN.0`), see [CONTRIBUTING.md](./CONTRIBUTING.md#git-commit-messages) for the commit guidelines.
 
+### 0.75.7 (2026-11-05)
+
+* :zap: The swipe-down-to-close sheet listened to every touchmove of the whole window as a blocking listener; it now listens on the open sheet only, so scrolling no longer waits on the page
+* :zap: No `will-change: scroll-position` on the chat list (made the whole list one big layer)
+* :zap: Chat photos and stickers decode async and lazily; the « typing » line no longer touches the page every 2 s
+
 ### 0.75.6 (2026-11-05)
 
 * :sparkles: WhatsApp-style formatting in chat: *gras*, _italique_, ~barré~, `code`, ```bloc```, « > » quotes and « - » lists (on escaped text, nothing styled inside code); cheat sheet in the chat settings
