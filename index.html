@@ -3759,6 +3759,93 @@ body:has(.ov.scrim) {
     'Gorgonzola': [9, '🐄', 'Bleu puissant, piquant', 'Powerful, sharp blue']
   };
 
+  // the board itself, for the Rust app (it has no window.LTF): same order & text as data.js `LTF.fromages` 📋
+  // (update it with data.js when the board changes; a live LTF.fromages always wins)
+  var BOARD = [
+    {
+      n: "Tomme fleurie",
+      img: "img/q-tomme-fleurie.jpg",
+      lait: {fr: "Vache", en: "Cow"},
+      orig: {fr: "Tradition alpine", en: "Alpine tradition"},
+      pate: {fr: "Pâte pressée non cuite", en: "Uncooked pressed cheese"},
+      h: {fr: "le plus doux, croûte couverte de fleurs séchées", en: "the mildest, rind covered in dried flowers"}
+    },
+    {
+      n: "Tommette corse",
+      img: "img/q-tommette.jpg",
+      lait: {fr: "Brebis (à confirmer)", en: "Sheep (to confirm)"},
+      orig: {fr: "Corse", en: "Corsica"},
+      pate: {fr: "Pâte pressée", en: "Pressed cheese"},
+      h: {fr: "croûte marquée par le panier (faisselle)", en: "rind printed by its basket mould"}
+    },
+    {
+      n: "Chèvre cendré",
+      img: "img/q-chevre-cendre.jpg",
+      lait: {fr: "Chèvre", en: "Goat"},
+      orig: {fr: "France", en: "France"},
+      pate: {fr: "Pâte molle, croûte cendrée", en: "Soft cheese, ash rind"},
+      h: {fr: "petit chèvre rond servi sur assiette noire", en: "small round goat's cheese on a black plate"}
+    },
+    {
+      n: "Montbriac",
+      img: "img/q-montbriac.jpg",
+      lait: {fr: "Vache", en: "Cow"},
+      orig: {fr: "Haute-Loire (Auvergne)", en: "Haute-Loire (Auvergne)"},
+      pate: {fr: "Pâte molle légèrement persillée", en: "Soft, lightly blue-veined"},
+      h: {fr: "croûte grise cendrée, cœur légèrement bleu", en: "grey ash rind, lightly blue heart"}
+    },
+    {
+      n: "Brin d'Amour",
+      img: "img/q-brin.jpg",
+      lait: {fr: "Brebis", en: "Sheep"},
+      orig: {fr: "Corse", en: "Corsica"},
+      pate: {fr: "Pâte molle, croûte aux herbes", en: "Soft cheese, herb crust"},
+      h: {fr: "croûte d'herbes du maquis", en: "crust of maquis herbs"}
+    },
+    {
+      n: "Crottin de Chavignol",
+      img: "img/q-crottin.jpg",
+      lait: {fr: "Chèvre", en: "Goat"},
+      orig: {fr: "Loire, Sancerrois (AOP)", en: "Loire Valley, Sancerre area (PDO)"},
+      pate: {fr: "Pâte molle, croûte naturelle", en: "Soft cheese, natural rind"},
+      h: {fr: "petit chèvre de la Loire, goût de noisette", en: "little Loire goat cheese, nutty taste"}
+    },
+    {
+      n: "Comté 18 mois",
+      img: "img/q-comte.jpg",
+      lait: {fr: "Vache", en: "Cow"},
+      orig: {fr: "Jura (AOP)", en: "Jura (PDO)"},
+      pate: {fr: "Pâte pressée cuite", en: "Cooked pressed cheese"},
+      h: {fr: "affiné 18 mois : fruité, noisette, petits cristaux", en: "aged 18 months: fruity, nutty, little crystals"}
+    },
+    {
+      n: "Casanu",
+      img: "img/q-casanu.jpg",
+      lait: {fr: "Chèvre", en: "Goat"},
+      orig: {fr: "Corse", en: "Corsica"},
+      pate: {fr: "Pâte molle, croûte lavée", en: "Soft cheese, washed rind"},
+      h: {fr: "croûte orangée, chèvre corse", en: "orange rind, Corsican goat"}
+    },
+    {
+      n: "Gorgonzola",
+      img: "img/q-gorgonzola-2.jpg",
+      lait: {fr: "Vache", en: "Cow"},
+      orig: {fr: "Italie (Lombardie, Piémont · AOP)", en: "Italy (Lombardy, Piedmont · PDO)"},
+      pate: {fr: "Pâte persillée", en: "Blue cheese"},
+      h: {fr: "le plus fort, servi à côté du plateau", en: "the strongest, served beside the board"}
+    }
+  ];
+
+  /**
+   * `boardCheeses` - Function 📋
+   *
+   * @returns { Array<object> } - the live `LTF.fromages` when the JS app has it, else `BOARD`
+   */
+  function boardCheeses() {
+    var live = window.LTF && LTF.fromages;
+    return live && live.length ? live : BOARD;
+  }
+
   /**
    * `isEnglish` - Function 🌍
    *
@@ -3812,7 +3899,7 @@ body:has(.ov.scrim) {
    */
   function card() {
     var english = isEnglish(),
-      cheeses = ((window.LTF && LTF.fromages) || []).slice();
+      cheeses = boardCheeses().slice();
     // 🔢 mildest first
     var ranked = cheeses
       .map(function (cheese) {
@@ -3912,14 +3999,14 @@ body:has(.ov.scrim) {
    */
   function boardRows() {
     var english = isEnglish(),
-      cheeses = (window.LTF && LTF.fromages) || [],
+      cheeses = boardCheeses(),
       photos = window.LTF_IMG || {};
     var pick = function (value) {
       return value ? (english ? value.en : value.fr) : '';
     };
     return cheeses
       .map(function (cheese, index) {
-        var photo = photos['q:' + cheese.n];
+        var photo = photos['q:' + cheese.n] || cheese.img;
         var open = window.LTFinfo ? ' onclick="LTFinfo(\'from:' + index + '\')"' : '';
         return (
           '<div class="li menu"' +
