@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file. Versions follow the service-worker cache (`ltf-vNN` → `0.NN.0`), see [CONTRIBUTING.md](./CONTRIBUTING.md#git-commit-messages) for the commit guidelines.
 
+### 0.76.0 (2026-11-05)
+
+* :sparkles: New chapter « Menus des fêtes » (🎄): Réveillon de Noël (24 Dec 2026, 185 € drinks not included, 6 courses), Menu de Noël (25 Dec 2026, 70 € drinks not included, 3 courses), Réveillon de la Saint-Sylvestre (31 Dec 2026, 299 € drinks included, 7 courses), all prepaid
+* :sparkles: 16 dishes with « À dire au client » lines and indicative allergens, 20 quiz facts (prices, drinks, prepayment, citron caviar, sauce Albufera, coquille lutée, navettes des Accoules…); the dishes hide themselves on 1 January 2027
+
 ### 0.75.8 (2026-11-05)
 
 * :sparkles: Signed in with a Google photo: the « Profil » tab shows it in place of the person icon (ring in the tab colour, gold when active)
