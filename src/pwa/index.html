@@ -215,6 +215,10 @@ body {
   min-height: 100vh;
   -webkit-font-smoothing: antialiased;
   overscroll-behavior-y: none;
+  /* 🚫 no text selection or long-press callout in the app (0.75.6), only in the fields below */
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
   transition:
     background 0.2s,
     color 0.2s;
@@ -230,6 +234,15 @@ button {
 }
 button:disabled {
   cursor: default;
+}
+/* ✍️ the fields stay selectable (typing, editing, pasting) */
+input,
+textarea,
+select,
+[contenteditable='true'] {
+  -webkit-user-select: text;
+  user-select: text;
+  -webkit-touch-callout: default;
 }
 .i {
   flex: none;
