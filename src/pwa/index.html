@@ -2568,16 +2568,6 @@ body.notabs .toast {
   overflow: hidden;
   min-height: 0;
 }
-.qs.open .qs-r {
-  animation: qsin 0.3s both;
-  animation-delay: var(--qs-delay, 0ms);
-}
-@keyframes qsin {
-  from {
-    opacity: 0;
-    transform: translateY(6px);
-  }
-}
 .qs-nm {
   display: flex;
   align-items: baseline;
@@ -2595,9 +2585,6 @@ body.notabs .toast {
   .qs-body,
   .qs-chev {
     transition: none;
-  }
-  .qs.open .qs-r {
-    animation: none;
   }
 }
 .qs-g {
@@ -3840,9 +3827,7 @@ body:has(.ov.scrim) {
           scale = entry.scale;
         var percent = Math.max(8, Math.round((scale[0] / 9) * 100));
         return (
-          '<div class="qs-r" style="--qs-delay:' +
-          index * 40 +
-          'ms"><div class="qs-n">' +
+          '<div class="qs-r"><div class="qs-n">' +
           (index + 1) +
           '</div><div class="qs-m" aria-hidden="true">' +
           scale[1] +
