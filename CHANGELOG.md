@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file. Versions follow the service-worker cache (`ltf-vNN` → `0.NN.0`), see [CONTRIBUTING.md](./CONTRIBUTING.md#git-commit-messages) for the commit guidelines.
 
+### 0.75.4 (2026-11-05)
+
+* :sparkles: The time sits under each bubble, hidden; a single tap shows or hides it
+* :bug: The « De retour » 86 card shared the flip-card `.back` class (mirrored, cream background); renamed to `.cback`
+
 ### 0.75.3 (2026-11-05)
 
 * :bug: A single tap on a message no longer opens the emojis; only a double tap or a long-press selects it (a single tap clears the selection)
