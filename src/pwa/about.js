@@ -73,6 +73,13 @@ const X_PATH =
 // the journey so far: [date, version, major?, FR, EN] (newest first) 🧭
 const TIMELINE = [
   [
+    '2026-11-05',
+    '0.74',
+    true,
+    'Le service complet, de l’accueil au départ · chat : 86, fils par table, envoi animé',
+    'The full service, from welcome to farewell · chat: 86, table threads, animated send',
+  ],
+  [
     '2026-11-04',
     '0.73',
     true,

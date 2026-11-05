@@ -2,6 +2,15 @@
 
 All notable changes to this project will be documented in this file. Versions follow the service-worker cache (`ltf-vNN` → `0.NN.0`), see [CONTRIBUTING.md](./CONTRIBUTING.md#git-commit-messages) for the commit guidelines.
 
+### 0.74.0 (2026-11-05)
+
+* :sparkles: Mise en place › Le service: 16 new steps after the order, through the bill, payment, coats, farewell and resetting the table (the filmed steps are unchanged)
+* :sparkles: Chat « 86 »: + menu › Épuisé sends a sold-out card, today's 86 dishes stay in a red strip (✕ puts one back)
+* :sparkles: Chat table threads: the floor plan of a #table opens its messages; new messages there get the tag
+* :dizzy: Chat: a sent message flies from the composer to its place while the list glides down; new messages glide in
+* :bug: Chat: day pills no longer overlap (each day is its own section)
+* :ambulance: Chat mic: tries the microphone even when the permission API says blocked, 1 s chunks, clear error codes
+
 ### 0.73.3 (2026-11-05)
 
 * :lipstick: Dashboard content lists reorder by holding the ⠿ grip and dragging, like the credits (the ↑ button is gone)
