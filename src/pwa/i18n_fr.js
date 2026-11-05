@@ -218,6 +218,71 @@ window.LTF_INFO_FR = {
       say: "C'est le dessert du menu : un sablé aux amandes, une ganache montée vanille et rose, du pamplemousse confit, une gelée de pamplemousse et un biscuit madeleine. Floral, frais et légèrement amer.",
       words: 'Contient gluten, fruits à coque (amande), lait, œuf.',
     },
+    // 🎄 menus des fêtes (décembre 2026)
+    'Langoustine juste raidie au citron caviar': {
+      say: "C'est une langoustine à peine saisie, encore nacrée, avec des perles de citron caviar qui éclatent en bouche, sur un crémeux de chou-fleur. Fin et iodé.",
+      words: 'À confirmer avec la cuisine : crustacés (langoustine), lait (crémeux).',
+    },
+    'Noix de Saint-Jacques en fine raviole au foie gras et truffe noire': {
+      say: 'Ce sont des noix de Saint-Jacques dans une raviole très fine, avec du foie gras et de la truffe noire. Riche et festif.',
+      words: 'À confirmer : mollusques (Saint-Jacques), gluten et œuf (pâte), lait ; foie gras.',
+    },
+    'Aiguillette de Saint-Pierre au caviar': {
+      say: "C'est une aiguillette de Saint-Pierre, un poisson blanc très fin, avec du caviar et un sabayon au champagne, léger et mousseux.",
+      words: 'À confirmer : poisson, œufs de poisson (caviar), œuf (sabayon), alcool (champagne).',
+    },
+    'Grenadin de veau': {
+      say: "C'est un médaillon épais de veau, nappé d'une sauce Albufera, une sauce crémeuse à la volaille, avec des conchiglioni, de grosses pâtes en coquille farcies aux champignons.",
+      words: 'À confirmer : lait (sauce), gluten et œuf (pâtes).',
+    },
+    'Fromages affinés de la maison Lemarié': {
+      say: 'Ce sont des fromages affinés par la maison Lemarié, notre fromager. On les sert du plus doux au plus fort.',
+      words: 'Contient lait. Demander si le client évite le lait cru.',
+    },
+    'Bûche chocolat': {
+      say: "C'est notre bûche de Noël au chocolat, avec un caramel au cognac. Gourmand, avec une touche d'alcool.",
+      words: 'À confirmer : lait, œuf, gluten ; alcool (cognac).',
+    },
+    'Carpaccio de loup à la mandarine': {
+      say: "C'est un carpaccio de loup, notre bar de Méditerranée, en fines tranches crues, relevé à la mandarine. Frais et léger.",
+      words: 'Contient poisson cru. À confirmer avec la cuisine (grossesse).',
+    },
+    'Turbotin rôti au beurre de truffe': {
+      say: "C'est un jeune turbot rôti au beurre de truffe, servi avec un bouillon parmentier, à la pomme de terre. Réconfortant et parfumé.",
+      words: 'À confirmer : poisson, lait (beurre).',
+    },
+    'Nougat glacé aux fruits du mendiant': {
+      say: "C'est un nougat glacé, avec les fruits du mendiant : amandes, noisettes, figues et raisins secs. Frais et croquant.",
+      words: 'À confirmer : fruits à coque (amande, noisette), œuf, lait, miel.',
+    },
+    'Rissole aux champignons et truffe noire': {
+      say: "C'est une petite rissole, un chausson doré, garni de champignons et de truffe noire. Une bouchée pour ouvrir le repas.",
+      words: 'À confirmer : gluten (pâte), lait, œuf.',
+    },
+    'Terrine de foie gras au vin chaud': {
+      say: "C'est une terrine de foie gras parfumée au vin chaud, avec une orange sanguine confite pour la fraîcheur.",
+      words: 'Foie gras. À confirmer : alcool (vin), sulfites.',
+    },
+    'Noix de Saint-Jacques en coquille lutée': {
+      say: "Ce sont des Saint-Jacques cuites dans leur coquille, fermée par un cordon de pâte. On l'ouvre à table et tout le parfum s'échappe.",
+      words: 'À confirmer : mollusques (Saint-Jacques), gluten (pâte), lait.',
+    },
+    'Tourte feuilletée de céleri à la truffe': {
+      say: "C'est une tourte en pâte feuilletée, garnie de céleri et de truffe. Végétale, fondante et très parfumée.",
+      words: 'À confirmer : céleri, gluten, lait (feuilletage), œuf.',
+    },
+    'Filet de biche': {
+      say: "C'est un filet de biche, une viande de gibier tendre et fine, avec une raviole de champignons et des marrons glacés, au jus.",
+      words: 'À confirmer : gluten et œuf (raviole), lait.',
+    },
+    'Parfait infusé aux navettes des Accoules': {
+      say: "C'est un parfait glacé infusé aux navettes des Accoules, les biscuits marseillais à la fleur d'oranger, avec des zestes confits et des agrumes.",
+      words: 'À confirmer : œuf, lait, gluten (navettes).',
+    },
+    'Mont-Blanc aux marrons glacés': {
+      say: "C'est un Mont-Blanc aux marrons glacés, avec du cassis et un rhum ambré de la Maison Ferroni. Gourmand, avec une pointe d'acidité.",
+      words: 'À confirmer : lait, œuf ; alcool (rhum).',
+    },
     'Ravioles de Saint-Jacques': {
       say: 'Ce sont de fines ravioles de Saint-Jacques, au foie gras et à la truffe, avec une émulsion légère au soja par-dessus.',
       words: 'Contient mollusques (Saint-Jacques), gluten, soja ; foie gras.',

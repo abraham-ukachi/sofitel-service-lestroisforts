@@ -44,6 +44,9 @@ window.LTF_EN = {
     Poisson: 'Fish',
     Viande: 'Meat',
     'Dessert dégustation': 'Tasting dessert',
+    'Réveillon de Noël': 'Christmas Eve dinner',
+    'Menu de Noël': 'Christmas Day menu',
+    'Réveillon de la Saint-Sylvestre': "New Year's Eve dinner",
     Entrée: 'Starter',
     Plat: 'Main course',
     Dessert: 'Dessert',
@@ -447,6 +450,71 @@ window.LTF_INFO = {
     'Sablé amande, ganache montée vanille-rose': {
       say: "It's the menu's dessert: an almond shortbread, a whipped vanilla and rose ganache, candied grapefruit, a grapefruit jelly and a madeleine sponge. Floral, fresh and slightly bitter.",
       words: 'Contains gluten, tree nuts (almond), dairy, egg.',
+    },
+    // 🎄 menus des fêtes (décembre 2026)
+    'Langoustine juste raidie au citron caviar': {
+      say: "It's a langoustine barely seared, still pearly, with finger lime pearls that pop in your mouth, on a cauliflower cream. Delicate and briny.",
+      words: 'Check with the kitchen: crustaceans (langoustine), dairy (cream).',
+    },
+    'Noix de Saint-Jacques en fine raviole au foie gras et truffe noire': {
+      say: "They're scallops in a very thin ravioli, with foie gras and black truffle. Rich and festive.",
+      words: 'Check: molluscs (scallop), gluten and egg (pasta), dairy; foie gras.',
+    },
+    'Aiguillette de Saint-Pierre au caviar': {
+      say: "It's a fillet of John Dory, a very fine white fish, with caviar and a light, airy champagne sabayon.",
+      words: 'Check: fish, fish roe (caviar), egg (sabayon), alcohol (champagne).',
+    },
+    'Grenadin de veau': {
+      say: "It's a thick veal medallion with Albufera sauce, a creamy chicken-based sauce, and conchiglioni, big pasta shells stuffed with mushrooms.",
+      words: 'Check: dairy (sauce), gluten and egg (pasta).',
+    },
+    'Fromages affinés de la maison Lemarié': {
+      say: "They're cheeses aged by Maison Lemarié, our cheesemonger, served from mildest to strongest.",
+      words: 'Contains dairy. Ask whether the guest avoids raw milk.',
+    },
+    'Bûche chocolat': {
+      say: "It's our chocolate Christmas log with a cognac caramel. Indulgent, with a touch of alcohol.",
+      words: 'Check: dairy, egg, gluten; alcohol (cognac).',
+    },
+    'Carpaccio de loup à la mandarine': {
+      say: "It's a carpaccio of loup, our Mediterranean sea bass, thinly sliced and raw, lifted with mandarin. Fresh and light.",
+      words: 'Raw fish. Check with the kitchen (pregnancy).',
+    },
+    'Turbotin rôti au beurre de truffe': {
+      say: "It's a young turbot roasted in truffle butter, with a potato broth. Comforting and fragrant.",
+      words: 'Check: fish, dairy (butter).',
+    },
+    'Nougat glacé aux fruits du mendiant': {
+      say: "It's an iced nougat with mendiant fruits: almonds, hazelnuts, figs and raisins. Cool and crunchy.",
+      words: 'Check: tree nuts (almond, hazelnut), egg, dairy, honey.',
+    },
+    'Rissole aux champignons et truffe noire': {
+      say: "It's a small golden turnover filled with mushrooms and black truffle. A bite to open the meal.",
+      words: 'Check: gluten (pastry), dairy, egg.',
+    },
+    'Terrine de foie gras au vin chaud': {
+      say: "It's a foie gras terrine scented with mulled wine, with candied blood orange for freshness.",
+      words: 'Foie gras. Check: alcohol (wine), sulphites.',
+    },
+    'Noix de Saint-Jacques en coquille lutée': {
+      say: "They're scallops cooked in their shell, sealed with a strip of pastry. It's opened at the table and all the aroma comes out.",
+      words: 'Check: molluscs (scallop), gluten (pastry), dairy.',
+    },
+    'Tourte feuilletée de céleri à la truffe': {
+      say: "It's a puff pastry pie filled with celeriac and truffle. Vegetable-based, melting and very fragrant.",
+      words: 'Check: celery, gluten, dairy (puff pastry), egg.',
+    },
+    'Filet de biche': {
+      say: "It's a fillet of venison (doe), a tender, delicate game meat, with a mushroom ravioli and candied chestnuts, with jus.",
+      words: 'Check: gluten and egg (ravioli), dairy.',
+    },
+    'Parfait infusé aux navettes des Accoules': {
+      say: "It's an iced parfait infused with Navettes des Accoules, Marseille's orange-blossom biscuits, with candied zest and citrus.",
+      words: 'Check: egg, dairy, gluten (biscuits).',
+    },
+    'Mont-Blanc aux marrons glacés': {
+      say: "It's a candied chestnut Mont-Blanc with blackcurrant and an amber rum from Maison Ferroni. Indulgent, with a little tartness.",
+      words: 'Check: dairy, egg; alcohol (rum).',
     },
     'Ravioles de Saint-Jacques': {
       say: "They're delicate scallop ravioli with foie gras and truffle, finished with a light soy foam.",
