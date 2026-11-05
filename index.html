@@ -2495,11 +2495,110 @@ body.notabs .toast {
 .qs {
   margin-bottom: 12px;
 }
+.qs-top {
+  all: unset;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.qs-tt {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.qs-tt b {
+  font-family: Georgia, 'Times New Roman', serif;
+  font-size: 17px;
+  color: var(--gold, #c9a961);
+}
+.qs-chev {
+  width: 22px;
+  height: 22px;
+  flex: none;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  opacity: 0.7;
+  transition: transform 0.28s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.qs.open .qs-chev {
+  transform: rotate(180deg);
+}
 .qs-h {
   display: flex;
   justify-content: space-between;
   font-weight: 700;
-  font-size: 13px;
+  font-size: 12px;
+  margin-top: 12px;
+  opacity: 0.8;
+}
+.qs-strip {
+  position: relative;
+  height: 24px;
+  margin: -6px 12px 4px;
+}
+.qs-strip span {
+  position: absolute;
+  top: 0;
+  transform: translateX(-50%);
+  font-size: 16px;
+  line-height: 24px;
+  transition: opacity 0.2s;
+}
+.qs.open .qs-strip {
+  display: none;
+}
+.qs-body {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows 0.32s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.qs.open .qs-body {
+  grid-template-rows: 1fr;
+}
+.qs-in {
+  overflow: hidden;
+  min-height: 0;
+}
+.qs.open .qs-r {
+  animation: qsin 0.3s both;
+  animation-delay: var(--qs-delay, 0ms);
+}
+@keyframes qsin {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+.qs-nm {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+.qs-lv {
+  flex: none;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--gold, #c9a961);
+}
+@media (prefers-reduced-motion: reduce) {
+  .qs-body,
+  .qs-chev {
+    transition: none;
+  }
+  .qs.open .qs-r {
+    animation: none;
+  }
 }
 .qs-g {
   height: 10px;
@@ -2535,8 +2634,9 @@ body.notabs .toast {
   flex: 1;
   min-width: 0;
 }
-.qs-nm {
+.qs-nm > span {
   font-weight: 700;
+  min-width: 0;
 }
 .qs-b {
   height: 6px;
@@ -2549,8 +2649,7 @@ body.notabs .toast {
   display: block;
   height: 100%;
   border-radius: 3px;
-  background: linear-gradient(90deg, #f6e7b0, #d98a3a, #3f6f8a);
-  background-size: 260px 100%;
+  background: linear-gradient(90deg, #f6e7b0, #e8c46a, #d98a3a, #a8452c, #3f6f8a) left / 100% 100% no-repeat;
 }
 /* 📷 scanner: camera, frame, buttons, results */
 .scanov {
@@ -3686,46 +3785,138 @@ body:has(.ov.scrim) {
     }
   }
 
+  // the open/closed state of the card (kept between visits) 💾
+  var OPEN_KEY = 'ltf_qs_open';
+
+  /**
+   * `isOpen` - Function 💾
+   *
+   * @returns { boolean } - true when the scale card was left open
+   */
+  function isOpen() {
+    try {
+      return localStorage.getItem(OPEN_KEY) === '1';
+    } catch (error) {
+      return false;
+    }
+  }
+
+  /**
+   * `strengthLabel` - Function 🔥
+   *
+   * @param { number } strength - 0 (mildest) to 9 (strongest)
+   * @param { boolean } english - the app language
+   * @returns { string } - « Doux », « Moyen », « Corsé » or « Fort »
+   */
+  function strengthLabel(strength, english) {
+    if (strength < 3.5) return english ? 'Mild' : 'Doux';
+    if (strength < 5.5) return english ? 'Medium' : 'Moyen';
+    if (strength < 8) return english ? 'Bold' : 'Corsé';
+    return english ? 'Strong' : 'Fort';
+  }
+
   /**
    * `card` - Function 🧩
    *
-   * @returns { string } - the scale card (board order from data.js `LTF.fromages`)
+   * A card that opens and closes on tap: closed, the gradient with the animals in strength order;
+   * open, every cheese from the mildest to the strongest with its animal, its meter and its taste.
+   *
+   * @returns { string } - the scale card (cheeses from data.js `LTF.fromages`, sorted by `SCALE` strength)
    */
   function card() {
     var english = isEnglish(),
-      cheeses = (window.LTF && LTF.fromages) || [];
-    var rows = cheeses.map(function (cheese, index) {
-      var scale = SCALE[cheese.n] || [5, '🧀', '', ''];
-      var percent = Math.round((scale[0] / 9) * 100);
-      return (
-        '<div class="qs-r"><div class="qs-n">' +
-        (cheese.side ? '＋' : index + 1) +
-        '</div><div class="qs-m">' +
-        scale[1] +
-        '</div><div class="qs-t"><div class="qs-nm">' +
-        cheese.n +
-        (cheese.side ? ' <span class="muted sm">' + (english ? 'on the side' : 'à côté') + '</span>' : '') +
-        '</div><div class="qs-b"><i style="width:' +
-        percent +
-        '%"></i></div><div class="muted sm">' +
-        (english ? scale[3] : scale[2]) +
-        '</div></div></div>'
-      );
-    }).join('');
+      cheeses = ((window.LTF && LTF.fromages) || []).slice();
+    // 🔢 mildest first
+    var ranked = cheeses
+      .map(function (cheese) {
+        return { cheese: cheese, scale: SCALE[cheese.n] || [5, '🧀', '', ''] };
+      })
+      .sort(function (first, second) {
+        return first.scale[0] - second.scale[0];
+      });
+    var rows = ranked
+      .map(function (entry, index) {
+        var cheese = entry.cheese,
+          scale = entry.scale;
+        var percent = Math.max(8, Math.round((scale[0] / 9) * 100));
+        return (
+          '<div class="qs-r" style="--qs-delay:' +
+          index * 40 +
+          'ms"><div class="qs-n">' +
+          (index + 1) +
+          '</div><div class="qs-m" aria-hidden="true">' +
+          scale[1] +
+          '</div><div class="qs-t"><div class="qs-nm"><span>' +
+          cheese.n +
+          (cheese.side ? ' <span class="muted sm">' + (english ? 'on the side' : 'à côté') + '</span>' : '') +
+          '</span><b class="qs-lv">' +
+          strengthLabel(scale[0], english) +
+          '</b></div><div class="qs-b"><i style="width:' +
+          percent +
+          '%;background-size:' +
+          Math.round(10000 / percent) +
+          '% 100%"></i></div><div class="muted sm">' +
+          (english ? scale[3] : scale[2]) +
+          '</div></div></div>'
+        );
+      })
+      .join('');
+    // 🐄🐑🐐 the animals along the gradient (closed view)
+    var strip = ranked
+      .map(function (entry) {
+        return (
+          '<span style="left:' +
+          Math.round((entry.scale[0] / 9) * 100) +
+          '%" title="' +
+          entry.cheese.n +
+          '">' +
+          entry.scale[1] +
+          '</span>'
+        );
+      })
+      .join('');
+    var open = isOpen();
     return (
-      '<div class="card qs" id="qScale"><div class="qs-h"><span>🧀 ' +
+      '<div class="card qs' +
+      (open ? ' open' : '') +
+      '" id="qScale"><button class="qs-top" type="button" aria-expanded="' +
+      open +
+      '"><span class="qs-tt"><b>🧀 ' +
+      (english ? 'Cheese strength' : 'La force des fromages') +
+      '</b><span class="muted sm">' +
+      ranked.length +
+      (english ? ' cheeses, mildest to strongest' : ' fromages, du plus doux au plus fort') +
+      '</span></span><svg class="qs-chev" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></button>' +
+      '<div class="qs-h"><span>' +
       (english ? 'Mildest' : 'Le plus doux') +
       '</span><span>' +
       (english ? 'Strongest' : 'Le plus fort') +
-      ' 🔥</span></div><div class="qs-g"></div>' +
+      '</span></div><div class="qs-g"></div><div class="qs-strip">' +
+      strip +
+      '</div><div class="qs-body"><div class="qs-in">' +
       rows +
       '<p class="muted sm" style="margin:10px 0 0">' +
       (english
         ? 'Mildest to strongest by taste. 🐄 cow · 🐑 sheep · 🐐 goat.'
         : 'Du plus doux au plus fort, selon le goût. 🐄 vache · 🐑 brebis · 🐐 chèvre.') +
-      '</p></div>'
+      '</p></div></div></div>'
     );
   }
+
+  // 👆 tap the card's header: open / close (one listener for every copy of the card)
+  document.addEventListener('click', function (event) {
+    var top = event.target.closest && event.target.closest('.qs-top');
+    if (!top) return;
+    var scaleCard = top.closest('.qs'),
+      open = !scaleCard.classList.contains('open');
+    scaleCard.classList.toggle('open', open);
+    top.setAttribute('aria-expanded', String(open));
+    try {
+      localStorage.setItem(OPEN_KEY, open ? '1' : '0');
+    } catch (error) {
+      // private mode: the card just won't remember 🤷
+    }
+  });
 
   /**
    * `boardRows` - Function 📋
