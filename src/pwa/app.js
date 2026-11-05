@@ -500,6 +500,15 @@
         : translate('Menu surprise du jour · 89 €', 'Surprise menu of the day · 89 €'),
     },
     {
+      id: 'fetes',
+      name: translate('Menus des fêtes', 'Festive menus'),
+      icon: '🎄',
+      sub: translate(
+        '24, 25 et 31 décembre 2026 · 3 menus · prépaiement',
+        '24, 25 and 31 December 2026 · 3 menus · prepaid',
+      ),
+    },
+    {
       id: 'dess',
       name: translate('Desserts & Fromages', 'Desserts & Cheese'),
       icon: '🍮',
@@ -1237,6 +1246,21 @@
    */
   const hPre = (dish) => (dish.svc.includes('hiver') && !WINTER ? SVC.h + ' · ' : '');
 
+  // 🎄 the festive menus (December 2026): their names & their « when » labels
+  const FETES = LTF.fetes || [];
+  const FETE_LABELS = FETES.map((menu) => menu[EN ? 'en' : 'fr']);
+
+  /**
+   * `feteLabel` - Function 🎄
+   *
+   * @param { object } dish - a dish of a festive menu
+   * @returns { string } - its menu, date & price (e.g. "Christmas Eve dinner · 24 December 2026 · 185 €…")
+   */
+  const feteLabel = (dish) => {
+    const menu = FETES.find((entry) => entry.s === dish.s);
+    return menu ? menu[EN ? 'en' : 'fr'] : translateWord(dish.s);
+  };
+
   /**
    * `svcLabel` - Function 🕘
    *
@@ -1244,11 +1268,13 @@
    * @returns { string } - when the dish is served
    */
   const svcLabel = (dish) =>
-    dish.svc.includes('deg')
-      ? SVC.g
-      : dish.svc.includes('hiver') && !dish.svc.includes('dej') && !dish.svc.includes('diner')
-        ? SVC.h
-        : hPre(dish) + svcBase(dish);
+    dish.svc.includes('fete')
+      ? feteLabel(dish)
+      : dish.svc.includes('deg')
+        ? SVC.g
+        : dish.svc.includes('hiver') && !dish.svc.includes('dej') && !dish.svc.includes('diner')
+          ? SVC.h
+          : hPre(dish) + svcBase(dish);
 
   /**
    * `unitTxt` - Function ⚖️
@@ -1366,15 +1392,17 @@
   // 🍽 every dish becomes one item per chapter it belongs to, with its question generators
   dishes.forEach((dish) => {
     // the chapters of the dish (tasting / desserts / formula / lunch & dinner / dinner)
-    const chs = dish.svc.includes('deg')
-      ? ['deg']
-      : dish.s === 'Desserts' || dish.s === 'Fromages'
-        ? ['dess']
-        : dish.svc.includes('formule')
-          ? ['dej']
-          : dish.svc.includes('dej')
-            ? ['dej', 'diner']
-            : ['diner'];
+    const chs = dish.svc.includes('fete')
+      ? ['fetes']
+      : dish.svc.includes('deg')
+        ? ['deg']
+        : dish.s === 'Desserts' || dish.s === 'Fromages'
+          ? ['dess']
+          : dish.svc.includes('formule')
+            ? ['dej']
+            : dish.svc.includes('dej')
+              ? ['dej', 'diner']
+              : ['diner'];
     if (dish.svc.includes('hiver')) chs.push('hiver');
     if (dish.svc.includes('deg')) chs.push('jour');
     // one item per chapter
@@ -1418,11 +1446,19 @@
             `Which section of the menu is "${dish.n}" in?`,
           ),
           translateWord(dish.s),
-          (dish.svc.includes('deg')
-            ? DEGS
-            : dish.svc.includes('formule')
-              ? ['Entrée', 'Plat', 'Dessert']
-              : sections.filter((section) => !['Entrée', 'Plat', 'Dessert'].concat(DEGS).includes(section))
+          (dish.svc.includes('fete')
+            ? FETES.map((menu) => menu.s)
+            : dish.svc.includes('deg')
+              ? DEGS
+              : dish.svc.includes('formule')
+                ? ['Entrée', 'Plat', 'Dessert']
+                : sections.filter(
+                    (section) =>
+                      !['Entrée', 'Plat', 'Dessert']
+                        .concat(DEGS)
+                        .concat(FETES.map((menu) => menu.s))
+                        .includes(section),
+                  )
           ).map(translateWord),
           '',
         ),
@@ -1458,11 +1494,13 @@
         mcq(
           translate(`Quand « ${dish.n} » est-il à la carte ?`, `When is "${dish.n}" on the menu?`),
           svcLabel(dish),
-          dish.svc.includes('deg')
-            ? [SVC.g, SVC.f, SVC.b, SVC.d]
-            : dish.svc.includes('hiver')
-              ? [SVC.b, SVC.d, SVC.l, SVC.f].map((service) => hPre(dish) + service)
-              : [SVC.f, SVC.b, SVC.d, SVC.l],
+          dish.svc.includes('fete')
+            ? FETE_LABELS.concat(SVC.g)
+            : dish.svc.includes('deg')
+              ? [SVC.g, SVC.f, SVC.b, SVC.d]
+              : dish.svc.includes('hiver')
+                ? [SVC.b, SVC.d, SVC.l, SVC.f].map((service) => hPre(dish) + service)
+                : [SVC.f, SVC.b, SVC.d, SVC.l],
           '',
         ),
       );
@@ -1617,6 +1655,10 @@
   );
   ((LTF.jour || {})[EN ? 'en' : 'fr'] || []).forEach(([question, answer, options, explanation]) =>
     add('jour', question, answer, [() => mcq(question, answer, options, explanation || '')], { fact: true }),
+  );
+  // 🎄 the festive menus facts (December 2026)
+  ((LTF.fq || {})[EN ? 'en' : 'fr'] || []).forEach(([question, answer, options, explanation]) =>
+    add('fetes', question, answer, [() => mcq(question, answer, options, explanation || '')], { fact: true }),
   );
   ((LTF.hq || {})[EN ? 'en' : 'fr'] || []).forEach(([question, answer, options, explanation]) =>
     add('hiver', question, answer, [() => mcq(question, answer, options, explanation || '')], { fact: true }),
@@ -2427,6 +2469,7 @@
     dej: 'sun',
     diner: 'moon',
     deg: 'gift',
+    fetes: 'star',
     dess: 'cake',
     cock: 'glass',
     cafe: 'cup',

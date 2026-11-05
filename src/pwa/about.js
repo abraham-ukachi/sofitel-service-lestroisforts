@@ -74,6 +74,13 @@ const X_PATH =
 const TIMELINE = [
   [
     '2026-11-05',
+    '0.76',
+    true,
+    'Menus des fêtes : réveillon de Noël, Noël et Saint-Sylvestre',
+    'Festive menus: Christmas Eve, Christmas Day and New Year’s Eve',
+  ],
+  [
+    '2026-11-05',
     '0.75',
     false,
     'Réglages du chat, sondage et 86 redessinés',

@@ -442,6 +442,7 @@ pub fn build() -> App {
         Ch { id: "dej", name: translate("Déjeuner", "Lunch"), sub: translate("Carte du midi & formule 49 €", "Lunch menu & 49 € formula") },
         Ch { id: "diner", name: translate("Dîner", "Dinner"), sub: translate("La carte du soir (ne change pas)", "The evening menu (stays the same)") },
         Ch { id: "deg", name: translate("Menu Dégustation", "Tasting Menu"), sub: if data["degSub"].is_object() { js(&data["degSub"][if en_ { "en" } else { "fr" }]) } else { translate("Menu surprise du jour · 89 €", "Surprise menu of the day · 89 €") } },
+        Ch { id: "fetes", name: translate("Menus des fêtes", "Festive menus"), sub: translate("24, 25 et 31 décembre 2026 · 3 menus · prépaiement", "24, 25 and 31 December 2026 · 3 menus · prepaid") },
         Ch { id: "dess", name: translate("Desserts & Fromages", "Desserts & Cheese"), sub: translate("Douceurs et plateau Lemarié", "Sweets and the Lemarié cheese board") },
         Ch { id: "from", name: translate("Plateau de fromages", "Cheese board"), sub: translate("9 fromages, du plus doux au plus fort", "9 cheeses, mildest to strongest") },
         Ch { id: "cock", name: translate("Cocktails & Softs", "Cocktails & Soft drinks"), sub: translate("Signatures, fiches techniques, softs, eaux", "Signatures, recipe cards, softs, waters") },
@@ -664,8 +665,16 @@ pub fn build() -> App {
         if has(dish, "formule") { svc_f.clone() } else if has(dish, "dej") && has(dish, "diner") { svc_b.clone() } else if has(dish, "diner") { svc_d.clone() } else { svc_l.clone() }
     };
     let h_pre = |dish: &Value| -> String { if has(dish, "hiver") && !winter { format!("{} · ", svc_h) } else { String::new() } };
+    // 🎄 the festive menus (December 2026): their names & their « when » labels
+    let fetes: Vec<Value> = data["fetes"].as_array().cloned().unwrap_or_default();
+    let fete_names: Vec<String> = fetes.iter().map(|menu| gs(menu, "s")).collect();
+    let fete_labels: Vec<String> = fetes.iter().map(|menu| gs(menu, if en_ { "en" } else { "fr" })).collect();
+    let fete_label = |dish: &Value| -> String {
+        let section = gs(dish, "s");
+        match fetes.iter().find(|menu| gs(menu, "s") == section) { Some(menu) => gs(menu, if en_ { "en" } else { "fr" }), None => w_(&section) }
+    };
     let svc_label = |dish: &Value| -> String {
-        if has(dish, "deg") { svc_g.clone() } else if has(dish, "hiver") && !has(dish, "dej") && !has(dish, "diner") { svc_h.clone() } else { h_pre(dish) + &svc_base(dish) }
+        if has(dish, "fete") { fete_label(dish) } else if has(dish, "deg") { svc_g.clone() } else if has(dish, "hiver") && !has(dish, "dej") && !has(dish, "diner") { svc_h.clone() } else { h_pre(dish) + &svc_base(dish) }
     };
     let unit_txt = |unit: &str| -> String { if en_ { if unit == "les 100 g" { "per 100 g".into() } else { unit.into() } } else { unit.into() } };
     let dish_price = |dish: &Value| -> Option<String> {
@@ -686,7 +695,8 @@ pub fn build() -> App {
     let corder_pool = rcv(CORDER.iter().map(|course_key| c_both(course_key)).collect());
     let sec_deg = rcv(degs.iter().map(|section| w_(section)).collect());
     let sec_form = rcv(["Entrée", "Plat", "Dessert"].iter().map(|section| w_(section)).collect());
-    let sec_other = rcv(sections.iter().filter(|section| !["Entrée", "Plat", "Dessert"].contains(&section.as_str()) && !degs.contains(&section.as_str())).map(|section| w_(section)).collect());
+    let sec_fete = rcv(fete_names.iter().map(|section| w_(section)).collect());
+    let sec_other = rcv(sections.iter().filter(|section| !["Entrée", "Plat", "Dessert"].contains(&section.as_str()) && !degs.contains(&section.as_str()) && !fete_names.contains(section)).map(|section| w_(section)).collect());
     // allergen hints & the course explanation
     let allerg_re = re("noisette|jambon|cochon|chorizo|thon|calamar|loup|Saint-Pierre|maigre|pêche suivant|crabe|huîtres|palourdes|Saint-Jacques|rouget|poutargue", "i");
     let re_nois = re("noisette", "i");
@@ -716,7 +726,7 @@ pub fn build() -> App {
     // 🍽 every dish becomes one item per chapter it belongs to
     for dish_ref in &dishes {
         let dish: &Value = dish_ref;
-        let chs: Vec<&'static str> = if has(dish, "deg") { vec!["deg"] } else if gs(dish, "s") == "Desserts" || gs(dish, "s") == "Fromages" { vec!["dess"] } else if has(dish, "formule") { vec!["dej"] } else if has(dish, "dej") { vec!["dej", "diner"] } else { vec!["diner"] };
+        let chs: Vec<&'static str> = if has(dish, "fete") { vec!["fetes"] } else if has(dish, "deg") { vec!["deg"] } else if gs(dish, "s") == "Desserts" || gs(dish, "s") == "Fromages" { vec!["dess"] } else if has(dish, "formule") { vec!["dej"] } else if has(dish, "dej") { vec!["dej", "diner"] } else { vec!["diner"] };
         let mut chs = chs;
         if has(dish, "hiver") { chs.push("hiver"); }
         if has(dish, "deg") { chs.push("jour"); }
@@ -735,7 +745,7 @@ pub fn build() -> App {
                 gens.push(mq(if en_ { format!("Which dish is this: \"{}\"?", d_desc(dish)) } else { format!("Quel plat est servi avec : « {} » ?", dd) }, dn.clone(), name_pool.clone(), format!("{} — {}.", dn, dd)));
                 gens.push(mq(translate(&format!("Comment est accompagné(e) « {} » ?", dn), &format!("What comes with \"{}\"?", dn)), dd.clone(), desc_pool.clone(), d_en(dish)));
             }
-            let spool = if has(dish, "deg") { sec_deg.clone() } else if has(dish, "formule") { sec_form.clone() } else { sec_other.clone() };
+            let spool = if has(dish, "fete") { sec_fete.clone() } else if has(dish, "deg") { sec_deg.clone() } else if has(dish, "formule") { sec_form.clone() } else { sec_other.clone() };
             gens.push(mq(translate(&format!("Dans quelle section de la carte se trouve « {} » ?", dn), &format!("Which section of the menu is \"{}\" in?", dn)), w_(&ds), spool, String::new()));
             if !d_en(dish).is_empty() {
                 gens.push(mq(translate(&format!("Comment présenter « {} » à un client anglophone ?", dn), &format!("How do you describe \"{}\" to an English-speaking guest?", dn)), d_en(dish), en_pool.clone(), String::new()));
@@ -743,7 +753,7 @@ pub fn build() -> App {
             if let Some(course_key) = course {
                 gens.push(mq(translate(&format!("« {} » : c'est quoi ?", dn), &format!("\"{}\": what kind of course is it?", dn)), c_both(course_key), corder_pool.clone(), course_expl.clone()));
             }
-            let vpool: Vec<String> = if has(dish, "deg") { vec![svc_g.clone(), svc_f.clone(), svc_b.clone(), svc_d.clone()] } else if has(dish, "hiver") { [&svc_b, &svc_d, &svc_l, &svc_f].iter().map(|service| h_pre(dish) + service).collect() } else { vec![svc_f.clone(), svc_b.clone(), svc_d.clone(), svc_l.clone()] };
+            let vpool: Vec<String> = if has(dish, "fete") { fete_labels.iter().cloned().chain(std::iter::once(svc_g.clone())).collect() } else if has(dish, "deg") { vec![svc_g.clone(), svc_f.clone(), svc_b.clone(), svc_d.clone()] } else if has(dish, "hiver") { [&svc_b, &svc_d, &svc_l, &svc_f].iter().map(|service| h_pre(dish) + service).collect() } else { vec![svc_f.clone(), svc_b.clone(), svc_d.clone(), svc_l.clone()] };
             gens.push(mq(translate(&format!("Quand « {} » est-il à la carte ?", dn), &format!("When is \"{}\" on the menu?", dn)), svc_label(dish), rcv(vpool), String::new()));
             if allerg_re.test(&format!("{} {}", dn, dd)) {
                 let choices = vec![translate("Fruits à coque (noisette)", "Nuts (hazelnut)"), translate("Porc", "Pork"), translate("Poisson / produits de la mer", "Fish / seafood"), translate("Rien de tout cela", "None of these")];
@@ -809,6 +819,13 @@ pub fn build() -> App {
         let options: Vec<String> = fact[2].as_array().unwrap_or(&empty).iter().map(js).collect();
         let explanation = js(&fact[3]);
         add!("jour", qq.clone(), answer.clone(), vec![mq(qq.clone(), answer.clone(), rcv(options), explanation)], |it: &mut Item| it.fact = true);
+    }
+    // 🎄 the festive menus facts (December 2026)
+    for fact in data["fq"][if en_ { "en" } else { "fr" }].as_array().unwrap_or(&empty) {
+        let (qq, answer) = (js(&fact[0]), js(&fact[1]));
+        let options: Vec<String> = fact[2].as_array().unwrap_or(&empty).iter().map(js).collect();
+        let explanation = js(&fact[3]);
+        add!("fetes", qq.clone(), answer.clone(), vec![mq(qq.clone(), answer.clone(), rcv(options), explanation)], |it: &mut Item| it.fact = true);
     }
     for fact in data["hq"][if en_ { "en" } else { "fr" }].as_array().unwrap_or(&empty) {
         let (qq, answer) = (js(&fact[0]), js(&fact[1]));
