@@ -340,10 +340,28 @@ export const SETUP_DEFAULT = {
     },
     {
       icon: '🍴',
-      title: { fr: 'Les couverts', en: 'The cutlery' },
+      title: { fr: 'Marquer la table', en: 'Setting for the order' },
       text: {
-        fr: 'Avant chaque plat, ajustez les couverts à ce qui a été commandé : couteau à poisson, couteau à viande, cuillère à dessert.',
-        en: 'Before each course, set the cutlery for what was ordered: fish knife, steak knife, dessert spoon.',
+        fr: 'Dès la commande prise, adaptez le couvert de chaque client à son premier plat et retirez ce qui ne servira pas. Chacun peut avoir des couverts différents.',
+        en: "As soon as the order is taken, set each guest's place for their first course and remove anything they won't use. Each guest can have different cutlery.",
+      },
+      say: { fr: '', en: '' },
+    },
+    {
+      icon: '🔪',
+      title: { fr: 'Poisson, viande ou soupe', en: 'Fish, meat or soup' },
+      text: {
+        fr: "Poisson : couteau et fourchette à poisson. Viande : couteau à viande, lame vers l'assiette. Soupe ou bouillon : cuillère à soupe à droite.",
+        en: 'Fish: fish knife and fork. Meat: steak knife, blade facing the plate. Soup or broth: soup spoon on the right.',
+      },
+      say: { fr: '', en: '' },
+    },
+    {
+      icon: '🫴',
+      title: { fr: 'Porter les couverts', en: 'Carrying cutlery' },
+      text: {
+        fr: 'Toujours sur une assiette avec une serviette, jamais à la main nue. Tenez-les par le manche, sans toucher la lame ni les dents. Couteaux et cuillères à droite, fourchettes à gauche.',
+        en: 'Always on a plate lined with a napkin, never in your bare hand. Hold them by the handle, never touching the blade or the prongs. Knives and spoons on the right, forks on the left.',
       },
       say: { fr: '', en: '' },
     },
@@ -376,6 +394,24 @@ export const SETUP_DEFAULT = {
         en: 'Wait until everyone has finished (cutlery laid together on the plate). Clear from the right, never stacking plates in front of the guests.',
       },
       say: { fr: 'Je peux vous débarrasser ?', en: 'May I clear your plates?' },
+    },
+    {
+      icon: '🔁',
+      title: { fr: 'Changer les couverts', en: 'Changing the cutlery' },
+      text: {
+        fr: "Après chaque plat, les couverts utilisés partent avec l'assiette. Posez ceux du plat suivant avant qu'il arrive, jamais pendant que le plat est sur la table.",
+        en: "After each course, the used cutlery leaves with the plate. Set the next course's cutlery before it arrives, never while the dish is on the table.",
+      },
+      say: { fr: '', en: '' },
+    },
+    {
+      icon: '🥂',
+      title: { fr: 'Changer les verres', en: 'Changing the glasses' },
+      text: {
+        fr: "Un nouveau vin, un verre propre. Avec l'accord mets-vins, retirez le verre fini et posez le suivant avant de servir. Le verre à eau reste toute la soirée.",
+        en: 'A new wine, a clean glass. With the wine pairing, remove the finished glass and set the next one before pouring. The water glass stays all evening.',
+      },
+      say: { fr: '', en: '' },
     },
     {
       icon: '🧹',
