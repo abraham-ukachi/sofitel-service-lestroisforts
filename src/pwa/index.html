@@ -436,6 +436,17 @@ body.notabs #app {
 #tabbar .on .pill {
   background: var(--pill);
 }
+/* 🧑 my Google photo in place of the Profil icon (cloud.js paintTabAvatar) */
+#tabbar .pill.haspic svg {
+  display: none;
+}
+#tabbar .tabpic {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  object-fit: cover;
+  box-shadow: 0 0 0 1.5px currentColor;
+}
 
 /* 🏠 hero, rank card & quick actions of the hub */
 .hero {

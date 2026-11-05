@@ -439,15 +439,59 @@ function render() {
 // 👂 the app re-renders its screens: put our card back whenever the Profil screen shows up
 new MutationObserver(() => {
   if (document.getElementById('rst') && !document.getElementById('gAcc')) render();
+  // 🔁 the tab bar is redrawn on every page: put my photo back
+  paintTabAvatar();
 }).observe(document.documentElement, { childList: true, subtree: true });
 // back from a redirect sign-in that failed? show the error
 getRedirectResult(auth).catch(() => {
   status = 6;
   render();
 });
+// ===== MY PHOTO IN THE TAB BAR 🧑 (0.75.8) ===== //
+
+// a Google profile photo, the only kind we show 🛡️
+const TAB_PICTURE_PATTERN = /^https:\/\/[a-z0-9.-]+\.googleusercontent\.com\/[^"<> ]*$/;
+// the photo that could not load (shown as the icon from then on)
+let failedTabPicture = '';
+
+/**
+ * `paintTabAvatar` - Function 🧑
+ *
+ * Signed in with a profile photo: the « Profil » tab shows it in place of the person icon.
+ * Signed out (or no photo, or the photo fails): the icon comes back.
+ *
+ * @returns { void }
+ */
+function paintTabAvatar() {
+  const tab = document.querySelector('#tabbar button[onclick*="\'settings\'"] .pill');
+  if (!tab) return;
+  const photo = user && TAB_PICTURE_PATTERN.test(user.photoURL || '') ? user.photoURL : '';
+  // a photo that failed once stays the icon (no retry loop) 🔁
+  const picture = photo === failedTabPicture ? '' : photo;
+  const current = tab.querySelector('.tabpic');
+  if (current && current.getAttribute('src') === picture) return;
+  if (current) current.remove();
+  tab.classList.toggle('haspic', !!picture);
+  if (!picture) return;
+  const image = document.createElement('img');
+  image.className = 'tabpic';
+  image.alt = '';
+  image.referrerPolicy = 'no-referrer';
+  image.decoding = 'async';
+  // a broken photo: back to the icon
+  image.onerror = () => {
+    failedTabPicture = picture;
+    image.remove();
+    tab.classList.remove('haspic');
+  };
+  image.src = picture;
+  tab.appendChild(image);
+}
+
 // 👤 signed in / out: refresh the card & sync
 onAuthStateChanged(auth, (signedInUser) => {
   user = signedInUser;
   render();
+  paintTabAvatar();
   if (signedInUser) sync();
 });
