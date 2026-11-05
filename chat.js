@@ -87,6 +87,10 @@ const firebaseApp = getApps()[0] || initializeApp(firebaseConfig),
 
 // ===== CONSTANTS & HELPERS 🧰 ===== //
 
+// the last tap on a bubble & the gap (ms) that makes two taps a double tap 👆👆
+let lastTap = { id: '', time: 0 };
+const DOUBLE_TAP_DELAY = 320;
+
 // the quick reactions (one emoji per user and message) 😍
 const REACTIONS = ['👍', '❤️', '😂', '😮', '🙏', '🔥'];
 
@@ -1325,7 +1329,15 @@ function openChat() {
     // a bubble: toggle its action bar
     const bubble = target.closest('.cb');
     const messageRow = target.closest('.cm');
-    selectedId = bubble && messageRow && selectedId !== messageRow.dataset.id ? messageRow.dataset.id : null;
+    // a single tap only clears the selection; a double tap selects (like a long-press) 👆👆
+    const now = Date.now(),
+      rowId = bubble && messageRow ? messageRow.dataset.id : '',
+      isDoubleTap = rowId && lastTap.id === rowId && now - lastTap.time < DOUBLE_TAP_DELAY;
+    lastTap = isDoubleTap ? { id: '', time: 0 } : { id: rowId, time: now };
+    const nextId = isDoubleTap ? rowId : null;
+    if (nextId === selectedId) return;
+    if (isDoubleTap && navigator.vibrate) navigator.vibrate(12);
+    selectedId = nextId;
     paint();
   });
 
