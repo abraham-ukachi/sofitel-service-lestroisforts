@@ -89,6 +89,9 @@ const firebaseApp = getApps()[0] || initializeApp(firebaseConfig),
 
 // the last tap on a bubble & the gap (ms) that makes two taps a double tap 👆👆
 let lastTap = { id: '', time: 0 };
+// when the list last scrolled & how long after it a tap is ignored (ms) 📜
+let lastScrollAt = 0;
+const SCROLL_TAP_GUARD = 250;
 // the message whose time is shown under its bubble 🕘
 let timeShownId = '';
 
@@ -1286,6 +1289,8 @@ function openChat() {
   overlay.querySelector('.cbody').addEventListener('click', (event) => {
     const target = event.target;
     if (overlay.querySelector('.cbody').dataset.sw) return;
+    // 📜 a tap that ends a scroll is not a tap
+    if (Date.now() - lastScrollAt < SCROLL_TAP_GUARD) return;
     // 😍 a reaction
     if (target.closest('[data-re]')) {
       const button = target.closest('[data-re]');
@@ -1366,11 +1371,24 @@ function openChat() {
   // 👉 swipe a message to the right to reply (like WhatsApp)
   const body = overlay.querySelector('.cbody');
   let swipe = null;
-  body.addEventListener('pointerdown', (event) => {
-    const messageRow = event.target.closest('.cm');
-    if (!messageRow || event.target.closest('button')) return;
-    swipe = { cm: messageRow, x: event.clientX, y: event.clientY, on: false };
-  });
+  body.addEventListener(
+    'pointerdown',
+    (event) => {
+      const messageRow = event.target.closest('.cm');
+      if (!messageRow || event.target.closest('button')) return;
+      swipe = { cm: messageRow, x: event.clientX, y: event.clientY, on: false };
+    },
+    { passive: true },
+  );
+  // 📜 the list scrolls: the touch is a scroll, not a swipe, a tap or a long-press (0.75.5)
+  body.addEventListener(
+    'scroll',
+    () => {
+      lastScrollAt = Date.now();
+      if (swipe && !swipe.on) swipe = null;
+    },
+    { passive: true },
+  );
   body.addEventListener('pointermove', (event) => {
     if (!swipe) return;
     const dx = event.clientX - swipe.x,
@@ -2086,7 +2104,11 @@ function watchPresence() {
               pic: typeof data.pic === 'string' ? data.pic : '',
             };
         });
-        paint();
+        // 👀 only the read avatars move: no full repaint (it made scrolling stutter)
+        const listBody = overlay && overlay.querySelector('.cbody');
+        if (!listBody || !user || !hasChatAccess()) return;
+        listBody.querySelectorAll('.cseen').forEach((line) => line.remove());
+        paintSeenAvatars(listBody);
       },
       () => {},
     ),
@@ -2316,6 +2338,8 @@ function wirePresence(textarea) {
   body.addEventListener('pointerdown', (event) => {
     const messageRow = event.target.closest('.cm');
     if (!messageRow || event.target.closest('button')) return;
+    // a finger that stops a fling is not a long-press 📜
+    if (Date.now() - lastScrollAt < SCROLL_TAP_GUARD) return;
     const startX = event.clientX,
       startY = event.clientY;
     press = {
@@ -2342,7 +2366,11 @@ function wirePresence(textarea) {
     clearTimeout(press.timer);
     press = null;
   };
-  ['pointermove', 'pointerup', 'pointercancel'].forEach((type) => body.addEventListener(type, cancelPress));
+  ['pointermove', 'pointerup', 'pointercancel'].forEach((type) =>
+    body.addEventListener(type, cancelPress, { passive: true }),
+  );
+  // 📜 scrolling cancels the long-press too
+  body.addEventListener('scroll', () => press && cancelPress({ type: 'scroll' }), { passive: true });
   body.addEventListener('contextmenu', (event) => {
     if (event.target.closest('.cm')) event.preventDefault();
   });
@@ -3084,8 +3112,7 @@ function addPolishStyles() {
   style.id = 'chatPolishCss';
   style.textContent = `
 .chatov{background:radial-gradient(120% 60% at 50% 0%,rgba(201,169,97,.07),transparent 60%),var(--bg)}
-.chatov .sch{position:relative;z-index:3;background:color-mix(in srgb,var(--bg) 78%,transparent);
-  -webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px);border-bottom:1px solid rgba(255,255,255,.06)}
+.chatov .sch{position:relative;z-index:3;background:var(--bg);border-bottom:1px solid rgba(255,255,255,.06)}
 .cfaces{display:flex;flex-direction:row-reverse;margin-right:2px}
 .cfaces img,.cfaces span{width:26px;height:26px;border-radius:50%;object-fit:cover;border:2px solid var(--bg);
   margin-left:-8px;font-size:11px;font-weight:700;color:#fff;display:inline-flex;align-items:center;justify-content:center}
@@ -3094,8 +3121,7 @@ function addPolishStyles() {
 .cdg{display:flex;flex-direction:column;gap:12px}
 .cday{position:sticky;top:6px;z-index:2;display:flex;justify-content:center;margin:6px 0 2px;pointer-events:none}
 .cday span{font-size:11.5px;font-weight:700;letter-spacing:.02em;padding:4px 12px;border-radius:999px;
-  background:color-mix(in srgb,var(--bar,#14203a) 88%,transparent);-webkit-backdrop-filter:blur(8px);
-  backdrop-filter:blur(8px);border:1px solid rgba(255,255,255,.08);color:var(--mu)}
+  background:var(--bar,#14203a);border:1px solid rgba(255,255,255,.08);color:var(--mu)}
 .cm.cgc{margin-top:-9px}
 .cm.cgc .ccap{display:none}
 .cm.cgn .cav{visibility:hidden}
@@ -3147,8 +3173,8 @@ function addPolishStyles() {
   box-shadow:inset 0 0 0 .5px rgba(255,255,255,.06);transition:background .2s,box-shadow .2s}
 .cpill:focus-within{background:rgba(255,255,255,.1);box-shadow:inset 0 0 0 .5px rgba(255,255,255,.1)}
 .cpill textarea::placeholder{color:var(--mu);opacity:.8}
-.cfoot{border-top:0;background:color-mix(in srgb,var(--bg) 82%,transparent);
-  -webkit-backdrop-filter:blur(18px) saturate(1.4);backdrop-filter:blur(18px) saturate(1.4)}
+.cfoot{border-top:0;background:var(--bg)}
+.cbody{will-change:scroll-position;-webkit-tap-highlight-color:transparent}
 .cmic,.cplus,.cemo{color:var(--mu);transition:color .15s,transform .15s}
 .cmic:active,.cplus:active,.cemo:active{transform:scale(.88);color:var(--tx,#fff)}
 .cplus{font-size:0}
