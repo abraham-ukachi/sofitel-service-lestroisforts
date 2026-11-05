@@ -2,6 +2,10 @@
 
 All notable changes to this project will be documented in this file. Versions follow the service-worker cache (`ltf-vNN` → `0.NN.0`), see [CONTRIBUTING.md](./CONTRIBUTING.md#git-commit-messages) for the commit guidelines.
 
+### 0.76.2 (2026-11-05)
+
+* :camera_flash: Menus des fêtes: a photo for all 16 dishes (15 AI-generated illustrations from each dish's ingredients, `d-gen-fete-*`, and the Lemarié board photo for the cheese course)
+
 ### 0.76.1 (2026-11-05)
 
 * :card_file_box: Service du jour: dinner of Thursday 5 November 2026 (6 bookings, 20 covers, all reconfirmed; T100 for 10 at 20:30 à la carte on the PM account, a wife's birthday at T12, a business meal at T21, last arrival T22 at 21:45), 10 briefing questions
