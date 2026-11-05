@@ -232,6 +232,8 @@ function playChime() {
   try {
     // the sound switch of the Profil tab is off? stay quiet 🤫
     if (JSON.parse(localStorage.getItem('ltf_v1') || '{}').sound === false) return;
+    // the chat's own sound switch (⚙️ settings) is off? quiet too
+    if (!chatPref('sound')) return;
     audioContext = audioContext || new (window.AudioContext || window.webkitAudioContext)();
     if (audioContext.state === 'suspended') audioContext.resume();
     const start = audioContext.currentTime;
@@ -1129,7 +1131,9 @@ function openChat() {
   overlay.innerHTML =
     '<div class="sch"><button class="cx" aria-label="close">←</button><div class="grow"><div style="font-weight:700">' +
     translate("Chat de l'équipe", 'Team chat') +
-    '</div><div class="muted sm csub">Les Trois Forts</div></div><div class="cfaces"></div><button class="cbell" hidden aria-label="notifications"></button></div>' +
+    '</div><div class="muted sm csub">Les Trois Forts</div></div><div class="cfaces"></div><button class="cbell" hidden aria-label="notifications"></button><button class="cgear" aria-label="settings">' +
+    HEADER_ICONS.gear +
+    '</button></div>' +
     '<div class="cpin" hidden></div><div class="c86bar" hidden></div><div class="cho" hidden></div><div class="cbody"></div><div class="cfoot"><button class="cnew" hidden></button><div class="crep"></div>' +
     '<div class="cmsug" hidden></div><div class="cquick" hidden></div><div class="cmenu" hidden><label><input type="file" accept="image/*" capture="environment" hidden>' +
     MENU_ICONS.camera +
@@ -1171,6 +1175,9 @@ function openChat() {
   // 🔔 the notifications switch (bell) in the header
   overlay.querySelector('.cbell').onclick = togglePush;
   refreshBell();
+  // ⚙️ the chat settings drawer
+  overlay.querySelector('.cgear').onclick = () => openChatSettings();
+  applyChatPrefs();
 
   // ✍️ the composer: grows up to 120 px, Enter sends (Shift+Enter = new line)
   const textarea = overlay.querySelector('textarea');
@@ -1179,14 +1186,17 @@ function openChat() {
     textarea.style.height = Math.min(120, textarea.scrollHeight) + 'px';
   });
   textarea.addEventListener('keydown', (event) => {
-    if (event.key === 'Enter' && !event.shiftKey && !event.isComposing) {
+    if (event.key === 'Enter' && !event.shiftKey && !event.isComposing && chatPref('enter')) {
       event.preventDefault();
       send();
     }
   });
   // the mobile keyboard "send" key ⌨️
   textarea.addEventListener('beforeinput', (event) => {
-    if (event.inputType === 'insertLineBreak' || event.inputType === 'insertParagraph') {
+    if (
+      chatPref('enter') &&
+      (event.inputType === 'insertLineBreak' || event.inputType === 'insertParagraph')
+    ) {
       event.preventDefault();
       send();
     }
@@ -2497,7 +2507,8 @@ function markFlight(origin) {
  * @returns { void } - a smooth scroll to the newest message (a jump when motion is reduced)
  */
 function glideToBottom(body) {
-  const reduced = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const reduced =
+    !chatPref('motion') || (window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches);
   body.scrollTo({ top: body.scrollHeight, behavior: reduced ? 'auto' : 'smooth' });
 }
 
@@ -2512,6 +2523,7 @@ function glideToBottom(body) {
  */
 function flyFromComposer(body) {
   if (!flight || Date.now() - flight.at > 4000) return;
+  if (!chatPref('motion')) return (flight = null);
   const row = [...body.querySelectorAll('.cm.me.cpop')].pop();
   if (!row) return;
   const bubble = row.querySelector('.cb'),
@@ -2625,7 +2637,7 @@ function soldOutToday() {
 function paint86Bar() {
   const bar = overlay && overlay.querySelector('.c86bar');
   if (!bar) return;
-  const dishes = user && hasChatAccess() ? soldOutToday() : [];
+  const dishes = user && hasChatAccess() && chatPref('strip') ? soldOutToday() : [];
   bar.hidden = !dishes.length;
   const html = dishes.length
     ? '<b>86</b>' +
@@ -2660,11 +2672,17 @@ function openSoldOutDialog() {
   const dialog = document.createElement('div');
   dialog.className = 'cpolldlg c86dlg';
   dialog.innerHTML =
-    '<div class="cpollbox"><b>🚫 ' +
-    translate('Plat épuisé (86)', 'Dish sold out (86)') +
-    '</b><input class="admfield" maxlength="80" data-search placeholder="' +
+    '<div class="cpollbox">' +
+    dialogHeadHtml(
+      MENU_ICONS.soldOut,
+      translate('Plat épuisé · 86', 'Sold out · 86'),
+      translate("Toute l'équipe arrête de le proposer", 'The whole team stops offering it'),
+    ) +
+    '<div class="csearch">' +
+    HEADER_ICONS.search +
+    '<input class="cfield" maxlength="80" data-search placeholder="' +
     translate('Chercher ou écrire un plat', 'Search or type a dish') +
-    '"><div class="c86list"></div><div class="abar"><button class="btn sec grow" data-cancel>' +
+    '"></div><div class="c86list"></div><div class="cdbar"><button class="cdbtn sec" data-cancel>' +
     translate('Annuler', 'Cancel') +
     '</button></div></div>';
   overlay.appendChild(dialog);
@@ -2676,22 +2694,267 @@ function openSoldOutDialog() {
       folded = query.toLowerCase();
     const matches = names.filter((name) => name.toLowerCase().includes(folded)).slice(0, 40);
     const typed = query && !matches.some((name) => name.toLowerCase() === folded) ? [query.slice(0, 80)] : [];
-    list.innerHTML = typed
-      .concat(matches)
-      .map((name) => '<button data-dish="' + escapeHtml(name) + '">' + escapeHtml(name) + '</button>')
-      .join('');
+    const rowHtml = (name, isTyped) =>
+      '<button data-dish="' +
+      escapeHtml(name) +
+      '">' +
+      MENU_ICONS.soldOut +
+      '<span>' +
+      (isTyped ? translate('Envoyer « ', 'Send « ') + escapeHtml(name) + ' »' : escapeHtml(name)) +
+      '</span></button>';
+    list.innerHTML =
+      typed.map((name) => rowHtml(name, true)).join('') +
+        matches.map((name) => rowHtml(name, false)).join('') ||
+      '<p class="muted sm" style="text-align:center;margin:14px 0">' +
+        translate('Aucun plat', 'No dish') +
+        '</p>';
   };
   paintList();
   search.addEventListener('input', paintList);
   search.focus();
   dialog.onclick = (event) => {
     const dish = event.target.closest('[data-dish]');
-    if (event.target === dialog || event.target.closest('[data-cancel]')) dialog.remove();
+    if (event.target === dialog || event.target.closest('[data-cancel]') || event.target.closest('.cdx'))
+      closeDialog(dialog);
     else if (dish) {
-      dialog.remove();
+      closeDialog(dialog);
       sendExtra({ text: OUT_PREFIX + dish.dataset.dish });
     }
   };
+}
+
+// ===== CHAT SETTINGS ⚙️ & DIALOG PARTS (0.75.0) ===== //
+
+// the chat settings of this phone: key & defaults 💾
+const PREFS_KEY = 'ltf_chat_prefs',
+  DEFAULT_PREFS = { sound: true, enter: true, size: 'm', motion: true, strip: true };
+
+/**
+ * `chatPrefs` - Function 💾
+ *
+ * @returns { object } - this phone's chat settings (defaults for anything never set)
+ */
+function chatPrefs() {
+  try {
+    return Object.assign({}, DEFAULT_PREFS, JSON.parse(localStorage.getItem(PREFS_KEY) || '{}'));
+  } catch (error) {
+    return Object.assign({}, DEFAULT_PREFS);
+  }
+}
+
+/**
+ * `chatPref` - Function 💾
+ *
+ * @param { string } name - a setting (sound, enter, size, motion, strip)
+ * @returns { any } - its value
+ */
+function chatPref(name) {
+  return chatPrefs()[name];
+}
+
+/**
+ * `setChatPref` - Function 💾
+ *
+ * @param { string } name - a setting
+ * @param { any } value - its new value
+ * @returns { void } - saved, then applied to the open chat
+ */
+function setChatPref(name, value) {
+  const prefs = chatPrefs();
+  prefs[name] = value;
+  try {
+    localStorage.setItem(PREFS_KEY, JSON.stringify(prefs));
+  } catch (error) {
+    // private mode: just for this visit 🤷
+  }
+  applyChatPrefs();
+  if (name === 'strip') paint86Bar();
+}
+
+/**
+ * `applyChatPrefs` - Function 🎛️
+ *
+ * @returns { void } - the text size & motion classes on the open chat
+ */
+function applyChatPrefs() {
+  if (!overlay) return;
+  const size = chatPref('size');
+  overlay.classList.toggle('cfs-s', size === 's');
+  overlay.classList.toggle('cfs-l', size === 'l');
+  overlay.classList.toggle('cnomo', !chatPref('motion'));
+}
+
+/**
+ * `dialogHeadHtml` - Function 🧩
+ *
+ * @param { string } icon - an outline SVG
+ * @param { string } title - the dialog title
+ * @param { string } subtitle - one short line under it
+ * @returns { string } - the head of a chat dialog (icon, title, subtitle, ✕)
+ */
+function dialogHeadHtml(icon, title, subtitle) {
+  return (
+    '<div class="cdh"><span class="cdhi">' +
+    icon +
+    '</span><div class="grow" style="min-width:0"><b>' +
+    title +
+    '</b><small>' +
+    subtitle +
+    '</small></div><button class="cdx" aria-label="close">✕</button></div>'
+  );
+}
+
+/**
+ * `closeDialog` - Function 👋
+ *
+ * @param { HTMLElement } dialog - a chat dialog (.cpolldlg)
+ * @returns { void } - slides it away, then removes it
+ */
+function closeDialog(dialog) {
+  if (dialog.classList.contains('out')) return;
+  dialog.classList.add('out');
+  setTimeout(() => dialog.remove(), 200);
+}
+
+/**
+ * `switchRowHtml` - Function 🎚️
+ *
+ * @param { string } name - the setting (or 'push' for the notifications)
+ * @param { string } title - the row title
+ * @param { string } hint - one short line under it
+ * @param { boolean } isOn - the switch state
+ * @returns { string } - a settings row with a switch
+ */
+function switchRowHtml(name, title, hint, isOn) {
+  return (
+    '<label class="csetr"><span class="grow"><b>' +
+    title +
+    '</b><small>' +
+    hint +
+    '</small></span><input type="checkbox" data-pref="' +
+    name +
+    '"' +
+    (isOn ? ' checked' : '') +
+    '><i class="csw"></i></label>'
+  );
+}
+
+/**
+ * `openChatSettings` - Async Function ⚙️
+ *
+ * The chat settings drawer, sliding in from the right: notifications, sound, Enter key, text size,
+ * animations & the 86 strip. Everything is saved on this phone only.
+ *
+ * @returns { Promise<void> }
+ */
+async function openChatSettings() {
+  if (!overlay || overlay.querySelector('.cset')) return;
+  const prefs = chatPrefs();
+  const pushOn =
+    pushSupported() && user && Notification.permission === 'granted' && !!(await currentSubscription());
+  const sizes = [
+    ['s', translate('Petit', 'Small')],
+    ['m', translate('Normal', 'Normal')],
+    ['l', translate('Grand', 'Large')],
+  ];
+  const drawer = document.createElement('div');
+  drawer.className = 'cset';
+  drawer.innerHTML =
+    '<div class="csetp" role="dialog" aria-label="settings"><div class="csethd"><button class="csetx" aria-label="back">' +
+    HEADER_ICONS.back +
+    '</button><b>' +
+    translate('Réglages du chat', 'Chat settings') +
+    '</b></div><div class="csetbd">' +
+    '<div class="csetg">' +
+    translate('Alertes', 'Alerts') +
+    '</div><div class="csetc">' +
+    (pushSupported() && user
+      ? switchRowHtml(
+          'push',
+          translate('Notifications', 'Notifications'),
+          translate('Sur ce téléphone, même app fermée', 'On this phone, even with the app closed'),
+          pushOn,
+        )
+      : '') +
+    switchRowHtml(
+      'sound',
+      translate('Son', 'Sound'),
+      translate('Un petit carillon à chaque message', 'A little chime for each message'),
+      prefs.sound,
+    ) +
+    switchRowHtml(
+      'strip',
+      translate('Bandeau « 86 »', '« 86 » strip'),
+      translate('Les plats épuisés du jour en haut', "Today's sold-out dishes at the top"),
+      prefs.strip,
+    ) +
+    '</div><div class="csetg">' +
+    translate('Écriture', 'Typing') +
+    '</div><div class="csetc">' +
+    switchRowHtml(
+      'enter',
+      translate('Entrée pour envoyer', 'Enter to send'),
+      translate('Désactivé : Entrée fait un retour à la ligne', 'Off: Enter adds a new line'),
+      prefs.enter,
+    ) +
+    '</div><div class="csetg">' +
+    translate('Affichage', 'Display') +
+    '</div><div class="csetc"><div class="csetr"><span class="grow"><b>' +
+    translate('Taille du texte', 'Text size') +
+    '</b><small>' +
+    translate('Dans les bulles', 'In the bubbles') +
+    '</small></span></div><div class="cseg">' +
+    sizes
+      .map(
+        ([value, label]) =>
+          '<button data-size="' +
+          value +
+          '"' +
+          (prefs.size === value ? ' class="on"' : '') +
+          ' style="font-size:' +
+          { s: 13, m: 15, l: 17 }[value] +
+          'px">' +
+          label +
+          '</button>',
+      )
+      .join('') +
+    '</div>' +
+    switchRowHtml(
+      'motion',
+      translate('Animations', 'Animations'),
+      translate("L'envoi qui s'envole, le défilement doux", 'The flying send, the smooth scroll'),
+      prefs.motion,
+    ) +
+    '</div><p class="muted sm csetft">' +
+    translate('Ces réglages restent sur ce téléphone.', 'These settings stay on this phone.') +
+    '</p></div></div>';
+  overlay.appendChild(drawer);
+  requestAnimationFrame(() => requestAnimationFrame(() => drawer.classList.add('on')));
+  // 👋 close: the back arrow or a tap on the dimmed side
+  const close = () => {
+    drawer.classList.remove('on');
+    setTimeout(() => drawer.remove(), 280);
+  };
+  drawer.addEventListener('click', (event) => {
+    if (event.target === drawer || event.target.closest('.csetx')) return close();
+    const size = event.target.closest('[data-size]');
+    if (size) {
+      drawer
+        .querySelectorAll('[data-size]')
+        .forEach((button) => button.classList.toggle('on', button === size));
+      setChatPref('size', size.dataset.size);
+    }
+  });
+  // 🎚️ the switches
+  drawer.addEventListener('change', async (event) => {
+    const input = event.target.closest('[data-pref]');
+    if (!input) return;
+    if (input.dataset.pref !== 'push') return setChatPref(input.dataset.pref, input.checked);
+    // 🔔 notifications: the same switch as the bell, then show the real state
+    await togglePush();
+    await refreshBell();
+    input.checked = Notification.permission === 'granted' && !!(await currentSubscription());
+  });
 }
 
 /**
@@ -2750,8 +3013,12 @@ function addPolishStyles() {
 .cthread b{color:var(--gold,#c9a961)}
 .cthread button{margin-left:auto;width:30px;height:30px;border-radius:50%;border:0;background:rgba(255,255,255,.08);color:inherit}
 .ctthr{margin:10px 0 6px}
-.c86dlg .c86list{display:flex;flex-direction:column;max-height:46vh;overflow:auto;margin:4px 0}
-.c86dlg .c86list button{text-align:left;padding:11px 12px;border:0;border-radius:12px;background:transparent;color:inherit;font:inherit}
+.c86dlg .c86list{display:flex;flex-direction:column;max-height:46vh;overflow:auto;margin:2px -6px;
+  border-radius:16px;background:rgba(255,255,255,.03)}
+.c86dlg .c86list button{display:flex;align-items:center;gap:12px;text-align:left;min-height:48px;padding:0 14px;border:0;
+  background:transparent;color:inherit;font:inherit;font-size:15px;cursor:pointer}
+.c86dlg .c86list button + button{border-top:1px solid rgba(255,255,255,.05)}
+.c86dlg .c86list button svg{flex:none;width:18px;height:18px;color:#ff8a80}
 .c86dlg .c86list button:active,.c86dlg .c86list button:hover{background:rgba(255,255,255,.07)}
 @keyframes cpop{from{transform:scale(.86) translateY(8px);opacity:0}to{transform:none;opacity:1}}
 .cact{animation:cslide .18s ease-out}
@@ -2808,11 +3075,86 @@ function addPolishStyles() {
 .cpollo.on{border-color:var(--gold,#c9a961)}
 .cpollo.on i{background:rgba(201,169,97,.35)}
 .cpollt{font-size:11px;opacity:.65}
-.cpolldlg{position:absolute;inset:0;z-index:9;background:rgba(0,0,0,.55);display:flex;align-items:center;
-  justify-content:center;padding:18px}
-.cpollbox{width:min(420px,100%);background:var(--bg);border:1px solid rgba(255,255,255,.1);border-radius:18px;
-  padding:16px;display:flex;flex-direction:column;gap:10px}
+.cfoot{position:relative;z-index:8}
+.cmenu{z-index:9}
+.cpolldlg{position:absolute;inset:0;z-index:30;background:rgba(0,0,0,.5);display:flex;align-items:flex-end;
+  justify-content:center;animation:fade .18s}
+.cpolldlg.out{opacity:0;transition:opacity .2s}
+.cpolldlg.out .cpollbox{transform:translateY(40px);transition:transform .2s}
+.cpollbox{width:min(520px,100%);box-sizing:border-box;max-height:90%;overflow:auto;
+  background:color-mix(in srgb,var(--bar,#14203a) 55%,var(--bg));border-radius:26px 26px 0 0;
+  padding:10px 18px calc(18px + env(safe-area-inset-bottom));display:flex;flex-direction:column;gap:10px;
+  box-shadow:0 -10px 40px rgba(0,0,0,.45);animation:csheet .32s cubic-bezier(.2,.85,.25,1)}
+.cpollbox::before{content:'';align-self:center;width:38px;height:4px;border-radius:2px;background:rgba(255,255,255,.18);margin-bottom:4px}
+@keyframes csheet{from{transform:translateY(100%)}}
+@media (min-width:700px){.cpolldlg{align-items:center}.cpollbox{border-radius:24px}.cpollbox::before{display:none}}
+.cdh{display:flex;align-items:center;gap:12px;margin-bottom:4px}
+.cdhi{width:42px;height:42px;flex:none;border-radius:14px;display:flex;align-items:center;justify-content:center;
+  color:var(--gold,#c9a961);background:rgba(201,169,97,.12)}
+.cdh b{display:block;font-size:17px}
+.cdh small{display:block;font-size:12.5px;color:var(--mu)}
+.cdx{width:34px;height:34px;flex:none;border:0;border-radius:50%;background:rgba(255,255,255,.07);color:var(--mu);
+  font-size:13px;cursor:pointer}
+.clbl{font-size:11px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--mu);margin:6px 2px -2px}
+.cfield{width:100%;box-sizing:border-box;height:50px;padding:0 16px;border-radius:14px;border:1.5px solid transparent;
+  background:rgba(255,255,255,.06);color:var(--tx,#fff);font:inherit;font-size:16px;outline:none;
+  transition:border-color .15s,background .15s}
+.cfield::placeholder{color:var(--mu);opacity:.8}
+.cfield:focus{border-color:var(--gold,#c9a961);background:rgba(255,255,255,.09)}
 .cpollopts{display:flex;flex-direction:column;gap:8px}
+.cpo{display:flex;align-items:center;gap:8px}
+.cpon{width:26px;height:26px;flex:none;border-radius:50%;display:flex;align-items:center;justify-content:center;
+  font-size:12px;font-weight:800;color:#111;background:var(--gold,#c9a961)}
+.cpox{width:34px;height:34px;flex:none;border:0;border-radius:50%;background:transparent;color:var(--mu);cursor:pointer}
+.cpollopts.cmin .cpox{visibility:hidden}
+.cpadd{height:46px;border-radius:14px;border:1.5px dashed rgba(255,255,255,.18);background:transparent;
+  color:var(--gold,#c9a961);font:inherit;font-weight:700;cursor:pointer}
+.cpadd[hidden]{display:none}
+.cdbar{display:flex;gap:10px;margin-top:8px}
+.cdbtn{flex:1;height:50px;border-radius:25px;border:0;background:var(--gold,#c9a961);color:#111;font:inherit;
+  font-weight:800;font-size:15px;cursor:pointer}
+.cdbtn.sec{background:rgba(255,255,255,.08);color:var(--tx,#fff);font-weight:700}
+.cdbtn:active,.cpadd:active{transform:scale(.97)}
+.csearch{position:relative}
+.csearch svg{position:absolute;left:14px;top:50%;transform:translateY(-50%);color:var(--mu);pointer-events:none}
+.csearch .cfield{padding-left:46px}
+.chatov .cbell,.chatov .cgear{width:40px;height:40px;flex:none;border:0;border-radius:50%;padding:0;background:transparent;
+  color:var(--mu);opacity:1;box-shadow:none;display:flex;align-items:center;justify-content:center;cursor:pointer}
+.chatov .cbell[hidden]{display:none}
+.chatov .cbell.on{color:var(--tx,#fff);box-shadow:none}
+.chatov .cbell:active,.chatov .cgear:active{background:rgba(255,255,255,.08)}
+.chatov.cfs-s .ct{font-size:13.5px}
+.chatov.cfs-l .ct{font-size:17.5px}
+.chatov.cnomo .cm.cpop .cb{animation:none}
+.cset{position:absolute;inset:0;z-index:40;background:rgba(0,0,0,0);transition:background .28s}
+.cset.on{background:rgba(0,0,0,.45)}
+.csetp{position:absolute;top:0;right:0;bottom:0;width:min(380px,88%);display:flex;flex-direction:column;
+  background:var(--bg);box-shadow:-12px 0 40px rgba(0,0,0,.4);transform:translateX(100%);
+  transition:transform .3s cubic-bezier(.2,.85,.25,1)}
+.cset.on .csetp{transform:none}
+.csethd{display:flex;align-items:center;gap:8px;padding:calc(10px + env(safe-area-inset-top)) 12px 10px}
+.csethd b{font-size:17px}
+.csetx{width:40px;height:40px;border:0;border-radius:50%;background:transparent;color:inherit;display:flex;
+  align-items:center;justify-content:center;cursor:pointer}
+.csetbd{flex:1;overflow:auto;padding:0 14px calc(18px + env(safe-area-inset-bottom))}
+.csetg{font-size:11px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--mu);margin:16px 6px 8px}
+.csetc{border-radius:18px;background:rgba(255,255,255,.05);overflow:hidden}
+.csetr{display:flex;align-items:center;gap:12px;padding:13px 14px;cursor:pointer}
+.csetr + .csetr{border-top:1px solid rgba(255,255,255,.06)}
+.csetr b{display:block;font-size:15px;font-weight:600}
+.csetr small{display:block;font-size:12.5px;color:var(--mu);margin-top:2px}
+.csetr input{position:absolute;opacity:0;pointer-events:none}
+.csw{position:relative;width:46px;height:28px;flex:none;border-radius:14px;background:rgba(255,255,255,.16);transition:background .2s}
+.csw::after{content:'';position:absolute;top:3px;left:3px;width:22px;height:22px;border-radius:50%;background:#fff;
+  box-shadow:0 1px 3px rgba(0,0,0,.35);transition:transform .2s cubic-bezier(.2,.85,.25,1)}
+.csetr input:checked + .csw{background:var(--gold,#c9a961)}
+.csetr input:checked + .csw::after{transform:translateX(18px)}
+.csetr input:focus-visible + .csw{outline:2px solid var(--gold,#c9a961);outline-offset:2px}
+.cseg{display:flex;gap:6px;padding:0 14px 14px}
+.cseg button{flex:1;height:40px;border-radius:12px;border:0;background:rgba(255,255,255,.07);color:inherit;font:inherit;cursor:pointer}
+.cseg button.on{background:var(--gold,#c9a961);color:#111;font-weight:700}
+.csetft{text-align:center;margin:16px 0 0}
+@media (prefers-reduced-motion:reduce){.csetp,.cpollbox{transition:none;animation:none}}
 .cholbl{font-size:11px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;color:#f3d58a;margin-bottom:3px}
 .cm .cb:has(.cholbl){outline:1.5px solid rgba(201,169,97,.7)}
 .cho{display:flex;gap:10px;align-items:center;padding:8px 14px;border-bottom:1px solid rgba(255,255,255,.06);
@@ -3294,42 +3636,69 @@ function openPollDialog() {
   overlay.querySelector('.cmenu').hidden = true;
   const dialog = document.createElement('div');
   dialog.className = 'cpolldlg';
+  // one option row: its number, the field & a ✕ (shown from the 3rd option)
   const optionInput = (index) =>
-    '<input class="admfield" maxlength="80" data-opt="' +
+    '<div class="cpo"><span class="cpon">' +
+    (index + 1) +
+    '</span><input class="cfield" maxlength="80" data-opt="' +
     index +
     '" placeholder="' +
     translate('Option ', 'Option ') +
     (index + 1) +
-    '">';
+    '"><button class="cpox" data-remove aria-label="remove">✕</button></div>';
   dialog.innerHTML =
-    '<div class="cpollbox"><b>📊 ' +
-    translate('Nouveau sondage', 'New poll') +
-    '</b>' +
-    '<input class="admfield" maxlength="200" data-q placeholder="' +
-    translate('Question (ex. Qui prend le brunch dimanche ?)', 'Question (e.g. Who takes Sunday brunch?)') +
-    '">' +
-    '<div class="cpollopts">' +
+    '<div class="cpollbox">' +
+    dialogHeadHtml(
+      MENU_ICONS.poll,
+      translate('Nouveau sondage', 'New poll'),
+      translate("L'équipe vote d'un tap", 'The team votes with one tap'),
+    ) +
+    '<label class="clbl">' +
+    translate('Question', 'Question') +
+    '</label><input class="cfield" maxlength="200" data-q placeholder="' +
+    translate('Ex. Qui prend le brunch dimanche ?', 'E.g. Who takes Sunday brunch?') +
+    '"><label class="clbl">' +
+    translate('Options', 'Options') +
+    '</label><div class="cpollopts">' +
     optionInput(0) +
     optionInput(1) +
     '</div>' +
-    '<button class="btn sec" data-add>+ ' +
-    translate('Option', 'Option') +
+    '<button class="cpadd" data-add>+ ' +
+    translate('Ajouter une option', 'Add an option') +
     '</button>' +
-    '<div class="abar"><button class="btn sec grow" data-cancel>' +
+    '<div class="cdbar"><button class="cdbtn sec" data-cancel>' +
     translate('Annuler', 'Cancel') +
-    '</button><button class="btn grow" data-send>' +
+    '</button><button class="cdbtn" data-send>' +
     translate('Envoyer', 'Send') +
     '</button></div></div>';
   overlay.appendChild(dialog);
   dialog.querySelector('[data-q]').focus();
+  const list = dialog.querySelector('.cpollopts');
+  // renumber the rows & hide « Ajouter » at the max 🔢
+  const renumber = () => {
+    [...list.children].forEach((row, index) => {
+      row.querySelector('.cpon').textContent = index + 1;
+      row.querySelector('input').placeholder = translate('Option ', 'Option ') + (index + 1);
+    });
+    list.classList.toggle('cmin', list.children.length <= POLL_MIN);
+    dialog.querySelector('[data-add]').hidden = list.children.length >= POLL_MAX;
+  };
+  renumber();
   dialog.querySelector('[data-add]').onclick = () => {
-    const list = dialog.querySelector('.cpollopts');
     if (list.children.length >= POLL_MAX) return;
     list.insertAdjacentHTML('beforeend', optionInput(list.children.length));
-    list.lastElementChild.focus();
+    renumber();
+    list.lastElementChild.querySelector('input').focus();
   };
-  dialog.querySelector('[data-cancel]').onclick = () => dialog.remove();
-  dialog.onclick = (event) => event.target === dialog && dialog.remove();
+  list.addEventListener('click', (event) => {
+    const remove = event.target.closest('[data-remove]');
+    if (!remove || list.children.length <= POLL_MIN) return;
+    remove.parentNode.remove();
+    renumber();
+  });
+  dialog.querySelector('[data-cancel]').onclick = () => closeDialog(dialog);
+  dialog.querySelector('.cdx').onclick = () => closeDialog(dialog);
+  dialog.onclick = (event) => event.target === dialog && closeDialog(dialog);
   dialog.querySelector('[data-send]').onclick = () => {
     const question = dialog.querySelector('[data-q]').value.trim().slice(0, 200),
       options = [...dialog.querySelectorAll('[data-opt]')]
@@ -3421,6 +3790,27 @@ const MENU_ICONS = {
   handover: MENU_SVG_START + '<path d="M4 9h13l-3.5-3.5M20 15H7l3.5 3.5"/></svg>',
   soldOut: MENU_SVG_START + '<circle cx="12" cy="12" r="8.5"/><path d="m6 6 12 12"/></svg>',
 };
+
+// the header & dialog icons: simple outline, one colour 🖊️
+const HEADER_ICONS = {
+  bell:
+    MENU_SVG_START +
+    '<path d="M6 16V11a6 6 0 0 1 12 0v5l1.5 2h-15z"/><path d="M10 20.5a2 2 0 0 0 4 0"/></svg>',
+  bellOff:
+    MENU_SVG_START +
+    '<path d="M6 16V11a6 6 0 0 1 12 0v5l1.5 2h-15z"/><path d="M10 20.5a2 2 0 0 0 4 0"/><path d="m3.5 3.5 17 17"/></svg>',
+  gear:
+    MENU_SVG_START +
+    '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a' +
+    '1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.' +
+    '8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.' +
+    '7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0' +
+    ' 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1' +
+    '.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>',
+  search: MENU_SVG_START + '<circle cx="11" cy="11" r="6.5"/><path d="m20 20-4.3-4.3"/></svg>',
+  back: MENU_SVG_START + '<path d="M15 5l-7 7 7 7"/></svg>',
+};
+
 // 🎤 a plain outline microphone (one colour, follows the text colour)
 const MIC_ICON =
   '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" ' +
@@ -3935,7 +4325,7 @@ async function refreshBell() {
   }
   const isOn = Notification.permission === 'granted' && !!(await currentSubscription());
   bell.hidden = false;
-  bell.textContent = isOn ? '🔔' : '🔕';
+  bell.innerHTML = isOn ? HEADER_ICONS.bell : HEADER_ICONS.bellOff;
   bell.classList.toggle('on', isOn);
 }
 
