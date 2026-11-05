@@ -231,4 +231,21 @@ window.LTF_IMG = {
   'q:Montbriac': 'img/q-montbriac.jpg',
   // 📸 Crottin de Chavignol: Markus Lindholm, CC BY-SA 2.5, Wikimedia Commons (File:Crottin_de_Chavignol.jpg)
   'q:Crottin de Chavignol': 'img/q-crottin.jpg',
+  // 🎄 Menus des fêtes 2026: AI-generated illustrations from the dish ingredients (not the real plates)
+  'd:Langoustine juste raidie au citron caviar': 'img/d-gen-fete-langoustine.jpg',
+  'd:Noix de Saint-Jacques en fine raviole au foie gras et truffe noire': 'img/d-gen-fete-raviole-sj.jpg',
+  'd:Aiguillette de Saint-Pierre au caviar': 'img/d-gen-fete-saint-pierre.jpg',
+  'd:Grenadin de veau': 'img/d-gen-fete-veau.jpg',
+  'd:Bûche chocolat': 'img/d-gen-fete-buche.jpg',
+  'd:Carpaccio de loup à la mandarine': 'img/d-gen-fete-carpaccio-loup.jpg',
+  'd:Turbotin rôti au beurre de truffe': 'img/d-gen-fete-turbotin.jpg',
+  'd:Nougat glacé aux fruits du mendiant': 'img/d-gen-fete-nougat.jpg',
+  'd:Rissole aux champignons et truffe noire': 'img/d-gen-fete-rissole.jpg',
+  'd:Terrine de foie gras au vin chaud': 'img/d-gen-fete-foie-gras.jpg',
+  'd:Noix de Saint-Jacques en coquille lutée': 'img/d-gen-fete-coquille.jpg',
+  'd:Tourte feuilletée de céleri à la truffe': 'img/d-gen-fete-tourte.jpg',
+  'd:Filet de biche': 'img/d-gen-fete-biche.jpg',
+  'd:Parfait infusé aux navettes des Accoules': 'img/d-gen-fete-parfait.jpg',
+  'd:Mont-Blanc aux marrons glacés': 'img/d-gen-fete-mont-blanc.jpg',
+  'd:Fromages affinés de la maison Lemarié': 'img/d-fromages-affines-de-provence-de-la-maison-lemarie.jpg',
 };
