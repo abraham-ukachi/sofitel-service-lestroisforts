@@ -229,4 +229,6 @@ window.LTF_IMG = {
   'q:Casanu': 'img/q-casanu.jpg',
   'q:Chèvre cendré': 'img/q-chevre-cendre.jpg',
   'q:Montbriac': 'img/q-montbriac.jpg',
+  // 📸 Crottin de Chavignol: Markus Lindholm, CC BY-SA 2.5, Wikimedia Commons (File:Crottin_de_Chavignol.jpg)
+  'q:Crottin de Chavignol': 'img/q-crottin.jpg',
 };
