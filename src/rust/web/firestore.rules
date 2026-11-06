@@ -326,6 +326,8 @@ service cloud.firestore {
       // team members read a live game (a missing code reads as "not found"); the owner's dashboard reads them all
       allow read: if isMember() && (resource == null || simAlive());
       allow read: if isOwner();
+      // 🔎 (v3) the host on another phone finds the code of their own game: where host == me, li == id, limit 1
+      allow list: if isMember() && request.query.limit <= 1 && resource.data.host == request.auth.uid;
       // the host creates a game under a free 4-digit code
       allow create: if isMember() && code.matches('^[0-9]{4}$') && isNewSimGame(request.resource.data);
       // an expired code (older than 6 hours) can be reused by a new game
