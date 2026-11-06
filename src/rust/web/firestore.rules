@@ -24,6 +24,7 @@
 // - pushlog/{id}   : one row per announced message / request, so a push can never be replayed.
 // - board/{uid}    : the team leaderboard (XP, month base, streak, mastered, answers, exam, XP per day & activity), teammates only, my own row only.
 // - sim/{code}     : an online « Simulation de service » game (4-digit code, 6 hours), team members only, small checked writes.
+// - simlist/{id}   : « Parties en cours », one public entry per online game (random id, the code only for an open game).
 
 rules_version = '2';
 service cloud.firestore {
@@ -276,9 +277,16 @@ service cloud.firestore {
     function simAlive() {
       return request.time < resource.data.at + duration.value(6, 'h');
     }
-    // 🆕 a brand-new game: the host alone, bookings & rangs as JSON text, no table yet, clock not started, server time
+    // 🕰️ a client timestamp about 6 hours after the server time (± 5 minutes): the game's expiry (`exp`)
+    function inSixHours(value) {
+      return value is timestamp
+        && value > request.time + duration.value(355, 'm')
+        && value < request.time + duration.value(365, 'm');
+    }
+    // 🆕 a brand-new game: the host alone, bookings & rangs as JSON text, no table yet, clock not started, server time;
+    // since 0.78: open or « sur code » (pub), not ended (en), expiry (exp), the id of its list entry (li), all optional
     function isNewSimGame(data) {
-      return data.keys().hasOnly(['v', 'host', 'n', 'bk', 'rg', 'wt', 'tb', 'rq', 'st', 'at'])
+      return data.keys().hasOnly(['v', 'host', 'n', 'bk', 'rg', 'wt', 'tb', 'rq', 'st', 'at', 'pub', 'en', 'exp', 'li'])
         && data.v == 1
         && data.host == request.auth.uid
         && data.n is int && data.n >= 1 && data.n <= 4
@@ -291,7 +299,28 @@ service cloud.firestore {
         && data.tb is map && data.tb.size() == 0
         && data.rq is map && data.rq.size() == 0
         && data.st == null
-        && data.at == request.time;
+        && data.at == request.time
+        && (!('pub' in data) || data.pub is bool)
+        && (!('en' in data) || data.en == false)
+        && (!('exp' in data) || inSixHours(data.exp))
+        && (!('li' in data) || (data.li is string && data.li.matches('^[A-Za-z0-9]{16,32}$')));
+    }
+    // 📡 a « Parties en cours » entry: its host, the code ('' for a « sur code » game), waiters, started, clock,
+    // tables done / total, ended, expiry, server time
+    function isSimListEntry(data) {
+      return data.keys().hasOnly(['h', 'hn', 'c', 'n', 'w', 's', 'k', 'd', 't', 'en', 'exp', 'at'])
+        && data.h == request.auth.uid
+        && isText(data.hn, 60)
+        && data.c is string && (data.c == '' || data.c.matches('^[0-9]{4}$'))
+        && data.n is int && data.n >= 1 && data.n <= 4
+        && data.w is int && data.w >= 0 && data.w <= 4
+        && data.s is bool
+        && data.k is int && data.k >= 0 && data.k <= 1440
+        && data.d is int && data.d >= 0 && data.d <= 10
+        && data.t is int && data.t >= 0 && data.t <= 10
+        && data.en is bool
+        && data.exp is timestamp
+        && data.at is timestamp;
     }
     match /sim/{code} {
       // team members read a live game (a missing code reads as "not found"); the owner's dashboard reads them all
@@ -313,16 +342,40 @@ service cloud.firestore {
         && request.resource.data.wt[request.auth.uid].i >= 0
         && request.resource.data.wt[request.auth.uid].i < resource.data.n;
       // 🍽️ play: the game's waiters change tables (steal included) & requests, keys = real table ids only;
-      // only the host starts the clock, once, with the server time
+      // only the host starts the clock, once, with the server time, and only the host ends the game (en = true)
       allow update: if isMember() && simAlive()
         && request.auth.uid in resource.data.wt
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['tb', 'rq', 'st'])
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['tb', 'rq', 'st', 'en'])
         && request.resource.data.tb is map && request.resource.data.tb.keys().hasOnly(simTableIds())
         && request.resource.data.rq is map && request.resource.data.rq.keys().hasOnly(simTableIds())
         && (!('st' in request.resource.data.diff(resource.data).affectedKeys())
-          || (request.auth.uid == resource.data.host && resource.data.st == null && request.resource.data.st == request.time));
+          || (request.auth.uid == resource.data.host && resource.data.st == null && request.resource.data.st == request.time))
+        && (!('en' in request.resource.data.diff(resource.data).affectedKeys())
+          || (request.auth.uid == resource.data.host && request.resource.data.en == true));
       // the host closes the game; anyone on the team may clear an expired one
       allow delete: if isMember() && (resource.data.host == request.auth.uid || !simAlive());
+    }
+    // 📡 « Parties en cours »: one public entry per online game, under a random id (never the game code)
+    match /simlist/{id} {
+      // a list query must carry limit(20) or less (the rules can prove it); expired & ended entries are filtered
+      // by the app (where exp > now), they hold nothing secret: a « sur code » game is listed without its code
+      allow list: if isMember() && request.query.limit <= 20;
+      allow get: if isMember();
+      // the host creates it with the game: the code must be one of the host's own games (or '' for « sur code »)
+      allow create: if isMember()
+        && id.matches('^[A-Za-z0-9]{16,32}$')
+        && isSimListEntry(request.resource.data)
+        && request.resource.data.at == request.time
+        && inSixHours(request.resource.data.exp)
+        && request.resource.data.en == false
+        && (request.resource.data.c == ''
+          || get(/databases/$(database)/documents/sim/$(request.resource.data.c)).data.host == request.auth.uid);
+      // the host updates only the live summary: waiters joined, started, clock, tables done, ended
+      allow update: if isMember()
+        && resource.data.h == request.auth.uid
+        && isSimListEntry(request.resource.data)
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['w', 's', 'k', 'd', 'en']);
+      allow delete: if isMember() && (resource.data.h == request.auth.uid || resource.data.exp < request.time);
     }
 
     // ===== LIVE CONTENT 📝 (the owner edits the menu in the dashboard, everybody reads it) ===== //
