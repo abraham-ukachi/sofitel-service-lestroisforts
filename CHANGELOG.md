@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file. Versions follow the service-worker cache (`ltf-vNN` → `0.NN.0`), see [CONTRIBUTING.md](./CONTRIBUTING.md#git-commit-messages) for the commit guidelines.
 
+### 0.77.1 (2026-11-06)
+
+* :bug: Simulation: the reservation sheet had 0 bookings in the live (Rust) app, which has no `window.LTF`; the game now loads `src/pwa/data.js` and the « À dire au client » lines itself
+* :hourglass: Simulation: the clock runs in real time, with ×2, ×5 and ×10 speeds (chosen in the setup, changeable during a solo game) and a « next arrival » button in solo
+* :lipstick: Simulation: the number buttons are centred
+
 ### 0.77.0 (2026-11-06)
 
 * :video_game: Simulation de service (`pwa/sim.js`): pick 1 to 4 waiters and their rangs on the real floor plan, 5 to 10 random bookings (fictional names, random birthdays, allergies), a briefing sheet, a service clock (1 real minute = 10 minutes), a multiple-choice dialogue with each table from welcome to bill built from the real carte, wines and allergens, scores and XP
