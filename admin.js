@@ -81,6 +81,7 @@ const COLLECTIONS = [
   ['pushlog', 'Journal des notifications', 'Push log'],
   ['typing', 'En train d’écrire (chat)', 'Typing now (chat)'],
   ['seen', 'Lu jusqu’à (chat)', 'Read up to (chat)'],
+  ['sim', 'Simulation de service (parties en ligne)', 'Service simulation (online games)'],
 ];
 // the localStorage key of the app's progress (for the language) 🎓
 const PROGRESS_KEY = 'ltf_v1';

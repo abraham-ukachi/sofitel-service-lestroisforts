@@ -73,6 +73,13 @@ const X_PATH =
 // the journey so far: [date, version, major?, FR, EN] (newest first) 🧭
 const TIMELINE = [
   [
+    '2026-11-06',
+    '0.77',
+    true,
+    'Simulation de service : un service de 5 à 10 tables, en solo ou à plusieurs',
+    'Service simulation: a 5 to 10 table service, solo or with friends',
+  ],
+  [
     '2026-11-05',
     '0.76',
     true,

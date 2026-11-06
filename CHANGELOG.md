@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file. Versions follow the service-worker cache (`ltf-vNN` → `0.NN.0`), see [CONTRIBUTING.md](./CONTRIBUTING.md#git-commit-messages) for the commit guidelines.
 
+### 0.77.0 (2026-11-06)
+
+* :video_game: Simulation de service (`pwa/sim.js`): pick 1 to 4 waiters and their rangs on the real floor plan, 5 to 10 random bookings (fictional names, random birthdays, allergies), a briefing sheet, a service clock (1 real minute = 10 minutes), a multiple-choice dialogue with each table from welcome to bill built from the real carte, wines and allergens, scores and XP
+* :busts_in_silhouette: Online games with a 4-digit code (Firestore `sim/{code}`): each player plays their rang, take a table or ask for it first
+* :lock: Firestore rules: `sim/{code}` block
+
 ### 0.76.2 (2026-11-05)
 
 * :camera_flash: Menus des fêtes: a photo for all 16 dishes (15 AI-generated illustrations from each dish's ingredients, `d-gen-fete-*`, and the Lemarié board photo for the cheese course)
