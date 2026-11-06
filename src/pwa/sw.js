@@ -36,7 +36,7 @@
 // network first, cache as a fallback (📴 offline).
 
 // the cache of this version 🏷️
-const CACHE = 'ltf-v102';
+const CACHE = 'ltf-v103';
 // the scanner cache (big model files, kept across app versions): bump it when pwa/scan/ changes 📷
 const SCAN_CACHE = 'ltf-scan-v5';
 // the app shell, precached on install 📦
@@ -64,6 +64,7 @@ const ASSETS = [
   'sim-scene.js',
   'sim-talk.js',
   'sim-list.js',
+  'sim-live.js',
   'img/setup-table.jpg',
   'img/setup-seau1.jpg',
   'img/setup-seau2.jpg',
