@@ -74,6 +74,13 @@ const X_PATH =
 const TIMELINE = [
   [
     '2026-11-06',
+    '0.79',
+    false,
+    'Simulations en direct sur chaque page, reprise après rechargement, barre d’appel en bas',
+    'Live simulations on every page, resume after reload, call bar at the bottom',
+  ],
+  [
+    '2026-11-06',
     '0.78',
     true,
     'Simulation 2 : voix des clients, boissons à préparer, questions, 3D et parties en cours',

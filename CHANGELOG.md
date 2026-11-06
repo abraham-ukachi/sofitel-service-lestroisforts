@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file. Versions follow the service-worker cache (`ltf-vNN` → `0.NN.0`), see [CONTRIBUTING.md](./CONTRIBUTING.md#git-commit-messages) for the commit guidelines.
 
+### 0.79.0 (2026-11-06)
+
+* :rotating_light: Simulation: a floating live card with a colourful ping on every page while games are running (`pwa/sim-live.js`)
+* :key: Simulation: the host (or a player on the same phone) rejoins without a code
+* :floppy_disk: Simulation: solo games are saved and resume after a reload; the ongoing notification comes back too
+* :iphone: Simulation: guests, voice, « réécouter » and « Questions » in a fixed bottom bar, plus a scroll-to-top button
+* :lock: Firestore rules: members can find their own game by its list id
+
 ### 0.78.0 (2026-11-06)
 
 * :speaking_head: Simulation: guests speak like a call (own voice per man, woman or child), mute and « réécouter »
