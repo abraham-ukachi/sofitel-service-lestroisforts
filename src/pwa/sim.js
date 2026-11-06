@@ -33,7 +33,7 @@
  * !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
  */
 
-// 🛎️ Simulation de service: a dinner service at Les Trois Forts, sped up (1 real minute = 10 service minutes).
+// 🛎️ Simulation de service: a dinner service at Les Trois Forts, in real time or sped up (×2, ×5, ×10).
 // - ⚙️ Setup: 1 to 4 waiters, each with a « rang » (a section of the real floor plan), split automatically by
 //   position or by tapping the tables
 // - 🎲 Generation: 5 to 10 fictional bookings (names, covers, table, time, occasions, allergies, notes)
@@ -57,8 +57,10 @@ const PROGRESS_KEY = 'ltf_v1';
 // the best solo scores 🏆
 const BEST_KEY = 'ltf_sim_best_v1';
 
-// the service clock: 1 real minute = 10 service minutes, so 1 service minute = 6 real seconds 🕰️
-const REAL_MS_PER_SERVICE_MINUTE = 6000;
+// the service clock runs in real time (1 real minute = 1 service minute) at speed ×1 🕰️
+const REAL_MS_PER_MINUTE = 60000;
+// the speeds a game can run at (×1 = real time) ⏩
+const SPEEDS = [1, 2, 5, 10];
 // 19:00, the first booking & the start of the clock (minutes after midnight) 🕖
 const SERVICE_START = 19 * 60;
 // 21:45, the last possible arrival 🕘
@@ -219,6 +221,7 @@ const ICON_PATHS = {
   key: 'M14 10a4 4 0 1 0-1.2 2.8L20 20M17 17l2-2M15 15l2-2',
   clock: 'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM12 7v5l3 2',
   play: 'M7 4.5v15l12-7.5z',
+  skip: 'M5 5l9 7-9 7zM18 5v14',
   chat: 'M4 5h16v11H9l-5 4z',
   cake: 'M4 20h16v-7H4zM4 16c2 1.2 4 1.2 6 0s4-1.2 6 0 3 1 4 0M12 13V9M12 6.5c-.8-.8-.8-1.8 0-2.8.8 1 .8 2 0 2.8',
   alert: 'M12 3l10 18H2zM12 10v5M12 18h.01',
@@ -431,6 +434,54 @@ function menuData() {
   return window.LTF || {};
 }
 
+// the one load of the data files (null until asked, or after a failed load) 📦
+let dataPromise = null;
+
+/**
+ * `loadScript` - Function 📜
+ *
+ * @param { string } source - a script's path (same origin)
+ * @returns { Promise<void> } - resolves once it ran (or failed: the game then says the data is missing)
+ */
+function loadScript(source) {
+  return new Promise((resolve) => {
+    const script = document.createElement('script');
+    script.src = source;
+    script.onload = () => resolve();
+    script.onerror = () => resolve();
+    document.head.appendChild(script);
+  });
+}
+
+/**
+ * `ensureData` - Async Function 📦
+ *
+ * The Rust/wasm app keeps the menu inside the wasm and has no `window.LTF`: the game then loads the readable
+ * data files it ships (src/pwa/data.js & the « À dire au client » lines), once, like the dashboard does.
+ *
+ * @returns { Promise<boolean> } - true when the floor plan & the dishes are there
+ */
+function ensureData() {
+  // 🔁 one load for every caller (the page & the setup may ask at the same time)
+  if (!dataPromise) dataPromise = loadData();
+  return dataPromise;
+}
+
+/**
+ * `loadData` - Async Function 📦
+ *
+ * @returns { Promise<boolean> } - loads the missing data files, then true when the plan & the dishes are there
+ */
+async function loadData() {
+  if (!(window.LTF && window.LTF.tables && window.LTF.dishes)) await loadScript('src/pwa/data.js');
+  if (!window.LTF_INFO) await loadScript('src/pwa/i18n.js');
+  if (!window.LTF_INFO_FR) await loadScript('src/pwa/i18n_fr.js');
+  const ready = floorTables().length > 0 && (menuData().dishes || []).length > 0;
+  // 🔄 a failed load (offline) can be tried again later
+  if (!ready) dataPromise = null;
+  return ready;
+}
+
 /**
  * `firstSentence` - Function ✂️
  *
@@ -479,7 +530,10 @@ const SIM_CSS = `
 .simsec{font-weight:700;font-size:15px;margin:18px 2px 10px;display:flex;align-items:center;gap:8px}
 .simseg{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
 .simseg>*{min-width:0}
-.simsegbtn{height:48px;border-radius:16px;background:var(--sf2);color:var(--tx);font-weight:800;font-size:17px}
+.simsegbtn{height:48px;border-radius:16px;background:var(--sf2);color:var(--tx);font-weight:800;font-size:17px;
+display:flex;align-items:center;justify-content:center;padding:0;margin:0;line-height:1;text-align:center;width:100%}
+.simspeed{display:inline-flex;align-items:center;justify-content:center;min-width:44px;height:32px;padding:0 10px;margin-left:6px;
+border-radius:99px;background:var(--pill);color:var(--tx);font-weight:800;font-size:14px;line-height:1}
 .simsegbtn.simon{background:var(--gbtn);color:var(--ong)}
 .simwaiters{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
 .simwaiters>*{min-width:0}
@@ -2134,12 +2188,14 @@ const page = {
   quitting: false,
   online: false,
   waiterCount: 1,
+  speed: 1,
   names: ['Serveur 1', 'Serveur 2', 'Serveur 3', 'Serveur 4'],
   rangs: {},
   brush: 0,
   bookings: [],
   tableId: '',
   joinedAsGuest: false,
+  dataReady: false,
 };
 
 // the game being played (null when none): see `startGame` 🎮
@@ -2176,6 +2232,9 @@ function startGame(options) {
       me: 'w0',
       requests: {},
       startMs: 0,
+      speed: 1,
+      anchorMs: 0,
+      anchorClock: 0,
       seen: {},
       ended: false,
       earned: 0,
@@ -2193,7 +2252,53 @@ function startGame(options) {
  */
 function serviceNow() {
   if (!game || !game.startMs) return SERVICE_START;
-  return Math.min(HARD_END, SERVICE_START + (Date.now() - game.startMs) / REAL_MS_PER_SERVICE_MINUTE);
+  // ⚓ the last speed change (or the start): the clock runs from there at the game's speed
+  const anchorMs = game.anchorMs || game.startMs;
+  const anchorClock = game.anchorClock || SERVICE_START;
+  return Math.min(HARD_END, anchorClock + ((Date.now() - anchorMs) / REAL_MS_PER_MINUTE) * (game.speed || 1));
+}
+
+/**
+ * `cleanSpeed` - Function ⏩
+ *
+ * @param { any } value - a speed (from the setup or a remote game)
+ * @returns { number } - one of SPEEDS (×1, real time, when it isn't one)
+ */
+function cleanSpeed(value) {
+  const speed = Number(value);
+  return SPEEDS.includes(speed) ? speed : 1;
+}
+
+/**
+ * `setSpeed` - Function ⏩
+ *
+ * Solo only: changes the speed of the clock from now on (the time already played stays as it is).
+ *
+ * @param { number } speed - the new speed
+ * @returns { void }
+ */
+function setSpeed(speed) {
+  if (!game || game.mode !== 'solo' || !game.startMs) return;
+  game.anchorClock = serviceNow();
+  game.anchorMs = Date.now();
+  game.speed = cleanSpeed(speed);
+}
+
+/**
+ * `skipToNextArrival` - Function ⏭️
+ *
+ * Solo only: moves the clock straight to the next guests' arrival (nothing to do until then).
+ *
+ * @returns { boolean } - true when the clock moved
+ */
+function skipToNextArrival() {
+  if (!game || game.mode !== 'solo' || !game.startMs) return false;
+  const now = serviceNow();
+  const upcoming = game.bookings.map((booking) => booking.time).filter((time) => time > now);
+  if (!upcoming.length) return false;
+  game.anchorClock = Math.min(...upcoming);
+  game.anchorMs = Date.now();
+  return true;
 }
 
 /**
@@ -2567,6 +2672,7 @@ function cleanRemote(data) {
   try {
     bookings = JSON.parse(typeof data.bk === 'string' && data.bk.length < 30000 ? data.bk : '[]');
     rangs = JSON.parse(typeof data.rg === 'string' && data.rg.length < 2000 ? data.rg : '{}');
+    // ⏩ the host's speed rides in `rg` (key `sp`, ignored by the rang check below)
   } catch (error) {
     return null;
   }
@@ -2639,6 +2745,7 @@ function cleanRemote(data) {
     requests,
     startMs: millis(data.st),
     createdMs: millis(data.at),
+    speed: cleanSpeed(rangs && rangs.sp),
   };
 }
 
@@ -2719,7 +2826,7 @@ async function createOnlineGame() {
       host: user.uid,
       n: page.waiterCount,
       bk: JSON.stringify(page.bookings),
-      rg: JSON.stringify(page.rangs),
+      rg: JSON.stringify(Object.assign({}, page.rangs, { sp: cleanSpeed(page.speed) })),
       wt: { [user.uid]: { n: playerName(user), i: 0 } },
       tb: {},
       rq: {},
@@ -2736,6 +2843,7 @@ async function createOnlineGame() {
       rangs: page.rangs,
       bookings: page.bookings,
       tables: {},
+      speed: cleanSpeed(page.speed),
     });
     subscribeGame(code);
     history.replaceState({ ltfSim: 'lobby' }, '');
@@ -2796,6 +2904,7 @@ async function joinOnlineGame(code) {
       tables: remote.tables,
       requests: remote.requests,
       startMs: remote.startMs,
+      speed: remote.speed,
     });
     page.joinedAsGuest = remote.host !== user.uid;
     subscribeGame(code);
@@ -3097,6 +3206,21 @@ function clockHtml() {
 }
 
 /**
+ * `speedHtml` - Function ⏩
+ *
+ * @returns { string } - solo: the speed button (taps cycle ×1 → ×2 → ×5 → ×10) & « next arrival »; online: the speed
+ */
+function speedHtml() {
+  if (!game) return '';
+  const label = `×${game.speed || 1}`;
+  if (game.mode !== 'solo') return `<span class="simspeed">${label}</span>`;
+  return (
+    `<button class="simspeed" data-act="speed" aria-label="${translate('Vitesse', 'Speed')}">${label}</button>` +
+    `<button class="simiconbtn" data-act="skip" aria-label="${translate('Prochaine arrivée', 'Next arrival')}">${icon('skip', 22)}</button>`
+  );
+}
+
+/**
  * `planSvg` - Function 🗺️
  *
  * The real floor plan (LTF.tables & counters, same geometry as the app's plan), coloured by rang or by status.
@@ -3185,8 +3309,8 @@ function renderPage() {
     [
       'clock',
       translate(
-        '1 minute réelle = 10 minutes de service, de 19:00 à 22:30 environ.',
-        '1 real minute = 10 service minutes, from 19:00 to about 22:30.',
+        'En temps réel de 19:00 à 22:30 environ, ou accéléré (×2, ×5, ×10).',
+        'Real time from 19:00 to about 22:30, or sped up (×2, ×5, ×10).',
       ),
     ],
     [
@@ -3278,7 +3402,24 @@ function renderSetup() {
           `<button class="simsegbtn${page.waiterCount === count ? ' simon' : ''}" data-count="${count}">${count}</button>`,
       )
       .join('') +
-    `</div><div class="simsec">${icon('plate', 20)}<span class="simgrow">${translate('Les rangs', 'The rangs')}</span>` +
+    `</div><div class="simsec">${icon('clock', 20)}${translate('Vitesse du service', 'Service speed')}</div>` +
+    `<div class="simseg">` +
+    SPEEDS.map(
+      (speed) =>
+        `<button class="simsegbtn${page.speed === speed ? ' simon' : ''}" data-speed="${speed}">×${speed}</button>`,
+    ).join('') +
+    `</div><p class="simhint">${
+      page.speed === 1
+        ? translate(
+            '×1 = temps réel : 1 minute de service = 1 vraie minute.',
+            '×1 = real time: 1 service minute = 1 real minute.',
+          )
+        : translate(
+            `×${page.speed} : 1 vraie minute = ${page.speed} minutes de service.`,
+            `×${page.speed}: 1 real minute = ${page.speed} service minutes.`,
+          )
+    }</p>` +
+    `<div class="simsec">${icon('plate', 20)}<span class="simgrow">${translate('Les rangs', 'The rangs')}</span>` +
     (page.waiterCount > 1
       ? `<button class="simsmallbtn simsec2" data-act="auto">${translate('Répartition auto', 'Auto split')}</button>`
       : '') +
@@ -3581,6 +3722,7 @@ function renderService() {
   appRoot().innerHTML = `<div id="simPage">${barHtml(
     translate('Service', 'Service') + (game.code ? ' · ' + game.code : ''),
     clockHtml() +
+      speedHtml() +
       `<button class="simiconbtn" data-act="end" aria-label="${translate('Terminer', 'End')}">${icon('flag', 22)}</button>`,
   )}<div class="pad">${chooser}<div id="simLive">${liveHtml()}</div></div></div>`;
 }
@@ -3986,11 +4128,13 @@ function afterGameView() {
  * `openSetup` - Function ⚙️
  *
  * @param { boolean } online - true for an online game (the host's setup)
- * @returns { void }
+ * @returns { Promise<void> }
  */
-function openSetup(online) {
+async function openSetup(online) {
   page.online = online;
   page.joinedAsGuest = false;
+  // 📦 the floor plan must be there before the rangs are split
+  if (!page.dataReady) page.dataReady = await ensureData();
   if (!Object.keys(page.rangs).length) page.rangs = autoRangs(page.waiterCount);
   history.pushState({ ltfSim: 'setup' }, '');
   render('setup');
@@ -4013,6 +4157,7 @@ function startSolo() {
     rangs: page.rangs,
     bookings: page.bookings,
     tables: {},
+    speed: cleanSpeed(page.speed),
   });
   game.bookings.forEach(
     (booking) =>
@@ -4104,14 +4249,16 @@ function openTable(tableId) {
  *
  * Opens the Simulation de service chapter page in place of the home screen (Back comes home).
  *
- * @returns { void }
+ * @returns { Promise<void> }
  */
-function openPage() {
+async function openPage() {
   addStyles();
   page.isOpen = true;
   page.quitting = false;
   history.pushState({ ltfSim: 'page' }, '');
   render('page');
+  // 📦 the Rust app has no window.LTF: load the menu & the floor plan before any game is generated
+  page.dataReady = await ensureData();
 }
 
 /**
@@ -4159,6 +4306,11 @@ function handleClick(event) {
     return renderSetup();
   }
   if (target('[data-name]')) return;
+  const speedButton = target('[data-speed]');
+  if (speedButton) {
+    page.speed = cleanSpeed(speedButton.dataset.speed);
+    return renderSetup();
+  }
   const brush = target('[data-brush]');
   if (brush) {
     page.brush = Number(brush.dataset.brush);
@@ -4198,12 +4350,41 @@ function handleClick(event) {
   }
   if (name === 'generate' || name === 'regen') {
     page.bookings = generateBookings();
+    if (!page.bookings.length) {
+      // 📦 no floor plan or menu yet (still loading, or offline on the first visit): try once more
+      ensureData().then((ready) => {
+        page.dataReady = ready;
+        if (!ready)
+          return showDialog({
+            icon: 'alert',
+            title: translate('Simulation', 'Simulation'),
+            text: translate(
+              'Le menu et le plan de salle ne sont pas encore chargés. Vérifiez la connexion et réessayez.',
+              'The menu and the floor plan are not loaded yet. Check the connection and try again.',
+            ),
+          });
+        page.bookings = generateBookings();
+        if (name === 'generate') history.pushState({ ltfSim: 'brief' }, '');
+        render('brief');
+      });
+      return;
+    }
     if (name === 'generate') history.pushState({ ltfSim: 'brief' }, '');
     return render('brief');
   }
   if (name === 'start') return page.online ? createOnlineGame() : startSolo();
   if (name === 'go') return startOnlineGame();
   if (name === 'end') return askEnd();
+  if (name === 'speed' && game) {
+    // ⏩ the next speed (back to ×1 after ×10)
+    setSpeed(SPEEDS[(SPEEDS.indexOf(game.speed || 1) + 1) % SPEEDS.length]);
+    showToast('clock', translate(`Vitesse ×${game.speed}`, `Speed ×${game.speed}`));
+    return renderService();
+  }
+  if (name === 'skip' && game) {
+    if (!skipToNextArrival()) showToast('clock', translate('Plus aucune arrivée', 'No more arrivals'));
+    return tick();
+  }
   if (!game) return;
   if (name === 'steal') {
     stealTable(page.tableId);
