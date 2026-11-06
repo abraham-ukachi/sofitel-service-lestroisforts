@@ -36,7 +36,7 @@
 // cache as a fallback (📴 offline), and a separate persistent cache for the heavy scan assets.
 
 // the cache of this version (bump it on every deploy, so phones pick up the new build 🚀)
-const CACHE = 'ltf-v101-rs';
+const CACHE = 'ltf-v102-rs';
 // the scanner cache (big model files, kept across app versions): bump it when pwa/scan/ changes 📷
 const SCAN_CACHE = 'ltf-scan-v5';
 // the app shell, precached on install 📦
@@ -55,6 +55,11 @@ const ASSETS = [
   'swipe.js',
   'setup.js',
   'sim.js',
+  'sim-voice.js',
+  'sim-drinks.js',
+  'sim-scene.js',
+  'sim-talk.js',
+  'sim-list.js',
   'img/setup-table.jpg',
   'img/setup-seau1.jpg',
   'img/setup-seau2.jpg',
@@ -185,17 +190,22 @@ self.addEventListener('push', (event) => {
   );
 });
 
-// 👆 notification tapped: focus the app & open the chat (or start the app on the chat)
+// 👆 notification tapped: focus the app & open the chat (or start the app on the chat);
+// the « Simulation de service » notification (tag 'ltf-sim') opens the simulation instead
 self.addEventListener('notificationclick', (event) => {
-  event.notification.close();
+  const isSim = event.notification.tag === 'ltf-sim';
+  // 🛎️ the game's ongoing notification stays up (the page replaces it every service minute)
+  if (!isSim) event.notification.close();
   event.waitUntil(
     self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((windows) => {
-      // an app window is already open: bring it up and ask it to open the chat 💬
+      // an app window is already open: bring it up and ask it to open the chat 💬 (or the simulation 🛎️)
       const openWindow = windows[0];
       if (openWindow) {
-        openWindow.postMessage({ type: 'open-chat' });
+        openWindow.postMessage({ type: isSim ? 'open-sim' : 'open-chat' });
         return openWindow.focus();
       }
+      // 🔗 no window: start the app on the simulation (`?sim=1` survives the app's own #/ router) or the chat
+      if (isSim) return self.clients.openWindow(new URL('./?sim=1#sim', self.registration.scope).href);
       return self.clients.openWindow((event.notification.data && event.notification.data.url) || './?chat=1');
     }),
   );
