@@ -2,6 +2,16 @@
 
 All notable changes to this project will be documented in this file. Versions follow the service-worker cache (`ltf-vNN` → `0.NN.0`), see [CONTRIBUTING.md](./CONTRIBUTING.md#git-commit-messages) for the commit guidelines.
 
+### 0.78.0 (2026-11-06)
+
+* :speaking_head: Simulation: guests speak like a call (own voice per man, woman or child), mute and « réécouter »
+* :tropical_drink: Simulation: the waiter makes every drink (cocktail, wine by the glass, champagne, water, coffee, digestif) in a mini-game like « Le Bar »
+* :raising_hand: Simulation: other guests interrupt with their own questions, and the waiter can ask anyone at the table at any time
+* :clapper: Simulation: simple 3D scenes while the kitchen works, guests eat or pay
+* :bell: Simulation: an ongoing notification with the service clock and the next countdown
+* :satellite: Simulation: « Parties en cours » drawer (live list, open games join without a code, private games « sur code »)
+* :lock: Firestore rules: `simlist/{id}` block, `en`/`exp` on `sim/{code}`
+
 ### 0.77.1 (2026-11-06)
 
 * :bug: Simulation: the reservation sheet had 0 bookings in the live (Rust) app, which has no `window.LTF`; the game now loads `src/pwa/data.js` and the « À dire au client » lines itself
