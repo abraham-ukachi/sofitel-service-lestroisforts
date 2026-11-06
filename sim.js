@@ -43,7 +43,35 @@
 //   real carte (dishes & allergens, wines, champagnes, cocktails, « À dire au client » lines)
 // - 🏁 Scores per waiter & per table, XP through the app (`window.LTFrecord`, ids `sim_…`, daily anti-farm)
 // - 🌐 Optional online game (Firestore `sim/{code}`, 4-digit code, steal a table or ask for permission)
+// - 🔔 An ongoing notification while a game runs (clock, next event, tables waiting), closed at the end
+// - 🍸 The waiter makes every drink ordered (sim-drinks.js), the guests speak (sim-voice.js), little 3D scenes
+//   while a table waits (sim-scene.js), other guests interrupt and the waiter can ask questions (sim-talk.js)
+// - 📡 « Parties en cours »: a live list of the team's online games (`simlist/{id}`, views in sim-list.js), join
+//   an open one in a tap
 // Shared by the JS & the Rust builds 🤝. Solo works fully offline: Firebase is only loaded for an online game.
+
+// ===== MODULES 📦 ===== //
+
+import { speakLines, stopSpeaking, avatarSvg, isMuted, setMuted, voiceAvailable } from './sim-voice.js';
+import {
+  useDrinkKit,
+  drinkTask,
+  drinkHtml,
+  togglePick,
+  scoreDrink,
+  gradeOfDigit,
+  answerText,
+} from './sim-drinks.js';
+import { sceneHtml, sceneOf, SCENE_CSS } from './sim-scene.js';
+import {
+  useTalkKit,
+  buildInterruptions,
+  questionsFor,
+  askQuestion,
+  questionText,
+  isQuestionId,
+} from './sim-talk.js';
+import { useListKit, cleanListEntry, drawerHtml } from './sim-list.js';
 
 // ===== CONSTANTS 🧰 ===== //
 
@@ -80,6 +108,19 @@ const GRADE_POINTS = { best: 10, ok: 4, wrong: 0, danger: -5 };
 const GRADE_PATIENCE = { best: 3, ok: 0, wrong: -10, danger: -20 };
 // the XP of a best answer (paid through window.LTFrecord, with its daily anti-farm) 🎓
 const BEST_ANSWER_XP = 4;
+
+// the ongoing notification of a running game (one at a time, replaced in place) 🔔
+const NOTIFY_TAG = 'ltf-sim';
+
+// an interruption's points (half a dialogue step) and a drink's points, by grade 🙋 🍸
+const INTERRUPT_POINTS = { best: 6, ok: 2, wrong: 0, danger: -5 };
+const DRINK_POINTS = { best: 8, ok: 3, wrong: 0 };
+
+// the most games the « Parties en cours » list shows (the query's limit, checked by the rules) 📡
+const LIST_LIMIT = 20;
+
+// fictional children's first names (a child at the table) 🧒
+const CHILD_NAMES = ['Lina', 'Noah', 'Jade', 'Léo', 'Mia', 'Tom', 'Zoé', 'Sacha', 'Nino', 'Lou'];
 
 // the colours of the 4 waiters (their rang on the plan) 🎨
 const WAITER_COLOURS = ['var(--gold)', 'var(--st2)', 'var(--st1)', 'var(--okb)'];
@@ -242,6 +283,14 @@ const ICON_PATHS = {
   copy: 'M9 9h11v11H9zM5 15V4h11',
   door: 'M5 21h14M7 21V4h10v17M14 12h.01',
   plate: 'M12 19a7 7 0 1 0 0-14 7 7 0 0 0 0 14zM12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM3 4v6M21 4v16',
+  speaker: 'M4 9h4l5-4v14l-5-4H4zM16.5 8.5a5 5 0 0 1 0 7M19 6a8.5 8.5 0 0 1 0 12',
+  mute: 'M4 9h4l5-4v14l-5-4H4zM16 9l5 6M21 9l-5 6',
+  replay: 'M4 12a8 8 0 1 0 2.3-5.7M4 4v4h4',
+  question:
+    'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.6.3-1 .9-1 1.6v.6M12 17h.01',
+  bell: 'M6 16V11a6 6 0 0 1 12 0v5l1.5 2h-15zM10 20a2 2 0 0 0 4 0',
+  live: 'M12 14a2 2 0 1 0 0-4 2 2 0 0 0 0 4zM8.5 15.5a5 5 0 0 1 0-7M15.5 8.5a5 5 0 0 1 0 7M5.6 18.4a9 9 0 0 1 0-12.8M18.4 5.6a9 9 0 0 1 0 12.8',
+  lock: 'M6 11h12v9H6zM8.5 11V8a3.5 3.5 0 0 1 7 0v3',
 };
 
 // ===== HELPERS 🧰 ===== //
@@ -515,7 +564,7 @@ function addStyles() {
   if (document.getElementById('simStyle')) return;
   const style = document.createElement('style');
   style.id = 'simStyle';
-  style.textContent = SIM_CSS;
+  style.textContent = SIM_CSS + SCENE_CSS;
   document.head.appendChild(style);
 }
 
@@ -657,6 +706,47 @@ border-radius:99px;background:var(--pill);color:var(--tx);font-weight:800;font-s
 .simfoot{position:fixed;left:0;right:0;bottom:0;z-index:25;max-width:640px;margin:0 auto;display:flex;gap:10px;
   padding:12px 16px calc(14px + env(safe-area-inset-bottom));background:linear-gradient(transparent,var(--bg) 30%)}
 .simfoot .btn{flex:1;min-width:0}
+.simrowend{display:flex;align-items:center;gap:6px}
+.simseg2{grid-template-columns:repeat(2,minmax(0,1fr))}
+.simseg2 .simsegbtn{font-size:14px}
+.simcall{display:flex;align-items:center;gap:8px;padding:8px 10px;margin:0 0 10px;border-radius:18px;background:var(--sf)}
+.simavatars{flex:1;min-width:0;display:flex;gap:6px;overflow-x:auto;scrollbar-width:none}
+.simavatars::-webkit-scrollbar{display:none}
+.simguestav{flex:none;width:46px;display:flex;flex-direction:column;align-items:center;gap:2px;color:var(--tx2)}
+.simguestav .simic{width:34px;height:34px;padding:5px;border-radius:17px;background:var(--sf2);box-sizing:border-box}
+.simguestav small{font-size:10px;max-width:46px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.simguestav.simk-c .simic{color:var(--st1)}
+.simguestav.simtalk .simic{color:var(--gold);box-shadow:0 0 0 2px var(--gold);animation:simring 1s ease-out infinite}
+@keyframes simring{0%{box-shadow:0 0 0 2px var(--gold)}100%{box-shadow:0 0 0 9px transparent}}
+.simcallbtns{display:flex;align-items:center;gap:2px;flex:none}
+.simcallbtns .simsmallbtn{display:inline-flex;align-items:center;gap:5px}
+.simiconbtn.simoff{color:var(--mu)}
+.simguest small .simic{vertical-align:-2px;margin-right:3px}
+.simwaitscene{flex-direction:column;text-align:center}
+.simwaitscene .simsub{color:var(--mu);font-size:12px}
+.simdrink{display:flex;flex-direction:column;gap:10px;padding:12px;border-radius:18px;background:var(--sf);border:2px solid var(--sf3)}
+.simdrinkhead{display:flex;align-items:center;gap:10px}
+.simdrinkhead .simic{color:var(--gold)}
+.simdrinkhead small{display:block;color:var(--mu);font-size:11.5px}
+.simdrinklabel{font-size:12.5px;font-weight:700;color:var(--tx2);margin:4px 0 6px}
+.simdrinklabel span{color:var(--mu);font-weight:400}
+.simchips{display:flex;flex-wrap:wrap;gap:6px}
+.simchip{display:inline-flex;align-items:center;gap:5px;min-height:36px;padding:6px 12px;border-radius:18px;background:var(--sf2);
+  color:var(--tx);font:inherit;font-size:13px;line-height:1.25;border:2px solid transparent;text-align:left;max-width:100%;overflow-wrap:anywhere}
+.simchip.simon{border-color:var(--gold);background:var(--pill);font-weight:700}
+.simserve,.simwide{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;margin-top:4px}
+.simdrawer{position:fixed;inset:0;z-index:55;background:rgba(0,0,0,.45);display:flex;align-items:flex-end;justify-content:center;
+  animation:simfade .2s ease-out}
+.simdrawerbox{width:100%;max-width:640px;max-height:82vh;overflow-y:auto;background:var(--bg);border-radius:24px 24px 0 0;
+  padding:12px 16px calc(18px + env(safe-area-inset-bottom));display:flex;flex-direction:column;gap:8px;animation:simrise .25s ease-out}
+.simdrawerhead{display:flex;align-items:center;gap:8px;min-height:44px}
+.simdrawerhead>.simic{color:var(--gold)}
+.simgame .simtag{font-variant-numeric:tabular-nums}
+.simgame .simtag .simic{color:var(--mu)}
+.simcode.simbad{border-color:var(--kob)}
+@keyframes simfade{from{opacity:0}}
+@keyframes simrise{from{transform:translateY(40px);opacity:.4}}
+@media (prefers-reduced-motion: reduce){.simguestav.simtalk .simic,.simdrawer,.simdrawerbox{animation:none}}
 `;
 
 // ===== THE MENU DATA 🍽️ ===== //
@@ -851,7 +941,7 @@ function autoRangs(count) {
  * @param { object } table - the table it's on
  * @param { number } covers - the party size
  * @param { Array<string> } usedNames - the surnames already used tonight (no twins on the sheet)
- * @returns { object } - a fictional booking { table, first, last, gender, covers, time, occasion, allergies, veg, hotel, first visit, seed }
+ * @returns { object } - a fictional booking { table, first, last, gender, covers, time, occasion, allergies, veg, hotel, first visit, seed, party }
  */
 function makeBooking(table, covers, usedNames) {
   const person = randomItem(FIRST_NAMES);
@@ -868,7 +958,7 @@ function makeBooking(table, covers, usedNames) {
       allergies.push({ id: allergy.id, who: covers > 1 && Math.random() < 0.5 ? 'friend' : 'me' }),
     );
   }
-  return {
+  const booking = {
     table: table.id,
     first: person[0],
     last: surname,
@@ -883,6 +973,82 @@ function makeBooking(table, covers, usedNames) {
     friend: Math.random() < 0.5 ? 'f' : 'm',
     seed: randomInt(1, 2147483646),
   };
+  // 👪 who sits at the table (stored with the booking, so every phone of an online game hears the same voices)
+  booking.party = partyFromSeed(booking);
+  return booking;
+}
+
+/**
+ * `partyFromSeed` - Function 👪
+ *
+ * The party's composition from the booking's seed: the booker first, their friend second, then men, women and
+ * sometimes children (never at a business meal).
+ *
+ * @param { object } booking - a booking (gender, friend, covers, occasion, seed)
+ * @returns { string } - one letter per guest: 'm' a man, 'f' a woman, 'c' a child (e.g. 'fmc')
+ */
+function partyFromSeed(booking) {
+  const random = makeRandom(((booking.seed * 3 + 11) % 2147483646) + 1);
+  let party = booking.gender === 'f' ? 'f' : 'm';
+  if (booking.covers > 1) party += booking.friend === 'f' ? 'f' : 'm';
+  // 🧒 children now and then, from the third guest on
+  const children =
+    booking.occasion !== 'business' && booking.covers >= 3 && random() < 0.35
+      ? Math.min(booking.covers - 2, random() < 0.4 ? 2 : 1)
+      : 0;
+  for (let index = 2; index < booking.covers; index++)
+    party += index >= booking.covers - children ? 'c' : random() < 0.5 ? 'f' : 'm';
+  return party;
+}
+
+/**
+ * `cleanParty` - Function 🧼
+ *
+ * @param { any } party - a party from the network
+ * @param { object } booking - its (already cleaned) booking
+ * @returns { string } - the party when it fits the booking, else the one its seed gives
+ */
+function cleanParty(party, booking) {
+  const valid =
+    typeof party === 'string' &&
+    /^[mfc]{1,10}$/.test(party) &&
+    party.length === booking.covers &&
+    party[0] === booking.gender &&
+    (booking.covers < 2 || party[1] === booking.friend) &&
+    (booking.occasion !== 'business' || !party.includes('c'));
+  return valid ? party : partyFromSeed(booking);
+}
+
+/**
+ * `partyGuests` - Function 👪
+ *
+ * @param { object } booking - a booking
+ * @returns { Array<{index: number, kind: string, slot: number, name: {fr: string, en: string}}> } - every guest,
+ *   with a fictional first name from the seed (the booker is « Madame Rossi ») and their rank among their kind
+ */
+function partyGuests(booking) {
+  const party = booking.party || partyFromSeed(booking);
+  const random = makeRandom(((booking.seed * 5 + 17) % 2147483646) + 1);
+  const used = [booking.first];
+  const slots = { m: 0, f: 0, c: 0 };
+  return party.split('').map((kind, index) => {
+    const slot = slots[kind]++;
+    if (index === 0) return { index, kind, slot, name: guestTitle(booking) };
+    const pool =
+      kind === 'c'
+        ? CHILD_NAMES.filter((name) => !used.includes(name))
+        : FIRST_NAMES.filter((person) => person[1] === kind && !used.includes(person[0])).map(
+            (person) => person[0],
+          );
+    const first = randomItem(pool, random) || '?';
+    used.push(first);
+    return {
+      index,
+      kind,
+      slot,
+      name: kind === 'c' ? both(first + ' (enfant)', first + ' (child)') : both(first, first),
+    };
+  });
 }
 
 /**
@@ -937,7 +1103,7 @@ function cleanBooking(booking) {
   if (!Number.isInteger(covers) || covers < 1 || covers > 10) return null;
   if (!Number.isInteger(time) || time < SERVICE_START || time > LAST_ARRIVAL) return null;
   if (!Number.isInteger(seed) || seed < 1 || seed > 2147483647) return null;
-  return {
+  const clean = {
     table: table.id,
     first: booking.first,
     last: booking.last,
@@ -955,6 +1121,8 @@ function cleanBooking(booking) {
     friend: booking.friend === 'f' ? 'f' : 'm',
     seed,
   };
+  clean.party = cleanParty(booking.party, clean);
+  return clean;
 }
 
 /**
@@ -2173,8 +2341,92 @@ function buildSteps(booking) {
       ),
     ],
   });
+
+  // 🍸 what the table orders to drink, and the waiter's mini-tasks (their own seeded generator, so the dialogue
+  // above stays the same as before)
+  const drinkRandom = makeRandom(((booking.seed * 11 + 7) % 2147483646) + 1);
+  const aperitifKind = celebrate || !cocktail.recipe || drinkRandom() < 0.5 ? 'champagne' : 'cocktail';
+  const coffeeKind = drinkRandom() < 0.6 ? 'coffee' : 'digestif';
+  const coffees = (menuData().coffee || []).filter((entry) => entry.diner).map((entry) => entry.n);
+  steps.meta = {
+    waterKind,
+    aperitif: aperitifKind,
+    cocktail,
+    champagne: celebrate ? roseCoupe : brutCoupe,
+    wine: sulphites ? null : bestWine || null,
+    mainDish,
+    coffeeKind,
+    coffee: randomItem(coffees.length ? coffees : ['Expresso'], drinkRandom),
+    digestif,
+  };
+  /**
+   * `indexOfKey` - Function 🔎
+   *
+   * @param { string } base - a step key (before the « | »)
+   * @returns { number } - the index of that step (-1 when the table has none)
+   */
+  const indexOfKey = (base) => steps.findIndex((step) => step.key.split('|')[0] === base);
+  const details = Object.assign({ covers, water: waterKind }, steps.meta);
+  steps.drinks = [
+    [indexOfKey('aperitif'), 'water'],
+    [indexOfKey('aperitif'), aperitifKind],
+    [indexOfKey('wine'), 'wine'],
+    [indexOfKey('coffee'), coffeeKind],
+  ]
+    .map(([at, kind]) => ({ at, task: at >= 0 ? drinkTask(kind, details, drinkRandom) : null }))
+    .filter((drink) => drink.task);
   return steps;
 }
+
+/**
+ * `translateWord` - Function 🇬🇧
+ *
+ * @param { string } word - a French word of the data (an ingredient, a glass, a garnish)
+ * @returns { string } - its English version in English mode (LTF_EN.words, loaded by ensureData), else the word
+ */
+function translateWord(word) {
+  const words = (window.LTF_EN && window.LTF_EN.words) || {};
+  return (isEnglish() && words[word]) || word;
+}
+
+/**
+ * `regionFrom` - Function 🗺️
+ *
+ * @param { string } region - a wine region of the data (Provence, Rhône…)
+ * @returns { [string, string] } - « de Provence » / « from Provence »
+ */
+function regionFrom(region) {
+  return REGION_FROM[region] || ['de ' + region, 'from ' + region];
+}
+
+// 🧰 the helpers the drinks & the talk modules borrow (they never touch window.LTF themselves)
+const MODULE_KIT = {
+  both,
+  pick,
+  translate,
+  escapeHtml,
+  menuData,
+  makeRandom,
+  shuffle,
+  randomItem,
+  randomInt,
+  translateWord,
+  choice,
+  dinnerDishes,
+  mainDishes,
+  dessertDishes,
+  oldDishes,
+  dishName,
+  allergenCodes,
+  labelsOf,
+  allergyOf,
+  allergyLine,
+  guestTitle,
+  regionFrom,
+};
+useDrinkKit(MODULE_KIT);
+useTalkKit(MODULE_KIT);
+useListKit({ translate, escapeHtml, icon, clockText, clamp, isSafeUid, SERVICE_START });
 
 // ===== THE GAME 🕹️ ===== //
 
@@ -2196,23 +2448,32 @@ const page = {
   tableId: '',
   joinedAsGuest: false,
   dataReady: false,
+  openGame: true,
+  spokenKey: '',
+  questionGuest: 0,
+  notifyAsked: false,
+  games: null,
+  gamesError: '',
+  drawerGame: '',
+  openOnBoot: false,
 };
 
 // the game being played (null when none): see `startGame` 🎮
 let game = null;
 
 // the Firebase handles, filled the first time an online game is used 🔥
-const cloud = { ready: false, auth: null, db: null, store: null, unsubscribe: null };
+const cloud = { ready: false, auth: null, db: null, store: null, unsubscribe: null, listUnsubscribe: null };
 
 /**
  * `newEntry` - Function 🆕
  *
  * @param { object } booking - a booking
  * @param { string } owner - the id of the waiter who owns the table (uid online, 'w0'… solo)
- * @returns { object } - the table's state { o: owner, c: chosen answers, p: points, pa: patience, w: ready at, x: left, by: points per waiter }
+ * @returns { object } - the table's state { o: owner, c: chosen answers, p: points, pa: patience, w: ready at, x: left,
+ *   by: points per waiter, i: interruption answers, d: drink scores (0-3 each), q: questions asked (4 letters each) }
  */
 function newEntry(booking, owner) {
-  return { o: owner, c: '', p: 0, pa: 100, w: booking.time, x: 0, by: {} };
+  return { o: owner, c: '', p: 0, pa: 100, w: booking.time, x: 0, by: {}, i: '', d: '', q: '' };
 }
 
 /**
@@ -2223,7 +2484,17 @@ function newEntry(booking, owner) {
  */
 function startGame(options) {
   const steps = {};
-  options.bookings.forEach((booking) => (steps[booking.table] = buildSteps(booking)));
+  const guests = {};
+  options.bookings.forEach((booking) => {
+    guests[booking.table] = partyGuests(booking);
+    steps[booking.table] = buildSteps(booking);
+    // 🙋 the other guests' interruptions, seeded like the steps
+    steps[booking.table].interrupts = buildInterruptions(
+      booking,
+      steps[booking.table],
+      guests[booking.table],
+    );
+  });
   game = Object.assign(
     {
       mode: 'solo',
@@ -2241,7 +2512,7 @@ function startGame(options) {
       endAwarded: false,
     },
     options,
-    { steps, results: {} },
+    { steps, guests, results: {}, picks: {}, notified: '', listMinute: -1 },
   );
 }
 
@@ -2479,7 +2750,11 @@ function answerStep(tableId, index) {
   const steps = game.steps[tableId];
   const step = steps[entry.c.length];
   if (!step || !step.choices[index] || entry.o !== game.me || !needsWaiter(tableId, now)) return null;
+  // 🙋 🍸 an interruption or a drink comes first
+  if (pendingInterrupt(tableId) || pendingDrink(tableId)) return null;
   const picked = step.choices[index];
+  // 🍸 a step with drinks to make: the wait starts once the last drink is served (see serveDrink)
+  const hasDrinks = (steps.drinks || []).some((drink) => drink.at === entry.c.length);
   const waited = now - entry.w;
   const quick =
     picked.grade === 'best' || picked.grade === 'ok' ? (waited <= 3 ? 3 : waited <= 6 ? 1 : 0) : 0;
@@ -2489,21 +2764,191 @@ function answerStep(tableId, index) {
   const points = GRADE_POINTS[picked.grade] + quick + (isLast ? Math.round(patience / 5) : 0);
   const byWaiter = Object.assign({}, entry.by);
   byWaiter[game.me] = (byWaiter[game.me] || 0) + points;
-  commitTable(tableId, {
-    o: entry.o,
-    c: entry.c + index,
-    p: entry.p + points,
-    pa: Math.round(patience),
-    w: roundTenth(now + step.wait),
-    x: 0,
-    by: byWaiter,
-  });
+  commitTable(
+    tableId,
+    Object.assign({}, entry, {
+      c: entry.c + index,
+      p: entry.p + points,
+      pa: Math.round(patience),
+      w: roundTenth(hasDrinks ? now : now + step.wait),
+      x: 0,
+      by: byWaiter,
+    }),
+  );
   game.results[tableId] = { grade: picked.grade, points };
   if (navigator.vibrate)
     navigator.vibrate(picked.grade === 'best' ? 8 : picked.grade === 'ok' ? 12 : [20, 40, 20]);
   // 🎓 a best answer pays XP (never a wrong one)
   if (picked.grade === 'best') award(step.key + '|' + picked.text.fr, BEST_ANSWER_XP);
   return picked;
+}
+
+/**
+ * `pendingInterrupt` - Function 🙋
+ *
+ * @param { string } tableId - a table id
+ * @returns { object | null } - the interruption waiting for an answer now (its step is the next one), or null
+ */
+function pendingInterrupt(tableId) {
+  const entry = entryOf(tableId);
+  const list = game.steps[tableId].interrupts || [];
+  const next = list[(entry.i || '').length];
+  if (!next || entry.x || next.at > entry.c.length || entry.c.length >= game.steps[tableId].length)
+    return null;
+  return next;
+}
+
+/**
+ * `pendingDrink` - Function 🍸
+ *
+ * @param { string } tableId - a table id
+ * @returns { object | null } - the drink to make now (its step was answered, the drink not served yet), or null
+ */
+function pendingDrink(tableId) {
+  const entry = entryOf(tableId);
+  const list = game.steps[tableId].drinks || [];
+  const next = list[(entry.d || '').length];
+  if (!next || entry.x || next.at >= entry.c.length) return null;
+  return next;
+}
+
+/**
+ * `answerInterrupt` - Function 🙋
+ *
+ * Answers the guest who interrupted: points (half a step), a little patience, XP for a best answer.
+ *
+ * @param { string } tableId - a table id
+ * @param { number } index - the chosen answer
+ * @returns { object | null } - the choice played, or null when it can't be played now
+ */
+function answerInterrupt(tableId, index) {
+  const now = serviceNow();
+  const entry = entryOf(tableId);
+  const interrupt = pendingInterrupt(tableId);
+  if (!interrupt || !interrupt.choices[index] || entry.o !== game.me || !needsWaiter(tableId, now))
+    return null;
+  const picked = interrupt.choices[index];
+  const points = INTERRUPT_POINTS[picked.grade];
+  const byWaiter = Object.assign({}, entry.by);
+  byWaiter[game.me] = (byWaiter[game.me] || 0) + points;
+  commitTable(
+    tableId,
+    Object.assign({}, entry, {
+      i: (entry.i || '') + index,
+      p: entry.p + points,
+      pa: Math.round(clamp(patienceOf(tableId, now) + GRADE_PATIENCE[picked.grade] / 2, 0, 100)),
+      by: byWaiter,
+    }),
+  );
+  if (picked.grade === 'best') award('interrupt|' + interrupt.id + '|' + picked.text.fr, BEST_ANSWER_XP);
+  return picked;
+}
+
+/**
+ * `serveDrink` - Function 🍸
+ *
+ * Serves the drink being made: scored 0 → 3 from the chips picked, then (after the step's last drink) the
+ * table's wait starts.
+ *
+ * @param { string } tableId - a table id
+ * @returns { object | null } - the score { digit, grade, right, total }, or null when nothing can be served
+ */
+function serveDrink(tableId) {
+  const now = serviceNow();
+  const entry = entryOf(tableId);
+  const drink = pendingDrink(tableId);
+  if (!drink || entry.o !== game.me || !needsWaiter(tableId, now)) return null;
+  const count = (entry.d || '').length;
+  const score = scoreDrink(drink.task, game.picks[tableId + '|' + count] || {});
+  const steps = game.steps[tableId];
+  const nextDrink = (steps.drinks || [])[count + 1];
+  const lastOfStep = !nextDrink || nextDrink.at !== drink.at;
+  const points = DRINK_POINTS[score.grade];
+  const byWaiter = Object.assign({}, entry.by);
+  byWaiter[game.me] = (byWaiter[game.me] || 0) + points;
+  commitTable(
+    tableId,
+    Object.assign({}, entry, {
+      d: (entry.d || '') + score.digit,
+      p: entry.p + points,
+      pa: Math.round(clamp(patienceOf(tableId, now) + (score.grade === 'best' ? 2 : 0), 0, 100)),
+      w: lastOfStep ? roundTenth(now + steps[drink.at].wait) : entry.w,
+      by: byWaiter,
+    }),
+  );
+  delete game.picks[tableId + '|' + count];
+  if (score.grade === 'best') award('drink|' + drink.task.name, BEST_ANSWER_XP);
+  return score;
+}
+
+/**
+ * `questionContext` - Function 🧭
+ *
+ * @param { string } tableId - a table id
+ * @returns { {nextKey: string, nextIndex: number, orderIndex: number, asked: Array<object>} } - where the table is
+ */
+function questionContext(tableId) {
+  const entry = entryOf(tableId);
+  const steps = game.steps[tableId];
+  const next = steps[entry.c.length];
+  return {
+    nextKey: next ? next.key : '',
+    nextIndex: entry.c.length,
+    orderIndex: steps.findIndex((step) => step.key.split('|')[0] === 'order'),
+    asked: questionsAsked(entry),
+  };
+}
+
+/**
+ * `questionsAsked` - Function 📜
+ *
+ * @param { object } entry - a table's state
+ * @returns { Array<{guest: number, id: string, at: number}> } - the questions in `q` (4 letters each: guest digit,
+ *   question id, step letter a → p)
+ */
+function questionsAsked(entry) {
+  const list = [];
+  const text = entry.q || '';
+  for (let index = 0; index + 4 <= text.length; index += 4)
+    list.push({
+      guest: Number(text[index]),
+      id: text.slice(index + 1, index + 3),
+      at: text.charCodeAt(index + 3) - 97,
+    });
+  return list;
+}
+
+/**
+ * `askGuest` - Function ❓
+ *
+ * The waiter asks one guest a question (any time the table is mine and the guests are here).
+ *
+ * @param { string } tableId - a table id
+ * @param { number } guestIndex - the guest asked (0 = the booker)
+ * @param { string } id - the question id
+ * @returns { object | null } - the reply { line, points, grade, feedback }, or null when it can't be asked now
+ */
+function askGuest(tableId, guestIndex, id) {
+  const now = serviceNow();
+  const entry = entryOf(tableId);
+  const booking = bookingOf(tableId);
+  const guest = game.guests[tableId][guestIndex];
+  if (!guest || entry.o !== game.me || now < booking.time || isDone(tableId) || !isQuestionId(id))
+    return null;
+  if (questionsAsked(entry).length >= 12) return null;
+  const context = questionContext(tableId);
+  const reply = askQuestion(Object.assign({ booking, meta: game.steps[tableId].meta, guest, id }, context));
+  const byWaiter = Object.assign({}, entry.by);
+  if (reply.points) byWaiter[game.me] = (byWaiter[game.me] || 0) + reply.points;
+  commitTable(
+    tableId,
+    Object.assign({}, entry, {
+      q: (entry.q || '') + guestIndex + id + String.fromCharCode(97 + Math.min(15, entry.c.length)),
+      p: entry.p + reply.points,
+      by: byWaiter,
+    }),
+  );
+  return reply;
 }
 
 /**
@@ -2715,6 +3160,10 @@ function cleanRemote(data) {
       w: clamp(Number(value.w) || booking.time, SERVICE_START, HARD_END + 60),
       x: value.x ? 1 : 0,
       by: byWaiter,
+      // 🙋 interruption answers, 🍸 drink scores, ❓ questions (guest digit + id + step letter): short checked text
+      i: /^[0-3]{0,3}$/.test(value.i || '') ? value.i || '' : '',
+      d: /^[0-3]{0,6}$/.test(value.d || '') ? value.d || '' : '',
+      q: /^([0-9][a-z]{2}[a-p]){0,12}$/.test(value.q || '') ? value.q || '' : '',
     };
   });
   const requests = {};
@@ -2746,6 +3195,10 @@ function cleanRemote(data) {
     startMs: millis(data.st),
     createdMs: millis(data.at),
     speed: cleanSpeed(rangs && rangs.sp),
+    // 📡 open or « sur code », ended by the host, the id of its « Parties en cours » entry
+    open: data.pub !== false,
+    ended: data.en === true,
+    listId: typeof data.li === 'string' && /^[A-Za-z0-9]{16,32}$/.test(data.li) ? data.li : '',
   };
 }
 
@@ -2757,6 +3210,67 @@ function cleanRemote(data) {
  */
 function gameRef(code) {
   return cloud.store.doc(cloud.db, 'sim', code);
+}
+
+/**
+ * `listRef` - Function 🗃️
+ *
+ * @param { string } listId - the random id of a « Parties en cours » entry
+ * @returns { object } - the Firestore reference of `simlist/{listId}`
+ */
+function listRef(listId) {
+  return cloud.store.doc(cloud.db, 'simlist', listId);
+}
+
+/**
+ * `randomListId` - Function 🎲
+ *
+ * @returns { string } - 20 random letters & digits (crypto when there is one): the entry's id, unrelated to the code
+ */
+function randomListId() {
+  const letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+  const bytes = new Uint8Array(20);
+  if (window.crypto && window.crypto.getRandomValues) window.crypto.getRandomValues(bytes);
+  else bytes.forEach((unused, index) => (bytes[index] = randomInt(0, 255)));
+  return Array.from(bytes, (byte) => letters[byte % letters.length]).join('');
+}
+
+/**
+ * `updateListEntry` - Function 📡
+ *
+ * The host's small writes to the public entry (waiters joined, started, clock & tables done, ended).
+ *
+ * @param { object } fields - the fields to change (w, s, k, d, en)
+ * @returns { void }
+ */
+function updateListEntry(fields) {
+  if (!game || game.mode !== 'online' || game.me !== game.host || !game.listId || !cloud.ready) return;
+  cloud.store.updateDoc(listRef(game.listId), fields).catch(() => {});
+}
+
+/**
+ * `doneCount` - Function 🧮
+ *
+ * @returns { number } - the tables whose guests have left (served or not)
+ */
+function doneCount() {
+  return game ? game.bookings.filter((booking) => isDone(booking.table)).length : 0;
+}
+
+/**
+ * `publishSummary` - Function 📡
+ *
+ * The host's public summary (clock & tables done), at most once per service minute.
+ *
+ * @param { number } now - the service clock
+ * @returns { void }
+ */
+function publishSummary(now) {
+  if (!game || game.mode !== 'online' || game.me !== game.host || game.ended) return;
+  const minute = Math.floor(now);
+  if (minute === game.listMinute) return;
+  game.listMinute = minute;
+  updateListEntry({ k: minute, d: doneCount() });
 }
 
 /**
@@ -2821,6 +3335,9 @@ async function createOnlineGame() {
       if (!existing || Date.now() - existing.createdMs > GAME_TTL_MS) code = candidate;
     }
     if (!code) throw new Error('busy');
+    // 📡 the public entry of « Parties en cours »: a random id (never the code), the code only for an open game
+    const listId = randomListId();
+    const expires = cloud.store.Timestamp.fromMillis(Date.now() + GAME_TTL_MS);
     await cloud.store.setDoc(gameRef(code), {
       v: 1,
       host: user.uid,
@@ -2832,7 +3349,27 @@ async function createOnlineGame() {
       rq: {},
       st: null,
       at: cloud.store.serverTimestamp(),
+      pub: page.openGame !== false,
+      en: false,
+      exp: expires,
+      li: listId,
     });
+    await cloud.store
+      .setDoc(listRef(listId), {
+        h: user.uid,
+        hn: playerName(user),
+        c: page.openGame !== false ? code : '',
+        n: page.waiterCount,
+        w: 1,
+        s: false,
+        k: SERVICE_START,
+        d: 0,
+        t: page.bookings.length,
+        en: false,
+        exp: expires,
+        at: cloud.store.serverTimestamp(),
+      })
+      .catch(() => {});
     if (run !== page.run) return;
     startGame({
       mode: 'online',
@@ -2844,6 +3381,7 @@ async function createOnlineGame() {
       bookings: page.bookings,
       tables: {},
       speed: cleanSpeed(page.speed),
+      listId,
     });
     subscribeGame(code);
     history.replaceState({ ltfSim: 'lobby' }, '');
@@ -2905,6 +3443,8 @@ async function joinOnlineGame(code) {
       requests: remote.requests,
       startMs: remote.startMs,
       speed: remote.speed,
+      listId: remote.host === user.uid ? remote.listId : '',
+      ended: remote.ended,
     });
     page.joinedAsGuest = remote.host !== user.uid;
     subscribeGame(code);
@@ -2985,6 +3525,10 @@ function applyRemote(remote) {
     }
   });
   const wasStarted = !!game.startMs;
+  // 📡 the host keeps « Parties en cours » up to date when someone joins
+  if (game.me === game.host && remote.waiters.length !== game.waiters.length)
+    updateListEntry({ w: remote.waiters.length });
+  if (remote.ended && !game.ended) game.ended = true;
   game.waiters = remote.waiters;
   game.tables = remote.tables;
   game.requests = remote.requests;
@@ -3024,6 +3568,7 @@ function startOnlineGame() {
   game.tables = tables;
   game.startMs = Date.now();
   writeRemote({ tb: tables, st: cloud.store.serverTimestamp() });
+  updateListEntry({ s: true });
   history.replaceState({ ltfSim: 'service' }, '');
   render('service');
 }
@@ -3078,6 +3623,98 @@ function answerRequest(tableId, accept) {
     writeRemote({ ['rq.' + tableId]: game.requests[tableId] });
   }
   refreshLive();
+}
+
+// ===== PARTIES EN COURS 📡 ===== //
+// The team's live online games, from `simlist/{id}` (one public entry per game, written by its host):
+// - the entry's id is random, never the game code; an open game shows its code, a « sur code » one doesn't
+// - the query is where('exp', '>', now) + limit(20); the rules allow a list only with that limit (provable)
+// - ended games (en) and expired ones are filtered here; joining an open game uses the code from its entry,
+//   a « sur code » game still needs the 4-digit code typed in
+
+/**
+ * `openGamesDrawer` - Async Function 📡
+ *
+ * Opens the « Parties en cours » bottom sheet and listens to the live list (onSnapshot on the query).
+ *
+ * @returns { Promise<void> }
+ */
+async function openGamesDrawer() {
+  closeDrawer();
+  const holder = document.getElementById('simPage');
+  if (!holder) return;
+  const drawer = document.createElement('div');
+  drawer.className = 'simdrawer';
+  drawer.id = 'simDrawer';
+  drawer.dataset.act = 'closedrawer';
+  holder.appendChild(drawer);
+  page.games = null;
+  page.gamesError = '';
+  renderDrawer();
+  const run = page.run;
+  const user = await signedInUser();
+  if (run !== page.run || !document.getElementById('simDrawer')) return;
+  if (!user) {
+    page.gamesError = onlineError('signin');
+    return renderDrawer();
+  }
+  try {
+    const store = cloud.store;
+    const listQuery = store.query(
+      store.collection(cloud.db, 'simlist'),
+      store.where('exp', '>', store.Timestamp.now()),
+      store.limit(LIST_LIMIT),
+    );
+    cloud.listUnsubscribe = store.onSnapshot(
+      listQuery,
+      (snapshot) => {
+        const games = [];
+        snapshot.forEach((item) => {
+          const entry = cleanListEntry(item.id, item.data());
+          if (entry && !entry.ended && entry.expMs > Date.now()) games.push(entry);
+        });
+        page.games = games.sort((left, right) => right.expMs - left.expMs);
+        renderDrawer();
+      },
+      (error) => {
+        page.gamesError = onlineError(error);
+        renderDrawer();
+      },
+    );
+  } catch (error) {
+    page.gamesError = onlineError(error);
+    renderDrawer();
+  }
+}
+
+/**
+ * `renderDrawer` - Function 🖼️
+ *
+ * @returns { void } - draws the list (or one game's details) inside the bottom sheet (views in sim-list.js)
+ */
+function renderDrawer() {
+  const drawer = document.getElementById('simDrawer');
+  if (!drawer) return;
+  drawer.innerHTML = drawerHtml({ games: page.games, selectedId: page.drawerGame, error: page.gamesError });
+}
+
+/**
+ * `joinFromDrawer` - Function 🔑
+ *
+ * @param { boolean } withCode - true when the waiter typed the code (« sur code »)
+ * @returns { void } - joins the selected game (the code from its entry, or the typed one)
+ */
+function joinFromDrawer(withCode) {
+  const entry = (page.games || []).find((item) => item.id === page.drawerGame);
+  if (!entry) return;
+  const field = document.getElementById('simListCode');
+  const code = withCode ? String((field && field.value) || '').replace(/\D/g, '') : entry.code;
+  if (!/^[0-9]{4}$/.test(code)) {
+    if (field) field.classList.add('simbad');
+    return;
+  }
+  closeDrawer();
+  joinOnlineGame(code);
 }
 
 // ===== DIALOGS & TOASTS 💬 ===== //
@@ -3304,6 +3941,13 @@ function renderPage() {
       translate("Entrez le code de l'hôte", "Enter the host's code"),
       '',
     ],
+    [
+      'games',
+      'live',
+      translate('Parties en cours', 'Live games'),
+      translate("Les parties de l'équipe, en direct", "The team's games, live"),
+      '',
+    ],
   ];
   const tips = [
     [
@@ -3419,6 +4063,22 @@ function renderSetup() {
             `×${page.speed}: 1 real minute = ${page.speed} service minutes.`,
           )
     }</p>` +
+    (page.online
+      ? `<div class="simsec">${icon(page.openGame !== false ? 'live' : 'lock', 20)}${translate('Visibilité', 'Visibility')}</div>` +
+        `<div class="simseg simseg2"><button class="simsegbtn${page.openGame !== false ? ' simon' : ''}" data-open="1">${translate('Partie ouverte', 'Open game')}</button>` +
+        `<button class="simsegbtn${page.openGame === false ? ' simon' : ''}" data-open="0">${translate('Sur code', 'Code only')}</button></div>` +
+        `<p class="simhint">${
+          page.openGame !== false
+            ? translate(
+                "L'équipe la voit dans « Parties en cours » et la rejoint sans code.",
+                'The team sees it in « Live games » and joins without a code.',
+              )
+            : translate(
+                'Listée sans son code : il faut le code à 4 chiffres pour la rejoindre.',
+                'Listed without its code: the 4-digit code is needed to join.',
+              )
+        }</p>`
+      : '') +
     `<div class="simsec">${icon('plate', 20)}<span class="simgrow">${translate('Les rangs', 'The rangs')}</span>` +
     (page.waiterCount > 1
       ? `<button class="simsmallbtn simsec2" data-act="auto">${translate('Répartition auto', 'Auto split')}</button>`
@@ -3647,7 +4307,7 @@ function requestBanners() {
  *
  * @param { object } booking - a booking
  * @param { number } now - the service clock
- * @returns { string } - its row in the service list (table, guest, status, patience, kitchen countdown)
+ * @returns { string } - its row in the service list (table, guest, status, patience, the wait's little scene)
  */
 function tableRowHtml(booking, now) {
   const entry = entryOf(booking.table);
@@ -3656,6 +4316,7 @@ function tableRowHtml(booking, now) {
   const mine = entry.o === game.me;
   const waiting = needsWaiter(booking.table, now);
   const locked = !isDone(booking.table) && now >= booking.time && now < entry.w;
+  const lastStep = game.steps[booking.table][entry.c.length - 1];
   return (
     `<button class="simrow${mine ? ' simmine' : ''}${mine && waiting ? ' simnow' : ''}" data-table="${booking.table}">` +
     `<span class="simtag" style="border-color:${waiterColour(entry.o)}">${booking.table}</span>` +
@@ -3664,19 +4325,46 @@ function tableRowHtml(booking, now) {
     (status !== 'waiting' && status !== 'gone'
       ? `<span class="simpat${patience < 35 ? ' simlow' : ''}"><i style="width:${patience}%"></i></span>`
       : '') +
-    `</span><span><span class="simstatus simst-${status}">${statusLabel(status)}</span>` +
-    (locked ? `<span class="simlock">${icon('clock', 13)}${clockText(entry.w)}</span>` : '') +
-    `</span></button>`
+    `</span><span class="simrowend">` +
+    (locked && lastStep ? sceneHtml(sceneOf(lastStep.key), true) : '') +
+    `<span><span class="simstatus simst-${status}">${statusLabel(status)}</span>` +
+    (locked ? `<span class="simlock">${icon('clock', 13)}${minutesLeft(entry.w, now)}</span>` : '') +
+    `</span></span></button>`
   );
+}
+
+/**
+ * `minutesLeft` - Function ⏳
+ *
+ * @param { number } until - a service time (minutes after midnight)
+ * @param { number } now - the service clock
+ * @returns { string } - « 6 min » (service minutes, rounded up; « 1 min » at the very end)
+ */
+function minutesLeft(until, now) {
+  return Math.max(1, Math.ceil(until - now)) + ' min';
 }
 
 /**
  * `liveHtml` - Function 🕰️
  *
- * @returns { string } - the live part of the service view: requests, the plan and the list of tables
+ * @returns { string } - the live part of the service view: requests & plan (top), then the list of tables
  */
 function liveHtml() {
   const now = serviceNow();
+  return (
+    `<div id="simLiveTop">${liveTopHtml(now)}</div><div class="simlist" id="simList">` +
+    game.bookings.map((booking) => tableRowHtml(booking, now)).join('') +
+    `</div>`
+  );
+}
+
+/**
+ * `liveTopHtml` - Function 🗺️
+ *
+ * @param { number } now - the service clock
+ * @returns { string } - the requests, the « service over » banner and the plan with its hint
+ */
+function liveTopHtml(now) {
   const mineWaiting = game.bookings.filter(
     (booking) => entryOf(booking.table).o === game.me && needsWaiter(booking.table, now),
   );
@@ -3692,9 +4380,7 @@ function liveHtml() {
             `${mineWaiting.length} table(s) waiting for you.`,
           )
         : translate('Touchez une table pour la servir.', 'Tap a table to serve it.')
-    }</div></div><div class="simlist">` +
-    game.bookings.map((booking) => tableRowHtml(booking, now)).join('') +
-    `</div>`
+    }</div></div>`
   );
 }
 
@@ -3725,6 +4411,8 @@ function renderService() {
       speedHtml() +
       `<button class="simiconbtn" data-act="end" aria-label="${translate('Terminer', 'End')}">${icon('flag', 22)}</button>`,
   )}<div class="pad">${chooser}<div id="simLive">${liveHtml()}</div></div></div>`;
+  // 🔔 the ongoing notification, from the start of the service (asked once, in-page first)
+  if (game.startMs && !game.ended) askNotify();
 }
 
 /**
@@ -3738,15 +4426,22 @@ function waitText(key) {
   const texts = {
     seating: both('Vous les accompagnez à la table…', 'You walk them to the table…'),
     water: both("Vous apportez l'eau…", 'You bring the water…'),
-    aperitif: both('Le bar prépare les boissons…', 'The bar prepares the drinks…'),
+    // 🍸 the waiter makes the drinks at Les Trois Forts, not the bar
+    aperitif: both('Vous préparez les boissons…', 'You prepare the drinks…'),
     menu: both('Les clients regardent la carte…', 'The guests read the menu…'),
-    wine: both('La cuisine prépare les plats…', 'The kitchen prepares the dishes…'),
+    wine: both(
+      'Vous servez le vin, la cuisine prépare les plats…',
+      'You pour the wine, the kitchen prepares the dishes…',
+    ),
     mains: both('Les clients savourent leur plat…', 'The guests enjoy their main course…'),
     dessert: both(
       'Le dessert est servi, les clients se régalent…',
       'Dessert is served, the guests enjoy it…',
     ),
-    coffee: both('Les clients prennent leur café…', 'The guests have their coffee…'),
+    coffee: both(
+      'Vous préparez le café, les clients le dégustent…',
+      'You make the coffee, the guests enjoy it…',
+    ),
     bill: both('Les clients règlent…', 'The guests are paying…'),
   };
   return texts[base] || both('Un instant…', 'One moment…');
@@ -3770,43 +4465,171 @@ function gradeLabel(grade) {
 /**
  * `chatHtml` - Function 💬
  *
- * Rebuilds the conversation from the answers chosen (so it's the same on every phone of an online game).
+ * Rebuilds the conversation from the table's state (answers, interruptions, drinks, questions), so it's the same
+ * on every phone of an online game.
  *
  * @param { string } tableId - a table id
- * @returns { string } - the chat bubbles so far
+ * @returns { string } - the chat bubbles so far (the current step's are drawn by actionHtml)
  */
 function chatHtml(tableId) {
-  const booking = bookingOf(tableId);
   const entry = entryOf(tableId);
   const steps = game.steps[tableId];
-  const speaker = escapeHtml(pick(guestTitle(booking)));
+  const asked = questionsAsked(entry);
   let html = '';
   for (let index = 0; index < entry.c.length; index++) {
     const step = steps[index];
     const picked = step.choices[Number(entry.c[index])];
     if (!picked) continue;
+    html += questionsHtml(tableId, asked, index);
     if (step.note) html += `<div class="simsys">${escapeHtml(pick(step.note))}</div>`;
-    if (step.guest)
-      html += `<div class="simsay simguest"><small>${speaker}</small>${escapeHtml(pick(step.guest))}</div>`;
+    if (step.guest) html += guestBubble(tableId, 0, step.guest);
+    html += interruptsHtml(tableId, index);
     html +=
       `<div class="simsay simmine2">${escapeHtml(pick(picked.text))}</div>` +
-      `<div class="simfb simg-${picked.grade}"><b>${icon(picked.grade === 'best' || picked.grade === 'ok' ? 'check' : 'alert', 13)}${gradeLabel(picked.grade)}</b>` +
-      `${escapeHtml(pick(picked.feedback))}</div>`;
+      feedbackHtml(picked.grade, picked.feedback);
+    html += drinksHtml(tableId, index);
   }
-  return html;
+  return html + questionsHtml(tableId, asked, entry.c.length);
+}
+
+/**
+ * `guestBubble` - Function 💬
+ *
+ * @param { string } tableId - a table id
+ * @param { number } guestIndex - who speaks (0 = the booker)
+ * @param { {fr: string, en: string} } text - what they say
+ * @returns { string } - a guest's chat bubble with their name
+ */
+function guestBubble(tableId, guestIndex, text) {
+  const guest = game.guests[tableId][guestIndex] || game.guests[tableId][0];
+  return (
+    `<div class="simsay simguest" data-from="${guest.index}"><small>${avatarSvg(guest.kind, 13)}${escapeHtml(pick(guest.name))}</small>` +
+    `${escapeHtml(pick(text))}</div>`
+  );
+}
+
+/**
+ * `feedbackHtml` - Function 🏷️
+ *
+ * @param { string } grade - best, ok, wrong or danger
+ * @param { {fr: string, en: string} } feedback - the explanation
+ * @param { string } [extra] - something to add after it (points)
+ * @returns { string } - the feedback bubble under the waiter's answer
+ */
+function feedbackHtml(grade, feedback, extra) {
+  return (
+    `<div class="simfb simg-${grade}"><b>${icon(grade === 'best' || grade === 'ok' ? 'check' : 'alert', 13)}${gradeLabel(grade)}</b>` +
+    `${escapeHtml(pick(feedback))}${extra ? ' ' + escapeHtml(extra) : ''}</div>`
+  );
+}
+
+/**
+ * `interruptsHtml` - Function 🙋
+ *
+ * @param { string } tableId - a table id
+ * @param { number } stepIndex - a step
+ * @returns { string } - the interruptions already answered at that step (the guest's question, the answer, feedback)
+ */
+function interruptsHtml(tableId, stepIndex) {
+  const entry = entryOf(tableId);
+  return (game.steps[tableId].interrupts || [])
+    .slice(0, (entry.i || '').length)
+    .map((interrupt, index) => ({ interrupt, picked: interrupt.choices[Number(entry.i[index])] }))
+    .filter((item) => item.interrupt.at === stepIndex && item.picked)
+    .map(
+      (item) =>
+        `<div class="simsys">${icon('hand', 14)}${translate('Un invité vous interrompt', 'A guest interrupts you')}</div>` +
+        guestBubble(tableId, item.interrupt.guest, item.interrupt.line) +
+        `<div class="simsay simmine2">${escapeHtml(pick(item.picked.text))}</div>` +
+        feedbackHtml(item.picked.grade, item.picked.feedback),
+    )
+    .join('');
+}
+
+/**
+ * `drinksHtml` - Function 🍸
+ *
+ * @param { string } tableId - a table id
+ * @param { number } stepIndex - a step
+ * @returns { string } - the drinks already served after that step (the order, the score and the right answer)
+ */
+function drinksHtml(tableId, stepIndex) {
+  const entry = entryOf(tableId);
+  return (game.steps[tableId].drinks || [])
+    .slice(0, (entry.d || '').length)
+    .map((drink, index) => ({ drink, digit: Number(entry.d[index]) }))
+    .filter((item) => item.drink.at === stepIndex)
+    .map(
+      (item) =>
+        (item.drink.task.order ? guestBubble(tableId, 0, item.drink.task.order) : '') +
+        `<div class="simsay simmine2">${icon('glass', 14)} ${escapeHtml(pick(item.drink.task.title))}</div>` +
+        feedbackHtml(gradeOfDigit(item.digit), answerText(item.drink.task), item.digit + '/3'),
+    )
+    .join('');
+}
+
+/**
+ * `questionsHtml` - Function ❓
+ *
+ * @param { string } tableId - a table id
+ * @param { Array<object> } asked - the questions asked (see questionsAsked)
+ * @param { number } stepIndex - the step they were asked at
+ * @returns { string } - each question (waiter), the guest's reply (in their name) and its small score
+ */
+function questionsHtml(tableId, asked, stepIndex) {
+  const booking = bookingOf(tableId);
+  const steps = game.steps[tableId];
+  const orderIndex = steps.findIndex((step) => step.key.split('|')[0] === 'order');
+  return asked
+    .map((question, index) => ({ question, before: asked.slice(0, index) }))
+    .filter((item) => item.question.at === stepIndex)
+    .map((item) => {
+      const guest = game.guests[tableId][item.question.guest] || game.guests[tableId][0];
+      const reply = askQuestion({
+        booking,
+        meta: steps.meta,
+        guest,
+        id: item.question.id,
+        nextKey: steps[stepIndex] ? steps[stepIndex].key : '',
+        nextIndex: stepIndex,
+        orderIndex,
+        asked: item.before,
+      });
+      return (
+        `<div class="simsay simmine2">${escapeHtml(pick(guest.name))}, ${escapeHtml(lowerFirst(pick(questionText(item.question.id))))}</div>` +
+        guestBubble(tableId, guest.index, reply.line) +
+        `<div class="simfb simg-${reply.grade === 'best' ? 'best' : 'ok'}">${icon('question', 13)} ${escapeHtml(pick(reply.feedback))}` +
+        `${reply.points ? ' +' + reply.points + ' pts' : ''}</div>`
+      );
+    })
+    .join('');
+}
+
+/**
+ * `lowerFirst` - Function 🔡
+ *
+ * @param { string } text - a question
+ * @returns { string } - the same with a small first letter (« Madame Rossi, avez-vous… »)
+ */
+function lowerFirst(text) {
+  return text ? text[0].toLowerCase() + text.slice(1) : '';
 }
 
 /**
  * `tableSignature` - Function 🔏
  *
  * @param { string } tableId - a table id
- * @returns { string } - what changes the table view (answers, lock, owner, arrival, end): redraw only when it moves
+ * @returns { string } - what changes the table view (answers, interruptions, drinks, questions, lock, owner, arrival,
+ *   end): redraw only when it moves
  */
 function tableSignature(tableId) {
   const now = serviceNow();
   const entry = entryOf(tableId);
   return [
     entry.c,
+    entry.i,
+    entry.d,
+    entry.q,
     entry.o,
     entry.x,
     needsWaiter(tableId, now),
@@ -3820,7 +4643,8 @@ function tableSignature(tableId) {
  * `actionHtml` - Function 🎯
  *
  * @param { string } tableId - a table id
- * @returns { string } - the bottom of the chat: the choices, a wait, or « this table is someone else's »
+ * @returns { string } - the bottom of the chat: a drink to make, an interruption, the choices, a wait (with its
+ *   little 3D scene & countdown), or « this table is someone else's »
  */
 function actionHtml(tableId) {
   const now = serviceNow();
@@ -3828,7 +4652,7 @@ function actionHtml(tableId) {
   const entry = entryOf(tableId);
   const steps = game.steps[tableId];
   const step = steps[entry.c.length];
-  const speaker = escapeHtml(pick(guestTitle(booking)));
+  const drink = pendingDrink(tableId);
   let html = '';
   if (game.ended)
     html += `<div class="simbanner">${icon('flag', 20)}<div class="simgrow">${translate('Service terminé.', 'Service over.')}</div><button class="simsmallbtn" data-go="back">${translate('Voir les scores', 'See the scores')}</button></div>`;
@@ -3837,7 +4661,7 @@ function actionHtml(tableId) {
       html +
       `<div class="simsys">${icon('door', 16)}${translate('Personne ne les a accueillis : les clients sont partis.', 'Nobody welcomed them: the guests left.')}</div>`
     );
-  if (!step)
+  if (!step && !drink)
     return (
       html +
       `<div class="simsys">${icon('check', 16)}${translate('Table terminée', 'Table done')} · ${entry.p} pts</div>`
@@ -3850,26 +4674,39 @@ function actionHtml(tableId) {
   if (now < entry.w)
     return (
       html +
-      `<div class="simwait">${icon('clock', 20)}<div class="simgrow">${escapeHtml(pick(waitText(steps[entry.c.length - 1].key)))}` +
-      `<br><b>${translate('Prêt à ', 'Ready at ')}${clockText(entry.w)}</b></div></div>`
+      `<div class="simwait simwaitscene">${sceneHtml(sceneOf(steps[entry.c.length - 1].key), false)}` +
+      `<div class="simgrow">${escapeHtml(pick(waitText(steps[entry.c.length - 1].key)))}` +
+      `<br><b id="simCountdown">${translate('Prêt dans ', 'Ready in ')}${minutesLeft(entry.w, now)}</b>` +
+      `<span class="simsub"> · ${clockText(entry.w)}</span></div></div>`
     );
-  html += step.note ? `<div class="simsys">${escapeHtml(pick(step.note))}</div>` : '';
-  html += step.guest
-    ? `<div class="simsay simguest"><small>${speaker}</small>${escapeHtml(pick(step.guest))}</div>`
-    : '';
-  if (entry.o !== game.me) {
-    const asked = game.requests[tableId] && game.requests[tableId].f === game.me;
+  if (drink) {
+    // 🍸 the drink ordered at the last step: the waiter makes it now
+    html += drink.task.order ? guestBubble(tableId, 0, drink.task.order) : '';
+    if (entry.o !== game.me) return html + otherRangHtml(tableId);
     return (
       html +
-      `<div class="simbanner">${icon('swap', 20)}<div class="simgrow">${escapeHtml(
-        translate(`Rang de ${waiterName(entry.o)}.`, `${waiterName(entry.o)}'s rang.`),
-      )}</div></div><div class="simactions">` +
-      (game.mode === 'solo'
-        ? `<button class="btn sec" data-act="switch">${icon('user', 18)}${escapeHtml(translate('Jouer ', 'Play as ') + waiterName(entry.o))}</button>`
-        : `<button class="btn sec" data-act="ask"${asked ? ' disabled' : ''}>${icon('hand', 18)}${asked ? translate('Demandé', 'Asked') : translate('Demander', 'Ask')}</button>`) +
-      `<button class="btn" data-act="steal">${icon('swap', 18)}${translate('Prendre la table', 'Take the table')}</button></div>`
+      drinkHtml(drink.task, game.picks[tableId + '|' + (entry.d || '').length] || {}, icon('glass', 18))
     );
   }
+  html += step.note ? `<div class="simsys">${escapeHtml(pick(step.note))}</div>` : '';
+  html += step.guest ? guestBubble(tableId, 0, step.guest) : '';
+  html += interruptsHtml(tableId, entry.c.length);
+  if (entry.o !== game.me) return html + otherRangHtml(tableId);
+  const interrupt = pendingInterrupt(tableId);
+  if (interrupt)
+    return (
+      html +
+      `<div class="simsys">${icon('hand', 14)}${translate('Un invité vous interrompt', 'A guest interrupts you')}</div>` +
+      guestBubble(tableId, interrupt.guest, interrupt.line) +
+      `<div class="simchoices">` +
+      interrupt.choices
+        .map(
+          (option, index) =>
+            `<button class="simopt" data-interrupt="${index}"><span class="simletter">${'ABCD'[index]}</span><span>${escapeHtml(pick(option.text))}</span></button>`,
+        )
+        .join('') +
+      `</div>`
+    );
   return (
     html +
     `<div class="simchoices">` +
@@ -3884,9 +4721,30 @@ function actionHtml(tableId) {
 }
 
 /**
+ * `otherRangHtml` - Function 🔁
+ *
+ * @param { string } tableId - a table of another waiter
+ * @returns { string } - « Rang de Léa » with « Jouer Léa » (solo) or « Demander » (online) and « Prendre la table »
+ */
+function otherRangHtml(tableId) {
+  const entry = entryOf(tableId);
+  const asked = game.requests[tableId] && game.requests[tableId].f === game.me;
+  return (
+    `<div class="simbanner">${icon('swap', 20)}<div class="simgrow">${escapeHtml(
+      translate(`Rang de ${waiterName(entry.o)}.`, `${waiterName(entry.o)}'s rang.`),
+    )}</div></div><div class="simactions">` +
+    (game.mode === 'solo'
+      ? `<button class="btn sec" data-act="switch">${icon('user', 18)}${escapeHtml(translate('Jouer ', 'Play as ') + waiterName(entry.o))}</button>`
+      : `<button class="btn sec" data-act="ask"${asked ? ' disabled' : ''}>${icon('hand', 18)}${asked ? translate('Demandé', 'Asked') : translate('Demander', 'Ask')}</button>`) +
+    `<button class="btn" data-act="steal">${icon('swap', 18)}${translate('Prendre la table', 'Take the table')}</button></div>`
+  );
+}
+
+/**
  * `renderTable` - Function 💬
  *
- * The table dialogue: the guests' notes, patience & points, the chat so far and what to do next.
+ * The table dialogue: the call header (the guests, who speaks, mute, « réécouter », « Questions »), the notes,
+ * patience & points, the chat so far and what to do next. The guests' new lines are spoken (see speakCurrent).
  *
  * @returns { void }
  */
@@ -3909,9 +4767,46 @@ function renderTable() {
     `<span class="simpill">${icon('star', 14)}<span id="simPts">${entry.p}</span> pts</span>`;
   appRoot().innerHTML =
     `<div id="simPage">${barHtml(`${tableId} · ${pick(guestTitle(booking))}`, clockHtml())}<div class="pad">` +
+    callHtml(tableId) +
     `<div class="siminfo">${pills}</div>` +
     `<div class="simpat${patience < 35 ? ' simlow' : ''}" id="simPatience" title="${translate('Patience', 'Patience')}"><i style="width:${patience}%"></i></div>` +
     `<div class="simchat" id="simChat">${chatHtml(tableId)}${actionHtml(tableId)}</div></div></div>`;
+  speakCurrent(tableId, false);
+}
+
+/**
+ * `callHtml` - Function 📞
+ *
+ * @param { string } tableId - a table id
+ * @returns { string } - the call-style header: every guest's avatar (the speaker gets a pulsing ring), mute/unmute,
+ *   « réécouter » and « Questions »
+ */
+function callHtml(tableId) {
+  const muted = isMuted();
+  const canAsk =
+    entryOf(tableId).o === game.me &&
+    serviceNow() >= bookingOf(tableId).time &&
+    !isDone(tableId) &&
+    !game.ended;
+  return (
+    `<div class="simcall"><div class="simavatars">` +
+    game.guests[tableId]
+      .map(
+        (guest) =>
+          `<span class="simguestav simk-${guest.kind}" data-guest="${guest.index}" title="${escapeHtml(pick(guest.name))}">` +
+          `${avatarSvg(guest.kind, 22)}<small>${escapeHtml(pick(guest.name).split(' (')[0])}</small></span>`,
+      )
+      .join('') +
+    `</div><div class="simcallbtns">` +
+    (voiceAvailable()
+      ? `<button class="simiconbtn${muted ? ' simoff' : ''}" data-act="mute" aria-label="${muted ? translate('Activer le son', 'Unmute') : translate('Couper le son', 'Mute')}">${icon(muted ? 'mute' : 'speaker', 20)}</button>` +
+        `<button class="simiconbtn" data-act="replay" aria-label="${translate('Réécouter', 'Listen again')}">${icon('replay', 20)}</button>`
+      : '') +
+    (canAsk
+      ? `<button class="simsmallbtn simsec2" data-act="questions">${icon('question', 16)}${translate('Questions', 'Questions')}</button>`
+      : '') +
+    `</div></div>`
+  );
 }
 
 /**
@@ -3935,7 +4830,12 @@ function renderEnd() {
     game.record = game.mode === 'solo' && saveBest(allPoints);
   }
   const maxPoints = game.bookings.reduce(
-    (sum, booking) => sum + game.steps[booking.table].length * 13 + 20,
+    (sum, booking) =>
+      sum +
+      game.steps[booking.table].length * 13 +
+      20 +
+      (game.steps[booking.table].interrupts || []).length * INTERRUPT_POINTS.best +
+      (game.steps[booking.table].drinks || []).length * DRINK_POINTS.best,
     0,
   );
   const ratio = maxPoints ? allPoints / maxPoints : 0;
@@ -3998,11 +4898,13 @@ const VIEWS = {
  * `render` - Function 🖼️
  *
  * @param { string } view - a view of the page
- * @returns { void } - draws it (and runs the clock while a game is on screen)
+ * @returns { void } - draws it (and runs the clock while a game is on screen); leaving the table stops the voices
  */
 function render(view) {
   page.run++;
   clearInterval(page.timer);
+  if (view !== 'table') stopSpeaking();
+  closeDrawer();
   page.view = VIEWS[view] ? view : 'page';
   VIEWS[page.view]();
   if (['service', 'table', 'lobby'].includes(page.view)) page.timer = setInterval(tick, 1000);
@@ -4020,32 +4922,63 @@ function scrollToBottom() {
   window.scrollTo(0, height);
 }
 
+// the markup each live element was last drawn with (so an unchanged row isn't replaced) 🧩
+const shownHtml = new WeakMap();
+
 /**
  * `refreshLive` - Function 🔄
  *
- * Updates what moves without redrawing the whole page: the clock, the plan & list, the table dialogue.
+ * Updates what moves without redrawing the whole page: the clock, the plan, each changed row of the list (so the
+ * little scenes keep turning), the table dialogue and its countdown.
  *
  * @returns { void }
  */
 function refreshLive() {
   if (!page.isOpen || !game) return;
+  const now = serviceNow();
   const clock = document.querySelector('#simClock span');
-  if (clock) clock.textContent = clockText(serviceNow());
+  if (clock) clock.textContent = clockText(now);
   if (page.view === 'service') {
-    const live = document.getElementById('simLive');
-    if (live) live.innerHTML = liveHtml();
+    const top = document.getElementById('simLiveTop');
+    const list = document.getElementById('simList');
+    if (!top || !list) {
+      const live = document.getElementById('simLive');
+      if (live) live.innerHTML = liveHtml();
+      return;
+    }
+    const topHtml = liveTopHtml(now);
+    if (shownHtml.get(top) !== topHtml) {
+      top.innerHTML = topHtml;
+      shownHtml.set(top, topHtml);
+    }
+    // 🧩 only the rows that changed are replaced
+    game.bookings.forEach((booking) => {
+      const rowHtml = tableRowHtml(booking, now);
+      const row = list.querySelector(`[data-table="${booking.table}"]`);
+      if (row && shownHtml.get(row) === rowHtml) return;
+      const holder = document.createElement('div');
+      holder.innerHTML = rowHtml;
+      const fresh = holder.firstElementChild;
+      shownHtml.set(fresh, rowHtml);
+      if (row) row.replaceWith(fresh);
+      else list.appendChild(fresh);
+    });
   } else if (page.view === 'table') {
     if (tableSignature(page.tableId) !== page.tableShown) {
       renderTable();
       scrollToBottom();
       return;
     }
-    const patience = patienceOf(page.tableId, serviceNow());
+    const patience = patienceOf(page.tableId, now);
     const bar = document.getElementById('simPatience');
     if (bar) {
       bar.classList.toggle('simlow', patience < 35);
       bar.firstElementChild.style.width = patience + '%';
     }
+    const countdown = document.getElementById('simCountdown');
+    if (countdown)
+      countdown.textContent =
+        translate('Prêt dans ', 'Ready in ') + minutesLeft(entryOf(page.tableId).w, now);
   } else if (page.view === 'lobby') renderLobby();
 }
 
@@ -4077,7 +5010,8 @@ function announceArrivals(now) {
 /**
  * `tick` - Function 🕰️
  *
- * Every real second while a game is on screen: arrivals, guests leaving, the end of the service, the redraw.
+ * Every real second while a game is on screen: arrivals, guests leaving, the end of the service, the redraw, the
+ * ongoing notification and (host of an online game) the public summary once per service minute.
  *
  * @returns { void }
  */
@@ -4090,16 +5024,25 @@ function tick() {
   if (!game.ended && gameOver(now)) game.ended = true;
   if (game.ended && page.view === 'service') return finishGame();
   refreshLive();
+  updateNotification(false);
+  publishSummary(now);
 }
 
 /**
  * `finishGame` - Function 🏁
  *
- * @returns { void } - shows the end screen in place of the service (Back then leaves the game)
+ * @returns { void } - shows the end screen in place of the service (Back then leaves the game); the host of an
+ *   online game marks it ended (`en`) so it leaves « Parties en cours »
  */
 function finishGame() {
   if (!game) return;
   game.ended = true;
+  closeNotification();
+  if (game.mode === 'online' && game.me === game.host && !game.endWritten) {
+    game.endWritten = true;
+    writeRemote({ en: true });
+    updateListEntry({ en: true, d: doneCount(), k: Math.floor(serviceNow()) });
+  }
   history.replaceState({ ltfSim: 'end' }, '');
   render('end');
 }
@@ -4107,11 +5050,13 @@ function finishGame() {
 /**
  * `stopGame` - Function ⏹️
  *
- * @returns { void } - stops the clock, stops listening online and forgets the game
+ * @returns { void } - stops the clock, the voices and the notification, stops listening online and forgets the game
  */
 function stopGame() {
   clearInterval(page.timer);
   stopListening();
+  stopSpeaking();
+  closeNotification();
   game = null;
 }
 
@@ -4235,14 +5180,326 @@ async function askQuit() {
  * `openTable` - Function 💬
  *
  * @param { string } tableId - a table with a booking tonight
- * @returns { void } - opens its dialogue (Back returns to the service)
+ * @returns { void } - opens its dialogue (Back returns to the service); the guests' current lines are spoken
  */
 function openTable(tableId) {
   if (!bookingOf(tableId)) return;
   page.tableId = tableId;
+  page.spokenKey = '';
   history.pushState({ ltfSim: 'table' }, '');
   render('table');
 }
+
+// ===== VOICES 📞 ===== //
+
+/**
+ * `currentLines` - Function 🗣️
+ *
+ * @param { string } tableId - a table id
+ * @param { boolean } again - true for « réécouter » (the step's line even after an interruption was answered)
+ * @returns { Array<{guest: number, text: object}> } - what the guests say now (never the waiter's lines)
+ */
+function currentLines(tableId, again) {
+  const now = serviceNow();
+  const entry = entryOf(tableId);
+  const steps = game.steps[tableId];
+  const step = steps[entry.c.length];
+  const lines = [];
+  const drink = pendingDrink(tableId);
+  const live = !entry.x && now >= bookingOf(tableId).time && now >= entry.w;
+  if (live && drink && drink.task.order) lines.push({ guest: 0, text: drink.task.order });
+  else if (live && !drink && step) {
+    const answeredHere = (steps.interrupts || [])
+      .slice(0, (entry.i || '').length)
+      .some((interrupt) => interrupt.at === entry.c.length);
+    if (step.guest && (again || !answeredHere)) lines.push({ guest: 0, text: step.guest });
+    const interrupt = pendingInterrupt(tableId);
+    if (interrupt) lines.push({ guest: interrupt.guest, text: interrupt.line });
+  }
+  // 🔁 « réécouter » with nothing new: the last line a guest said in the steps so far
+  if (!lines.length && again)
+    for (let index = Math.min(entry.c.length, steps.length) - 1; index >= 0; index--)
+      if (steps[index].guest) {
+        lines.push({ guest: 0, text: steps[index].guest });
+        break;
+      }
+  return lines;
+}
+
+/**
+ * `speakCurrent` - Function 📞
+ *
+ * Speaks the table's new guest lines once (a redraw never repeats them), or again for « réécouter ».
+ *
+ * @param { string } tableId - a table id
+ * @param { boolean } again - true to say them again
+ * @returns { void }
+ */
+function speakCurrent(tableId, again) {
+  const entry = entryOf(tableId);
+  const key = [tableId, entry.c, entry.i, entry.d].join('|');
+  if (!again && key === page.spokenKey) return;
+  page.spokenKey = key;
+  speakFor(tableId, currentLines(tableId, again));
+}
+
+/**
+ * `speakFor` - Function 🗣️
+ *
+ * @param { string } tableId - a table id
+ * @param { Array<{guest: number, text: object}> } lines - what each guest says
+ * @returns { void } - queues them in each guest's voice, the speaker's avatar ringing while they talk
+ */
+function speakFor(tableId, lines) {
+  if (!lines.length) return;
+  const guests = game.guests[tableId];
+  /**
+   * `ring` - Function 💫
+   *
+   * @param { object } line - the line said
+   * @param { boolean } on - true while the guest talks
+   * @returns { void } - toggles the pulsing ring on their avatar
+   */
+  const ring = (line, on) => {
+    const avatar = document.querySelector(`.simguestav[data-guest="${line.guest}"]`);
+    if (avatar) avatar.classList.toggle('simtalk', on);
+  };
+  speakLines(
+    lines.map((line) => {
+      const guest = guests[line.guest] || guests[0];
+      return { guest: guest.index, kind: guest.kind, slot: guest.slot, text: pick(line.text) };
+    }),
+    {
+      lang: isEnglish() ? 'en' : 'fr',
+      replace: true,
+      onStart: (line) => ring(line, true),
+      onDone: (line) => ring(line, false),
+    },
+  );
+}
+
+// ===== QUESTIONS SHEET ❓ ===== //
+
+/**
+ * `openQuestions` - Function ❓
+ *
+ * @returns { void } - opens the « Questions » sheet of the table on screen: choose the guest, then the question
+ */
+function openQuestions() {
+  if (!game || page.view !== 'table') return;
+  if (!game.guests[page.tableId][page.questionGuest || 0]) page.questionGuest = 0;
+  closeDrawer();
+  const holder = document.getElementById('simPage');
+  if (!holder) return;
+  const sheet = document.createElement('div');
+  sheet.className = 'simdrawer';
+  sheet.id = 'simDrawer';
+  sheet.dataset.act = 'closedrawer';
+  sheet.innerHTML = questionsSheetHtml();
+  holder.appendChild(sheet);
+}
+
+/**
+ * `questionsSheetHtml` - Function ❓
+ *
+ * @returns { string } - the sheet: one chip per guest (the booker by name), then the questions for now first
+ */
+function questionsSheetHtml() {
+  const tableId = page.tableId;
+  const context = questionContext(tableId);
+  const chosen = page.questionGuest || 0;
+  return (
+    `<div class="simdrawerbox" role="dialog" aria-modal="true"><div class="simdrawerhead">${icon('question', 22)}` +
+    `<b class="simgrow">${translate('Poser une question', 'Ask a question')}</b>` +
+    `<button class="simiconbtn" data-act="closedrawer" aria-label="${translate('Fermer', 'Close')}">${icon('close', 20)}</button></div>` +
+    `<div class="simdrinklabel">${translate('À qui ?', 'To whom?')}</div><div class="simchips">` +
+    game.guests[tableId]
+      .map(
+        (guest) =>
+          `<button class="simchip${guest.index === chosen ? ' simon' : ''}" data-qguest="${guest.index}">${avatarSvg(guest.kind, 14)}${escapeHtml(pick(guest.name))}</button>`,
+      )
+      .join('') +
+    `</div><div class="simdrinklabel">${translate('Quelle question ?', 'Which question?')}</div><div class="simchoices">` +
+    questionsFor(context.nextKey)
+      .map(
+        (question) =>
+          `<button class="simopt" data-ask="${question.id}">${icon(question.now ? 'clock' : 'question', 16)}` +
+          `<span>${escapeHtml(pick(question.text))}</span></button>`,
+      )
+      .join('') +
+    `</div></div>`
+  );
+}
+
+/**
+ * `closeDrawer` - Function 👋
+ *
+ * @returns { void } - closes the bottom sheet (questions or « Parties en cours ») and stops listening to the list
+ */
+function closeDrawer() {
+  const drawer = document.getElementById('simDrawer');
+  if (drawer) drawer.remove();
+  if (cloud.listUnsubscribe) cloud.listUnsubscribe();
+  cloud.listUnsubscribe = null;
+  page.drawerGame = '';
+}
+
+// ===== THE ONGOING NOTIFICATION 🔔 ===== //
+// ⚠️ It only updates while the page is alive: Chrome throttles (and may freeze) background timers, so a phone in
+// a pocket may show a clock that is a few minutes behind until the app is opened again.
+
+/**
+ * `notifyReady` - Function 🔔
+ *
+ * @returns { boolean } - true when this browser can show a service-worker notification
+ */
+function notifyReady() {
+  return typeof Notification !== 'undefined' && !!navigator.serviceWorker;
+}
+
+/**
+ * `askNotify` - Function 🔔
+ *
+ * At the start of a game: a small in-page explanation first (never window.confirm), then the browser's own
+ * question, only while the permission is still undecided.
+ *
+ * @returns { Promise<void> }
+ */
+async function askNotify() {
+  if (!notifyReady() || !game) return;
+  if (Notification.permission === 'granted') return updateNotification(true);
+  if (Notification.permission !== 'default' || page.notifyAsked) return;
+  page.notifyAsked = true;
+  const yes = await showDialog({
+    icon: 'bell',
+    title: translate('Suivre le service', 'Follow the service'),
+    text: translate(
+      "Une notification discrète garde l'heure du service, le prochain événement et les tables qui vous attendent, jusqu'à la fin de la partie.",
+      'A quiet notification keeps the service clock, the next event and the tables waiting for you, until the game ends.',
+    ),
+    buttons: [
+      { label: translate('Plus tard', 'Later'), value: false },
+      { label: translate('Activer', 'Turn on'), value: true },
+    ],
+  });
+  if (!yes) return;
+  try {
+    await Notification.requestPermission();
+  } catch (error) {
+    return;
+  }
+  updateNotification(true);
+}
+
+/**
+ * `nextStepLabel` - Function 🏷️
+ *
+ * @param { string } key - the key of the step that unlocks next
+ * @returns { string } - « plats », « dessert », « addition »… in the app's language
+ */
+function nextStepLabel(key) {
+  const labels = {
+    welcome: ['arrivée', 'arrival'],
+    seating: ['installation', 'seating'],
+    water: ['eau', 'water'],
+    aperitif: ['apéritif', 'aperitif'],
+    menu: ['carte', 'menu'],
+    allergy: ['commande', 'order'],
+    order: ['commande', 'order'],
+    wine: ['vin', 'wine'],
+    mains: ['plats', 'mains'],
+    birthday: ['anniversaire', 'birthday'],
+    anniversary: ['anniversaire', 'anniversary'],
+    business: ['client', 'guest'],
+    dessert: ['dessert', 'dessert'],
+    coffee: ['café', 'coffee'],
+    bill: ['addition', 'bill'],
+    goodbye: ['départ', 'goodbye'],
+  }[String(key || '').split('|')[0]] || ['suite', 'next step'];
+  return translate(labels[0], labels[1]);
+}
+
+/**
+ * `notificationText` - Function 🔔
+ *
+ * @returns { {title: string, body: string} } - the clock, the next event (an arrival or a step that unlocks) and
+ *   how many tables need me
+ */
+function notificationText() {
+  const now = serviceNow();
+  const mine = game.bookings.filter(
+    (booking) => game.mode === 'solo' || entryOf(booking.table).o === game.me,
+  );
+  let next = null;
+  mine.forEach((booking) => {
+    if (isDone(booking.table)) return;
+    const entry = entryOf(booking.table);
+    const at = now < booking.time ? booking.time : entry.w;
+    if (at <= now) return;
+    const label =
+      now < booking.time
+        ? nextStepLabel('welcome')
+        : nextStepLabel((game.steps[booking.table][entry.c.length] || {}).key);
+    if (!next || at < next.at)
+      next = { at, text: `${booking.table} · ${label} ${translate('dans', 'in')} ${minutesLeft(at, now)}` };
+  });
+  const waiting = mine.filter((booking) => needsWaiter(booking.table, now)).length;
+  return {
+    title: translate('Service · ', 'Service · ') + clockText(now) + (game.code ? ' · ' + game.code : ''),
+    body:
+      (next ? next.text : translate('Aucun événement à venir', 'Nothing coming up')) +
+      ' · ' +
+      (waiting
+        ? translate(`${waiting} table(s) vous attendent`, `${waiting} table(s) need you`)
+        : translate('aucune table en attente', 'no table waiting')),
+  };
+}
+
+/**
+ * `updateNotification` - Function 🔔
+ *
+ * Shows or replaces the ongoing notification (tag 'ltf-sim', silent, no re-alert): called every second by the
+ * clock, it only redraws when its text changed (each service minute, or a table changed).
+ *
+ * @param { boolean } force - true to show it even when the text didn't change
+ * @returns { void }
+ */
+function updateNotification(force) {
+  if (!notifyReady() || Notification.permission !== 'granted' || !game || !game.startMs || game.ended) return;
+  const text = notificationText();
+  const signature = text.title + '|' + text.body;
+  if (!force && signature === game.notified) return;
+  game.notified = signature;
+  navigator.serviceWorker.ready
+    .then((registration) =>
+      registration.showNotification(text.title, {
+        tag: NOTIFY_TAG,
+        renotify: false,
+        silent: true,
+        requireInteraction: true,
+        body: text.body,
+        icon: 'icon-192.png',
+        badge: 'icon-192.png',
+        data: { url: '/#sim' },
+      }),
+    )
+    .catch(() => {});
+}
+
+/**
+ * `closeNotification` - Function 🔕
+ *
+ * @returns { void } - closes the ongoing notification (end, quit, leaving the page)
+ */
+function closeNotification() {
+  if (!notifyReady()) return;
+  navigator.serviceWorker.ready
+    .then((registration) => registration.getNotifications({ tag: NOTIFY_TAG }))
+    .then((notifications) => (notifications || []).forEach((notification) => notification.close()))
+    .catch(() => {});
+}
+
+// ===== THE PAGE 📚 ===== //
 
 /**
  * `openPage` - Function 📚
@@ -4297,7 +5554,27 @@ function handleClick(event) {
     if (go.dataset.go === 'solo') return openSetup(false);
     if (go.dataset.go === 'host') return openSetup(true);
     if (go.dataset.go === 'join') return askJoin();
+    if (go.dataset.go === 'games') return openGamesDrawer();
   }
+  // 👋 the bottom sheet's backdrop (or its close button)
+  const closer = target('[data-act="closedrawer"]');
+  if (closer && (closer.id !== 'simDrawer' || event.target === closer)) return closeDrawer();
+  if (target('#simDrawer') && handleDrawerClick(target)) return;
+  const openButton = target('[data-open]');
+  if (openButton) {
+    page.openGame = openButton.dataset.open === '1';
+    return renderSetup();
+  }
+  const interruptButton = target('[data-interrupt]');
+  if (interruptButton && game) {
+    if (answerInterrupt(page.tableId, Number(interruptButton.dataset.interrupt))) {
+      renderTable();
+      scrollToBottom();
+    }
+    return;
+  }
+  const drinkChip = target('[data-dpick]');
+  if (drinkChip && game) return pickDrinkChip(drinkChip);
   const count = target('[data-count]');
   if (count) {
     page.waiterCount = clamp(Number(count.dataset.count), 1, 4);
@@ -4398,6 +5675,90 @@ function handleClick(event) {
     game.me = entryOf(page.tableId).o;
     return renderTable();
   }
+  if (name === 'serve') {
+    if (serveDrink(page.tableId)) {
+      renderTable();
+      scrollToBottom();
+    }
+    return;
+  }
+  if (name === 'mute') {
+    setMuted(!isMuted());
+    return renderTable();
+  }
+  if (name === 'replay') {
+    // 🔁 « réécouter » turns the sound back on
+    if (isMuted()) {
+      setMuted(false);
+      renderTable();
+    }
+    return speakCurrent(page.tableId, true);
+  }
+  if (name === 'questions') return openQuestions();
+}
+
+/**
+ * `handleDrawerClick` - Function 👆
+ *
+ * @param { Function } target - the click's `closest` helper
+ * @returns { boolean } - true when the tap was for the bottom sheet (questions or « Parties en cours »)
+ */
+function handleDrawerClick(target) {
+  const guestChip = target('[data-qguest]');
+  if (guestChip) {
+    page.questionGuest = Number(guestChip.dataset.qguest);
+    const drawer = document.getElementById('simDrawer');
+    if (drawer) drawer.innerHTML = questionsSheetHtml();
+    return true;
+  }
+  const ask = target('[data-ask]');
+  if (ask && game) {
+    const guest = page.questionGuest || 0;
+    const reply = askGuest(page.tableId, guest, ask.dataset.ask);
+    closeDrawer();
+    if (reply) {
+      renderTable();
+      scrollToBottom();
+      speakFor(page.tableId, [{ guest, text: reply.line }]);
+    }
+    return true;
+  }
+  const gameRow = target('[data-game]');
+  if (gameRow) {
+    page.drawerGame = gameRow.dataset.game;
+    renderDrawer();
+    return true;
+  }
+  const action = target('[data-act]');
+  if (!action) return false;
+  if (action.dataset.act === 'gamelist') {
+    page.drawerGame = '';
+    renderDrawer();
+    return true;
+  }
+  if (action.dataset.act === 'joinlisted' || action.dataset.act === 'joincode') {
+    joinFromDrawer(action.dataset.act === 'joincode');
+    return true;
+  }
+  return false;
+}
+
+/**
+ * `pickDrinkChip` - Function 🍸
+ *
+ * @param { HTMLElement } chip - the chip tapped (data-dpick = "group:index")
+ * @returns { void } - toggles it in place (no redraw: the chat keeps its scroll)
+ */
+function pickDrinkChip(chip) {
+  const drink = pendingDrink(page.tableId);
+  if (!drink) return;
+  const [groupId, index] = chip.dataset.dpick.split(':');
+  const key = page.tableId + '|' + (entryOf(page.tableId).d || '').length;
+  game.picks[key] = game.picks[key] || {};
+  const selected = togglePick(drink.task, game.picks[key], groupId, Number(index));
+  document.querySelectorAll(`[data-dpick^="${groupId}:"]`).forEach((other) => {
+    other.classList.toggle('simon', selected.includes(Number(other.dataset.dpick.split(':')[1])));
+  });
 }
 
 // 👆 the page's taps
@@ -4478,9 +5839,59 @@ function addChapterRow() {
   else firstChapter.parentNode.insertBefore(row, firstChapter);
 }
 
+/**
+ * `openOnBoot` - Function 📲
+ *
+ * Opened from the game's notification (`?sim=1` or `#sim`): the chapter page opens once the home screen is
+ * drawn. A game only lives in the page's memory, so after a reload the waiter lands on the chapter page (an
+ * online game can be joined again from « Parties en cours » or its code).
+ *
+ * @returns { void }
+ */
+function openOnBoot() {
+  if (!page.openOnBoot || page.isOpen || !document.getElementById('simRow')) return;
+  page.openOnBoot = false;
+  openPage();
+}
+
+/**
+ * `readBootLink` - Function 🔗
+ *
+ * @returns { void } - remembers a `?sim=1` / `#sim` link and cleans the address (the app's router keeps its own hash)
+ */
+function readBootLink() {
+  const fromQuery = new URLSearchParams(location.search).get('sim') === '1';
+  const fromHash = location.hash === '#sim';
+  if (!fromQuery && !fromHash) return;
+  page.openOnBoot = true;
+  history.replaceState(history.state, '', location.pathname + (fromHash ? '' : location.hash));
+}
+
 // 👀 watch for the home screen (both builds redraw `#app`)
-new MutationObserver(addChapterRow).observe(document.body, { childList: true, subtree: true });
+readBootLink();
+new MutationObserver(() => {
+  addChapterRow();
+  openOnBoot();
+}).observe(document.body, { childList: true, subtree: true });
 addChapterRow();
+openOnBoot();
+
+// 📲 the game's notification was tapped while the app was open (message from the service worker)
+if (navigator.serviceWorker && typeof navigator.serviceWorker.addEventListener === 'function')
+  navigator.serviceWorker.addEventListener('message', (event) => {
+    if (!event.data || event.data.type !== 'open-sim') return;
+    // 🔔 show the notification again at the next tick (in case the system closed it)
+    if (game) game.notified = '';
+    if (page.isOpen) return;
+    page.openOnBoot = true;
+    openOnBoot();
+  });
+
+// 👋 leaving the page (closing the tab, navigating away): no notification of a game that is gone
+addEventListener('pagehide', () => {
+  stopSpeaking();
+  closeNotification();
+});
 
 // 🌍 open it from anywhere (e.g. a link or the console)
 window.LTFopenSim = openPage;
