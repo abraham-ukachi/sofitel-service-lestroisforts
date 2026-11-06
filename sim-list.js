@@ -120,8 +120,9 @@ function gameWaitersText(entry) {
 /**
  * `drawerHtml` - Function 🖼️
  *
- * @param { {games: Array<object> | null, selectedId: string, error: string} } state - the list (null while loading),
- *   the game opened ('' for the list) and an error to show
+ * @param { {games: Array<object> | null, selectedId: string, error: string, hostNote: boolean} } state - the list
+ *   (null while loading), the game opened ('' for the list), an error to show, and true when I host the opened game
+ *   but its code isn't on this phone
  * @returns { string } - the bottom sheet: the list of live games, or one game's details
  */
 export function drawerHtml(state) {
@@ -131,7 +132,7 @@ export function drawerHtml(state) {
     body = `<div class="simwait">${kit.icon('alert', 20)}<div class="simgrow">${kit.escapeHtml(state.error)}</div></div>`;
   else if (!state.games)
     body = `<div class="simwait">${kit.icon('clock', 20)}${kit.translate('Chargement…', 'Loading…')}</div>`;
-  else if (selected) body = gameDetailsHtml(selected);
+  else if (selected) body = gameDetailsHtml(selected, !!state.hostNote);
   else if (!state.games.length)
     body = `<div class="simwait">${kit.icon('live', 20)}<div class="simgrow">${kit.translate("Aucune partie en cours. Créez-en une pour l'équipe !", 'No game running. Create one for the team!')}</div></div>`;
   else
@@ -160,10 +161,12 @@ export function drawerHtml(state) {
  * `gameDetailsHtml` - Function 🔎
  *
  * @param { object } entry - a clean list entry
+ * @param { boolean } [hostNote] - true when I host it but its code isn't remembered on this phone: a note, and the
+ *   code field even when every rang is taken (I already have mine)
  * @returns { string } - the game's details, then « Rejoindre » (open game) or the code field (« sur code »)
  */
-export function gameDetailsHtml(entry) {
-  const full = entry.joined >= entry.count;
+export function gameDetailsHtml(entry, hostNote) {
+  const full = entry.joined >= entry.count && !hostNote;
   return (
     `<div class="simattn">${kit.icon('user', 20)}<div>${kit.translate('Hôte : ', 'Host: ')}<b>${kit.escapeHtml(entry.name)}</b></div></div>` +
     `<div class="simattn">${kit.icon('users', 20)}<div>${kit.escapeHtml(gameWaitersText(entry))}</div></div>` +
@@ -173,6 +176,12 @@ export function gameDetailsHtml(entry) {
         ? kit.translate('Partie ouverte · code ', 'Open game · code ') + kit.escapeHtml(entry.code)
         : kit.translate("Sur code : demandez le code à l'hôte.", 'Code only: ask the host for the code.')
     }</div></div>` +
+    (hostNote
+      ? `<div class="simattn simhostnote">${kit.icon('alert', 20)}<div>${kit.translate(
+          "C'est votre partie, mais son code n'est pas enregistré sur ce téléphone : il s'affiche sur celui qui l'a créée.",
+          "It's your game, but its code isn't saved on this phone: it shows on the one that created it.",
+        )}</div></div>`
+      : '') +
     (full
       ? `<div class="simwait">${kit.icon('users', 20)}${kit.translate('Tous les rangs sont pris.', 'Every rang is taken.')}</div>`
       : entry.code

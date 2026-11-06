@@ -24,6 +24,7 @@
  *   1+|> (index.html) script type="module" src="sim.js"
  *    -|> Accueil › Chapitres › « Simulation de service » opens the chapter page (solo, créer, rejoindre)
  *   2+|> window.LTFopenSim() opens it from anywhere
+ *   3+|> (sim-live.js) the live card on every page, my games' codes & the notification after a reload
  *
  */
 
@@ -47,7 +48,9 @@
 // - 🍸 The waiter makes every drink ordered (sim-drinks.js), the guests speak (sim-voice.js), little 3D scenes
 //   while a table waits (sim-scene.js), other guests interrupt and the waiter can ask questions (sim-talk.js)
 // - 📡 « Parties en cours »: a live list of the team's online games (`simlist/{id}`, views in sim-list.js), join
-//   an open one in a tap
+//   an open one in a tap; the host (or anyone who played it on this phone) comes back without the code
+// - 🛎️ sim-live.js: a live card on every page, the codes of my games, the notification after a reload; a solo game
+//   is saved (`ltf_sim_solo_v1`) and can be resumed after a reload (« Reprendre la partie »)
 // Shared by the JS & the Rust builds 🤝. Solo works fully offline: Firebase is only loaded for an online game.
 
 // ===== MODULES 📦 ===== //
@@ -72,6 +75,18 @@ import {
   isQuestionId,
 } from './sim-talk.js';
 import { useListKit, cleanListEntry, drawerHtml } from './sim-list.js';
+import {
+  useLiveKit,
+  liveChanged,
+  rememberGame,
+  forgetGame,
+  markLeft,
+  mineCode,
+  activeMine,
+  readSoloSummary,
+  clearSolo,
+  SOLO_KEY,
+} from './sim-live.js';
 
 // ===== CONSTANTS 🧰 ===== //
 
@@ -291,6 +306,7 @@ const ICON_PATHS = {
   bell: 'M6 16V11a6 6 0 0 1 12 0v5l1.5 2h-15zM10 20a2 2 0 0 0 4 0',
   live: 'M12 14a2 2 0 1 0 0-4 2 2 0 0 0 0 4zM8.5 15.5a5 5 0 0 1 0-7M15.5 8.5a5 5 0 0 1 0 7M5.6 18.4a9 9 0 0 1 0-12.8M18.4 5.6a9 9 0 0 1 0 12.8',
   lock: 'M6 11h12v9H6zM8.5 11V8a3.5 3.5 0 0 1 7 0v3',
+  up: 'M12 19V5M5 12l7-7 7 7',
 };
 
 // ===== HELPERS 🧰 ===== //
@@ -710,6 +726,18 @@ border-radius:99px;background:var(--pill);color:var(--tx);font-weight:800;font-s
 .simseg2{grid-template-columns:repeat(2,minmax(0,1fr))}
 .simseg2 .simsegbtn{font-size:14px}
 .simcall{display:flex;align-items:center;gap:8px;padding:8px 10px;margin:0 0 10px;border-radius:18px;background:var(--sf)}
+.simcall.simcallbar{position:fixed;left:0;right:0;bottom:0;z-index:26;max-width:640px;margin:0 auto;border-radius:20px 20px 0 0;
+  padding:8px 12px calc(8px + env(safe-area-inset-bottom));box-shadow:0 -8px 24px rgba(0,0,0,.28)}
+body:not(.notabs) .simcall.simcallbar{bottom:calc(76px + env(safe-area-inset-bottom));border-radius:20px}
+#simPage.simtablepage{padding-bottom:calc(170px + env(safe-area-inset-bottom))}
+.simtopfab{position:fixed;right:16px;bottom:calc(92px + env(safe-area-inset-bottom));z-index:27;width:46px;height:46px;border-radius:23px;
+  border:0;background:var(--sf2);color:var(--tx);display:flex;align-items:center;justify-content:center;box-shadow:0 6px 18px rgba(0,0,0,.3);
+  opacity:0;pointer-events:none;transform:translateY(10px);transition:opacity .22s ease,transform .22s ease}
+.simtopfab.simshow{opacity:1;pointer-events:auto;transform:none}
+body:not(.notabs) .simtopfab{bottom:calc(168px + env(safe-area-inset-bottom))}
+.simresume .simsmallbtn{display:inline-flex;align-items:center}
+@media (min-width:960px){body:not(.notabs) .simcall.simcallbar,body:not(.notabs) .simfoot{left:248px}
+  body:not(.notabs) .simcall.simcallbar{bottom:0;border-radius:20px 20px 0 0}body:not(.notabs) .simtopfab{bottom:calc(92px + env(safe-area-inset-bottom))}}
 .simavatars{flex:1;min-width:0;display:flex;gap:6px;overflow-x:auto;scrollbar-width:none}
 .simavatars::-webkit-scrollbar{display:none}
 .simguestav{flex:none;width:46px;display:flex;flex-direction:column;align-items:center;gap:2px;color:var(--tx2)}
@@ -746,7 +774,7 @@ border-radius:99px;background:var(--pill);color:var(--tx);font-weight:800;font-s
 .simcode.simbad{border-color:var(--kob)}
 @keyframes simfade{from{opacity:0}}
 @keyframes simrise{from{transform:translateY(40px);opacity:.4}}
-@media (prefers-reduced-motion: reduce){.simguestav.simtalk .simic,.simdrawer,.simdrawerbox{animation:none}}
+@media (prefers-reduced-motion: reduce){.simguestav.simtalk .simic,.simdrawer,.simdrawerbox{animation:none}.simtopfab{transition:none}}
 `;
 
 // ===== THE MENU DATA 🍽️ ===== //
@@ -2456,6 +2484,9 @@ const page = {
   gamesError: '',
   drawerGame: '',
   openOnBoot: false,
+  hostNote: false,
+  soloDirty: false,
+  soloSavedAt: 0,
 };
 
 // the game being played (null when none): see `startGame` 🎮
@@ -2553,6 +2584,7 @@ function setSpeed(speed) {
   game.anchorClock = serviceNow();
   game.anchorMs = Date.now();
   game.speed = cleanSpeed(speed);
+  page.soloDirty = true;
 }
 
 /**
@@ -2569,6 +2601,7 @@ function skipToNextArrival() {
   if (!upcoming.length) return false;
   game.anchorClock = Math.min(...upcoming);
   game.anchorMs = Date.now();
+  page.soloDirty = true;
   return true;
 }
 
@@ -2731,6 +2764,7 @@ function award(key, xp) {
  */
 function commitTable(tableId, entry) {
   game.tables[tableId] = entry;
+  page.soloDirty = true;
   if (game.mode === 'online') writeRemote({ ['tb.' + tableId]: entry });
 }
 
@@ -3370,6 +3404,8 @@ async function createOnlineGame() {
         at: cloud.store.serverTimestamp(),
       })
       .catch(() => {});
+    // 🔑 my game on this phone: I come back to it without the code (even « sur code »)
+    rememberGame(listId, code, Date.now() + GAME_TTL_MS, true);
     if (run !== page.run) return;
     startGame({
       mode: 'online',
@@ -3401,6 +3437,7 @@ async function createOnlineGame() {
  */
 async function joinOnlineGame(code) {
   if (!/^[0-9]{4}$/.test(code)) return;
+  if (!(await leaveRunningGame(code))) return;
   const user = await signedInUser();
   if (!user)
     return showDialog({
@@ -3443,10 +3480,15 @@ async function joinOnlineGame(code) {
       requests: remote.requests,
       startMs: remote.startMs,
       speed: remote.speed,
-      listId: remote.host === user.uid ? remote.listId : '',
+      listId: remote.listId,
       ended: remote.ended,
     });
     page.joinedAsGuest = remote.host !== user.uid;
+    // 👑 the host comes back: already a waiter (no second entry), the lobby expects the game's waiter count
+    if (remote.host === user.uid) page.waiterCount = remote.count;
+    // 🔑 remembered on this phone (to come back in a tap, and for the notification after a reload)
+    if (remote.listId)
+      rememberGame(remote.listId, code, remote.createdMs + GAME_TTL_MS, remote.host === user.uid);
     subscribeGame(code);
     history.pushState({ ltfSim: 'lobby' }, '');
     render(remote.startMs ? 'service' : 'lobby');
@@ -3637,9 +3679,11 @@ function answerRequest(tableId, accept) {
  *
  * Opens the « Parties en cours » bottom sheet and listens to the live list (onSnapshot on the query).
  *
+ * @param { object } [selected] - a clean list entry to open straight away (a tap on the live card)
+ * @param { boolean } [hostNote] - true to explain why the host still needs the code (another phone)
  * @returns { Promise<void> }
  */
-async function openGamesDrawer() {
+async function openGamesDrawer(selected, hostNote) {
   closeDrawer();
   const holder = document.getElementById('simPage');
   if (!holder) return;
@@ -3648,7 +3692,9 @@ async function openGamesDrawer() {
   drawer.id = 'simDrawer';
   drawer.dataset.act = 'closedrawer';
   holder.appendChild(drawer);
-  page.games = null;
+  page.games = selected ? [selected] : null;
+  page.drawerGame = selected ? selected.id : '';
+  page.hostNote = !!hostNote;
   page.gamesError = '';
   renderDrawer();
   const run = page.run;
@@ -3673,6 +3719,9 @@ async function openGamesDrawer() {
           const entry = cleanListEntry(item.id, item.data());
           if (entry && !entry.ended && entry.expMs > Date.now()) games.push(entry);
         });
+        // 📌 the game opened from the live card stays on screen until the list has it
+        const opened = (page.games || []).find((entry) => entry.id === page.drawerGame);
+        if (opened && !games.some((entry) => entry.id === opened.id)) games.push(opened);
         page.games = games.sort((left, right) => right.expMs - left.expMs);
         renderDrawer();
       },
@@ -3695,7 +3744,12 @@ async function openGamesDrawer() {
 function renderDrawer() {
   const drawer = document.getElementById('simDrawer');
   if (!drawer) return;
-  drawer.innerHTML = drawerHtml({ games: page.games, selectedId: page.drawerGame, error: page.gamesError });
+  drawer.innerHTML = drawerHtml({
+    games: page.games,
+    selectedId: page.drawerGame,
+    error: page.gamesError,
+    hostNote: page.hostNote,
+  });
 }
 
 /**
@@ -3715,6 +3769,334 @@ function joinFromDrawer(withCode) {
   }
   closeDrawer();
   joinOnlineGame(code);
+}
+
+/**
+ * `tapListedGame` - Async Function 🎯
+ *
+ * A game tapped in « Parties en cours » (or on the live card). The host, or anyone who played it on this phone,
+ * comes back straight away with the code remembered here (`ltf_sim_mine_v1`), even for a « sur code » game; the
+ * host on another phone gets the code through `findHostedCode` when the rules allow it, else the code field with
+ * a note. Everyone else sees the game's details (« Rejoindre », or the code field).
+ *
+ * @param { object } entry - a clean list entry
+ * @returns { Promise<void> }
+ */
+async function tapListedGame(entry) {
+  if (!entry) return;
+  const user = await signedInUser();
+  const isHost = !!user && entry.host === user.uid;
+  const remembered = mineCode(entry.id);
+  let code = remembered || (isHost ? entry.code : '');
+  if (!code && isHost) code = await findHostedCode(entry.id, user.uid);
+  if (code) {
+    closeDrawer();
+    return joinOnlineGame(code);
+  }
+  if (!document.getElementById('simDrawer')) return openGamesDrawer(entry, isHost);
+  page.drawerGame = entry.id;
+  page.hostNote = isHost;
+  renderDrawer();
+}
+
+/**
+ * `findHostedCode` - Async Function 🔎
+ *
+ * The host on another phone: the code of my own game, by its list id (query `sim` where host == me and li == id,
+ * limit 1). Needs the rule « allow list » of /workspace/work/rules_sim_v3.txt; without it the query is refused and
+ * the code field is shown instead (with a note).
+ *
+ * @param { string } listId - the game's « Parties en cours » id
+ * @param { string } uid - my uid
+ * @returns { Promise<string> } - the 4-digit code ('' when it can't be found)
+ */
+async function findHostedCode(listId, uid) {
+  if (!cloud.ready || typeof cloud.store.getDocs !== 'function') return '';
+  try {
+    const store = cloud.store;
+    const snapshot = await store.getDocs(
+      store.query(
+        store.collection(cloud.db, 'sim'),
+        store.where('host', '==', uid),
+        store.where('li', '==', listId),
+        store.limit(1),
+      ),
+    );
+    let code = '';
+    snapshot.forEach((item) => {
+      if (/^[0-9]{4}$/.test(item.id)) code = item.id;
+    });
+    if (code) rememberGame(listId, code, Date.now() + GAME_TTL_MS, true);
+    return code;
+  } catch (error) {
+    return '';
+  }
+}
+
+/**
+ * `leaveRunningGame` - Async Function 🚪
+ *
+ * Before joining or resuming another game: asks to leave the one on screen (in-page dialog). A solo game stays
+ * saved (« Reprendre » later), an online one is marked as left.
+ *
+ * @param { string } code - the code about to be joined ('' for a solo game)
+ * @returns { Promise<boolean> } - true when the way is clear
+ */
+async function leaveRunningGame(code) {
+  if (!game) return true;
+  if (code && game.code === code) return true;
+  if (game.ended || !game.startMs) {
+    stopGame();
+    return true;
+  }
+  const yes = await showDialog({
+    icon: 'door',
+    title: translate('Quitter la partie en cours ?', 'Leave the current game?'),
+    text:
+      game.mode === 'solo'
+        ? translate(
+            'Elle reste enregistrée : « Reprendre la partie » plus tard.',
+            'It stays saved: « Resume » later.',
+          )
+        : translate('Vous pourrez revenir avec le même code.', 'You can come back with the same code.'),
+    buttons: [
+      { label: translate('Rester', 'Stay'), value: false },
+      { label: translate('Quitter', 'Leave'), value: true, kind: 'danger' },
+    ],
+  });
+  if (!yes || !game) return !!yes;
+  if (game.mode === 'solo') saveSolo(true);
+  else if (game.listId) markLeft(game.listId);
+  stopGame();
+  return true;
+}
+
+/**
+ * `ensurePageOpen` - Async Function 📚
+ *
+ * @returns { Promise<void> } - opens the chapter page when it isn't on screen (from any tab of the app)
+ */
+async function ensurePageOpen() {
+  if (page.isOpen && document.getElementById('simPage')) return;
+  await openPage();
+}
+
+/**
+ * `openListedGame` - Async Function 🛎️
+ *
+ * The live card's tap on one game: the chapter page, then the direct rejoin or the game's details.
+ *
+ * @param { object } entry - a clean list entry
+ * @returns { Promise<void> }
+ */
+async function openListedGame(entry) {
+  if (game && game.listId === entry.id && page.isOpen) return;
+  await ensurePageOpen();
+  return tapListedGame(entry);
+}
+
+/**
+ * `openDrawerFromCard` - Async Function 📡
+ *
+ * @returns { Promise<void> } - the live card's tap with several games: the chapter page & « Parties en cours »
+ */
+async function openDrawerFromCard() {
+  await ensurePageOpen();
+  return openGamesDrawer();
+}
+
+/**
+ * `playingState` - Function 🎮
+ *
+ * @returns { { solo: boolean, listId: string } | null } - the game on screen (for the live card & notification)
+ */
+function playingState() {
+  if (!page.isOpen || !game) return null;
+  return { solo: game.mode === 'solo', listId: game.listId || '' };
+}
+
+// ===== SAVED SOLO GAME 💾 ===== //
+// A solo game lives in this page's memory; it's also saved to localStorage (`ltf_sim_solo_v1`) at the start, after
+// every change (at most every 2 s) and once a service minute, and right away when the app goes to the background.
+// After a reload: « Reprendre la partie » (chapter page & live card), or straight back from the notification.
+// The save is the shape of an online game doc (so `cleanRemote` checks it again) + the clock anchor.
+
+/**
+ * `soloSnapshot` - Function 📸
+ *
+ * @returns { object } - the solo game to save: { v, at, st, am, ac, sp, me, xp, seen, doc, sum }
+ */
+function soloSnapshot() {
+  const waiters = {};
+  game.waiters.forEach((waiter) => (waiters[waiter.id] = { n: waiter.name, i: waiter.rang }));
+  return {
+    v: 1,
+    at: Date.now(),
+    st: game.startMs,
+    am: game.anchorMs || game.startMs,
+    ac: game.anchorClock || SERVICE_START,
+    sp: cleanSpeed(game.speed),
+    me: game.me,
+    xp: game.earned,
+    seen: Object.keys(game.seen).filter((tableId) => game.seen[tableId]),
+    doc: {
+      v: 1,
+      host: 'w0',
+      n: game.waiters.length,
+      bk: JSON.stringify(game.bookings),
+      rg: JSON.stringify(game.rangs),
+      wt: waiters,
+      tb: game.tables,
+    },
+    // 🔔 what sim-live.js needs for the notification without rebuilding the game
+    sum: { d: doneCount(), t: game.bookings.length, times: game.bookings.map((booking) => booking.time) },
+  };
+}
+
+/**
+ * `saveSolo` - Function 💾
+ *
+ * @param { boolean } force - true to save now (start, background, leaving)
+ * @returns { void } - saves the solo game: after a change (at most every 2 s) or once a minute
+ */
+function saveSolo(force) {
+  if (!game || game.mode !== 'solo' || !game.startMs || game.ended) return;
+  const now = Date.now();
+  const since = now - page.soloSavedAt;
+  if (!force && (since < 2000 || (!page.soloDirty && since < 60000))) return;
+  try {
+    localStorage.setItem(SOLO_KEY, JSON.stringify(soloSnapshot()));
+    page.soloSavedAt = now;
+    page.soloDirty = false;
+  } catch (error) {
+    // 🤷 a full storage: the game simply can't be resumed after a reload
+  }
+}
+
+/**
+ * `readSoloSave` - Function 📖
+ *
+ * @returns { object | null } - the saved solo game (raw, checked by restoreSoloGame), null when there's none
+ */
+function readSoloSave() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(SOLO_KEY) || 'null');
+    return saved && typeof saved === 'object' ? saved : null;
+  } catch (error) {
+    return null;
+  }
+}
+
+/**
+ * `restoreSoloGame` - Function ♻️
+ *
+ * Checks every saved value (the doc through `cleanRemote`, the clock, the waiters, the owners) and rebuilds the
+ * game (steps, guests & interruptions come back from the bookings' seeds).
+ *
+ * @param { any } saved - the saved solo game
+ * @returns { boolean } - true when the game is back in memory
+ */
+function restoreSoloGame(saved) {
+  const now = Date.now();
+  if (!saved || saved.v !== 1 || !saved.doc || typeof saved.doc !== 'object') return false;
+  const startMs = Number(saved.st);
+  const anchorMs = Number(saved.am);
+  const anchorClock = Number(saved.ac);
+  if (![startMs, anchorMs, anchorClock].every(Number.isFinite)) return false;
+  if (startMs > now + 60000 || now - startMs >= GAME_TTL_MS || anchorMs < startMs || anchorMs > now + 60000)
+    return false;
+  if (anchorClock < SERVICE_START || anchorClock > HARD_END) return false;
+  /**
+   * `stamp` - Function ⏱️
+   *
+   * @param { number } millis - a time in ms
+   * @returns { object } - a timestamp-like value (what cleanRemote reads)
+   */
+  const stamp = (millis) => ({ toMillis: () => millis });
+  const remote = cleanRemote(
+    Object.assign({}, saved.doc, { host: 'w0', rq: {}, st: stamp(startMs), at: stamp(startMs) }),
+  );
+  if (!remote || !remote.waiters.length) return false;
+  const waiters = remote.waiters.slice().sort((left, right) => left.rang - right.rang);
+  const ids = waiters.map((waiter) => waiter.id);
+  if (!ids.every((id) => /^w[0-3]$/.test(id)) || !ids.includes('w0')) return false;
+  if (
+    !remote.bookings.every(
+      (booking) => remote.tables[booking.table] && ids.includes(remote.tables[booking.table].o),
+    )
+  )
+    return false;
+  startGame({
+    mode: 'solo',
+    me: ids.includes(saved.me) ? saved.me : 'w0',
+    host: 'w0',
+    waiters,
+    rangs: remote.rangs,
+    bookings: remote.bookings,
+    tables: remote.tables,
+    speed: cleanSpeed(saved.sp),
+    startMs,
+    anchorMs,
+    anchorClock,
+    earned: clamp(Math.round(Number(saved.xp) || 0), 0, 100000),
+  });
+  (Array.isArray(saved.seen) ? saved.seen : []).forEach((tableId) => {
+    if (bookingOf(tableId)) game.seen[tableId] = true;
+  });
+  // ⚙️ the setup matches the game (Back after the game lands on a coherent setup)
+  page.online = false;
+  page.joinedAsGuest = false;
+  page.waiterCount = waiters.length;
+  page.rangs = remote.rangs;
+  page.bookings = remote.bookings;
+  page.speed = game.speed;
+  waiters.forEach((waiter) => (page.names[waiter.rang] = waiter.name));
+  page.soloSavedAt = Date.now();
+  page.soloDirty = false;
+  return true;
+}
+
+/**
+ * `resumeSolo` - Async Function ▶️
+ *
+ * « Reprendre la partie »: the chapter page (if needed), the data (the Rust build has no window.LTF), then the saved
+ * game straight into the service. A broken save is dropped.
+ *
+ * @returns { Promise<void> }
+ */
+async function resumeSolo() {
+  addStyles();
+  if (game && game.mode === 'solo' && game.startMs && !game.ended && page.isOpen) return render('service');
+  if (!(await leaveRunningGame(''))) return;
+  if (!page.isOpen) {
+    page.isOpen = true;
+    page.quitting = false;
+    history.pushState({ ltfSim: 'page' }, '');
+    render('page');
+  }
+  // 📦 the floor plan & the menu first: cleanRemote & the steps need them
+  page.dataReady = await ensureData();
+  if (!page.dataReady)
+    return showDialog({
+      icon: 'alert',
+      title: translate('Simulation', 'Simulation'),
+      text: translate(
+        'Le menu et le plan de salle ne sont pas encore chargés. Vérifiez la connexion et réessayez.',
+        'The menu and the floor plan are not loaded yet. Check the connection and try again.',
+      ),
+    });
+  if (!restoreSoloGame(readSoloSave())) {
+    clearSolo();
+    render('page');
+    return showToast(
+      'alert',
+      translate('Cette partie ne peut pas être reprise.', "This game can't be resumed."),
+    );
+  }
+  history.pushState({ ltfSim: 'service' }, '');
+  render('service');
+  updateNotification(true);
+  liveChanged();
 }
 
 // ===== DIALOGS & TOASTS 💬 ===== //
@@ -3987,6 +4369,7 @@ function renderPage() {
       'Réservations du soir, briefing, arrivées, commandes, allergies, vins, desserts et addition : jouez tout le service, seul ou à plusieurs.',
       "Tonight's bookings, briefing, arrivals, orders, allergies, wines, desserts and the bill: play the whole service, alone or as a team.",
     )}</p>` +
+    resumeHtml() +
     `<div class="sh">${translate('Jouer', 'Play')}</div>` +
     modes
       .map(
@@ -4005,6 +4388,21 @@ function renderPage() {
       )
       .join('') +
     `</div></div>`;
+}
+
+/**
+ * `resumeHtml` - Function ▶️
+ *
+ * @returns { string } - « Reprendre la partie » when a solo game was saved (after a reload), with its status
+ */
+function resumeHtml() {
+  const summary = game ? null : readSoloSummary();
+  if (!summary) return '';
+  return (
+    `<div class="simbanner simresume">${icon('play', 20)}<div class="simgrow"><b>${translate('Partie solo en cours', 'Solo game in progress')}</b><br>` +
+    `${translate('Service', 'Service')} ${clockText(summary.clock)} · ${summary.done}/${summary.total} tables</div>` +
+    `<button class="simsmallbtn" data-act="resume">${translate('Reprendre la partie', 'Resume the game')}</button></div>`
+  );
 }
 
 /**
@@ -4765,21 +5163,58 @@ function renderTable() {
       )
       .join('') +
     `<span class="simpill">${icon('star', 14)}<span id="simPts">${entry.p}</span> pts</span>`;
+  // 👍 the call bar is fixed at the bottom (thumb reach); the content gets room for it; ⬆️ back to the top
   appRoot().innerHTML =
-    `<div id="simPage">${barHtml(`${tableId} · ${pick(guestTitle(booking))}`, clockHtml())}<div class="pad">` +
-    callHtml(tableId) +
+    `<div id="simPage" class="simtablepage">${barHtml(`${tableId} · ${pick(guestTitle(booking))}`, clockHtml())}<div class="pad">` +
     `<div class="siminfo">${pills}</div>` +
     `<div class="simpat${patience < 35 ? ' simlow' : ''}" id="simPatience" title="${translate('Patience', 'Patience')}"><i style="width:${patience}%"></i></div>` +
-    `<div class="simchat" id="simChat">${chatHtml(tableId)}${actionHtml(tableId)}</div></div></div>`;
+    `<div class="simchat" id="simChat">${chatHtml(tableId)}${actionHtml(tableId)}</div></div>` +
+    callHtml(tableId) +
+    `<button class="simtopfab" id="simTop" data-act="top" aria-label="${translate('Revenir en haut', 'Back to top')}">${icon('up', 22)}</button></div>`;
   speakCurrent(tableId, false);
+  updateTopFab();
+}
+
+/**
+ * `prefersReducedMotion` - Function 🐢
+ *
+ * @returns { boolean } - true when the phone asks for less motion
+ */
+function prefersReducedMotion() {
+  return (
+    typeof window.matchMedia === 'function' && window.matchMedia('(prefers-reduced-motion: reduce)').matches
+  );
+}
+
+/**
+ * `updateTopFab` - Function ⬆️
+ *
+ * @returns { void } - shows the « back to top » button once the table dialogue is scrolled far down (600 px, or
+ *   1.5 screens on a small one), hides it near the top (it fades in & out)
+ */
+function updateTopFab() {
+  const button = document.getElementById('simTop');
+  if (!button) return;
+  const scrolled = window.scrollY || window.pageYOffset || 0;
+  const threshold = Math.min(600, (window.innerHeight || 800) * 1.5);
+  button.classList.toggle('simshow', page.view === 'table' && scrolled > threshold);
+}
+
+/**
+ * `scrollToTop` - Function ⬆️
+ *
+ * @returns { void } - smooth scroll to the top of the table dialogue (instant with reduced motion)
+ */
+function scrollToTop() {
+  window.scrollTo({ top: 0, behavior: prefersReducedMotion() ? 'auto' : 'smooth' });
 }
 
 /**
  * `callHtml` - Function 📞
  *
  * @param { string } tableId - a table id
- * @returns { string } - the call-style header: every guest's avatar (the speaker gets a pulsing ring), mute/unmute,
- *   « réécouter » and « Questions »
+ * @returns { string } - the call bar, fixed at the bottom of the table view: every guest's avatar (the speaker gets
+ *   a pulsing ring), mute/unmute, « réécouter » and « Questions »
  */
 function callHtml(tableId) {
   const muted = isMuted();
@@ -4789,7 +5224,7 @@ function callHtml(tableId) {
     !isDone(tableId) &&
     !game.ended;
   return (
-    `<div class="simcall"><div class="simavatars">` +
+    `<div class="simcall simcallbar"><div class="simavatars">` +
     game.guests[tableId]
       .map(
         (guest) =>
@@ -4992,6 +5427,7 @@ function announceArrivals(now) {
   const arrived = game.bookings.filter((booking) => now >= booking.time && !game.seen[booking.table]);
   if (!arrived.length) return;
   arrived.forEach((booking) => (game.seen[booking.table] = true));
+  page.soloDirty = true;
   const mine = arrived.filter((booking) => game.mode === 'solo' || entryOf(booking.table).o === game.me);
   if (!mine.length) return;
   if (navigator.vibrate) navigator.vibrate(30);
@@ -5026,6 +5462,7 @@ function tick() {
   refreshLive();
   updateNotification(false);
   publishSummary(now);
+  saveSolo(false);
 }
 
 /**
@@ -5038,6 +5475,9 @@ function finishGame() {
   if (!game) return;
   game.ended = true;
   closeNotification();
+  // 💾 a finished game can't be resumed: the solo save & my online game's code go
+  if (game.mode === 'solo') clearSolo();
+  else if (game.listId) forgetGame(game.listId);
   if (game.mode === 'online' && game.me === game.host && !game.endWritten) {
     game.endWritten = true;
     writeRemote({ en: true });
@@ -5058,6 +5498,8 @@ function stopGame() {
   stopSpeaking();
   closeNotification();
   game = null;
+  // 🛎️ the live card & the notification of a saved game come back (sim-live.js)
+  liveChanged();
 }
 
 /**
@@ -5109,8 +5551,10 @@ function startSolo() {
       (game.tables[booking.table] = newEntry(booking, ownerForRang(page.rangs[booking.table] || 0))),
   );
   game.startMs = Date.now();
+  saveSolo(true);
   history.replaceState({ ltfSim: 'service' }, '');
   render('service');
+  liveChanged();
 }
 
 /**
@@ -5342,6 +5786,7 @@ function closeDrawer() {
   if (cloud.listUnsubscribe) cloud.listUnsubscribe();
   cloud.listUnsubscribe = null;
   page.drawerGame = '';
+  page.hostNote = false;
 }
 
 // ===== THE ONGOING NOTIFICATION 🔔 ===== //
@@ -5608,6 +6053,7 @@ function handleClick(event) {
   const me = target('[data-me]');
   if (me && game) {
     game.me = me.dataset.me;
+    page.soloDirty = true;
     return renderService();
   }
   const table = target('[data-table]');
@@ -5650,6 +6096,8 @@ function handleClick(event) {
     return render('brief');
   }
   if (name === 'start') return page.online ? createOnlineGame() : startSolo();
+  if (name === 'resume') return resumeSolo();
+  if (name === 'top') return scrollToTop();
   if (name === 'go') return startOnlineGame();
   if (name === 'end') return askEnd();
   if (name === 'speed' && game) {
@@ -5673,6 +6121,7 @@ function handleClick(event) {
   }
   if (name === 'switch') {
     game.me = entryOf(page.tableId).o;
+    page.soloDirty = true;
     return renderTable();
   }
   if (name === 'serve') {
@@ -5725,14 +6174,15 @@ function handleDrawerClick(target) {
   }
   const gameRow = target('[data-game]');
   if (gameRow) {
-    page.drawerGame = gameRow.dataset.game;
-    renderDrawer();
+    // 👑 my own game (or one I played here): straight back in, no code
+    tapListedGame((page.games || []).find((entry) => entry.id === gameRow.dataset.game));
     return true;
   }
   const action = target('[data-act]');
   if (!action) return false;
   if (action.dataset.act === 'gamelist') {
     page.drawerGame = '';
+    page.hostNote = false;
     renderDrawer();
     return true;
   }
@@ -5781,6 +6231,9 @@ addEventListener(
     document.querySelectorAll('.simdlg').forEach((dialog) => dialog.remove());
     if (page.quitting) {
       page.quitting = false;
+      // 🚪 quit: a solo game is gone, an online one is left (its code stays, the notification doesn't come back)
+      if (game && game.mode === 'solo') clearSolo();
+      else if (game && game.listId) markLeft(game.listId);
       stopGame();
       return render(afterGameView());
     }
@@ -5842,15 +6295,18 @@ function addChapterRow() {
 /**
  * `openOnBoot` - Function 📲
  *
- * Opened from the game's notification (`?sim=1` or `#sim`): the chapter page opens once the home screen is
- * drawn. A game only lives in the page's memory, so after a reload the waiter lands on the chapter page (an
- * online game can be joined again from « Parties en cours » or its code).
+ * Opened from the game's notification (`?sim=1` or `#sim`): once the home screen is drawn, a saved solo game is
+ * resumed, else my active online game is rejoined (code remembered on this phone), else the chapter page opens.
  *
  * @returns { void }
  */
 function openOnBoot() {
   if (!page.openOnBoot || page.isOpen || !document.getElementById('simRow')) return;
   page.openOnBoot = false;
+  // 💾 a saved solo game comes straight back; else my online game (rejoined with its remembered code)
+  if (readSoloSummary()) return resumeSolo();
+  const online = activeMine();
+  if (online) return openPage().then(() => joinOnlineGame(online.code));
   openPage();
 }
 
@@ -5887,11 +6343,34 @@ if (navigator.serviceWorker && typeof navigator.serviceWorker.addEventListener =
     openOnBoot();
   });
 
-// 👋 leaving the page (closing the tab, navigating away): no notification of a game that is gone
+// 👋 leaving the page (closing the tab, navigating away): the voices stop, the solo game is saved
+// (the notification stays: the game is saved, sim-live.js shows it again after a reload)
 addEventListener('pagehide', () => {
   stopSpeaking();
-  closeNotification();
+  saveSolo(true);
 });
+
+// 💾 the app goes to the background: save the solo game now
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) saveSolo(true);
+});
+
+// ⬆️ the « back to top » button of the table dialogue follows the scroll
+addEventListener('scroll', updateTopFab, { passive: true });
 
 // 🌍 open it from anywhere (e.g. a link or the console)
 window.LTFopenSim = openPage;
+
+// 🛎️ the live card on every page & the notification after a reload (sim-live.js)
+useLiveKit({
+  translate,
+  escapeHtml,
+  clockText,
+  cleanListEntry,
+  api: {
+    playing: playingState,
+    openListed: openListedGame,
+    openDrawer: openDrawerFromCard,
+    resumeSolo,
+  },
+});
