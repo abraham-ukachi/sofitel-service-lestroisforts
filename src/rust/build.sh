@@ -80,6 +80,8 @@ cp -r "$PWA/stickers" "$DIST/stickers"
 # 6. 📝 the public repo files: README, LICENSE, CONTRIBUTING, CHANGELOG & the Vercel config (static, no build)
 cp "$RUST_DIR/../README.md" "$RUST_DIR/../LICENSE" "$DIST/"
 cp web/CONTRIBUTING.md web/CHANGELOG.md web/vercel.json "$DIST/"
+# 🤖 agent skills & AGENTS.md (the project knowledge for AI agents)
+cp web/AGENTS.md "$DIST/" && rm -rf "$DIST/skills" && cp -r web/skills "$DIST/skills"
 # the chat push server (Vercel function) & its one dependency (web-push) 📲
 mkdir -p "$DIST/api" && cp web/api/notify.js web/api/admin.js "$DIST/api/" && cp web/package.json "$DIST/"
 

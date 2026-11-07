@@ -223,6 +223,13 @@ NODE_PATH=/tmp/jt/node_modules bash rust/tests/run_all.sh
 - 🔑 The Firebase web config in `cloud.js` / `chat.js` is a public identifier by design; access is enforced by the rules above.
 
 
+## For AI agents 🤖
+
+Picking this project up with an AI agent? Start with [`AGENTS.md`](./AGENTS.md): it lists the [skills](./skills) that hold
+everything we learned building the app (architecture, build & release, code style, content rules, Firebase & security,
+the simulation, and the lessons learned).
+
+
 ## More
 
 These are some of the things we did or plan to do:
